@@ -9,8 +9,8 @@ Scope: the build wrappers, live configuration, runtime helper, host initializer,
 | Area | Finding in supplied draft | Resolution / remaining check |
 | --- | --- | --- |
 | live-build kernel packages | `linux-image linux-headers` with flavour amd64 is valid. | Retained; hook now rejects zero or multiple bootable kernels. |
-| live-build environment | Host defaults and recommended packages affect the image implicitly. | Ignore system defaults, disable recommendations, explicitly include live-config-systemd, user-setup, initramfs backend, DKMS build dependencies and console tools. |
-| headless access | No SSH server or remote authentication configuration. | Local console bring-up is explicit; remote access is not promised. Networking on actual NICs still needs testing. |
+| live-build environment | Host defaults and recommended packages affect the image implicitly. | Ignore system defaults, disable recommendations, explicitly include live-config-systemd, a fixed simlun account hook, initramfs backend, DKMS build dependencies and console tools. |
+| headless access | No SSH server or remote authentication configuration; the local live account is explicitly provisioned. | Local console bring-up is explicit; remote access is not promised. Networking on actual NICs still needs testing. |
 | DKMS | Presence check is useful, but an empty kernel loop could succeed. Existing initramfs was not refreshed after identity/cache cleanup. | Exactly one kernel required; matching headers/DKMS/depmod/modinfo; regenerate initramfs afterward. Guest modprobe is required to validate loadability. |
 | ZFS boot dependency | Data pool must not be needed for boot. | Exclude zfs-initramfs; reject unexpected installation. Compile ZFS into SquashFS, not at each boot. |
 | automatic mounts | Masking zfs-mount.service alone does not cover mount-generator units. `canmount=on` allows broad mounts. | Mask generator, clear caches, mask import services; create data with noauto and generator-ignore property. |

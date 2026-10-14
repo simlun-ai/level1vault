@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+POOL=workspace
+[ "$#" -eq 0 ] || { echo 'Usage: sudo workspace-umount' >&2; exit 2; }
+[ "$(id -u)" -eq 0 ] || { echo 'Run: sudo workspace-umount' >&2; exit 1; }
+# Both helpers share this lock so import/mount cannot race with sync/export.
+exec 9>/run/lock/level1vault-workspace.lock
+flock -x 9
+cd /
+modprobe zfs
+pools=$(zpool list -H -o name)
+if ! printf '%s\n' "$pools" | grep -Fxq "$POOL"; then
+    echo 'workspace is already exported.'
+    exit 0
+fi
+zpool sync "$POOL"
+# Export unmounts the datasets. Never force a busy pool or power off on failure.
+if ! zpool export "$POOL"; then
+    echo 'Export failed. Leave /mnt/workspace in every shell and stop processes using it, then retry before poweroff.' >&2
+    exit 1
+fi
+echo 'workspace synced and exported; safe to power off.'

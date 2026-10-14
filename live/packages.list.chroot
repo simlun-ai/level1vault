@@ -5,7 +5,6 @@ live-config-systemd
 systemd-sysv
 initramfs-tools
 sudo
-user-setup
 locales
 zfs-dkms
 zfsutils-linux

@@ -33,8 +33,8 @@ class ScriptTests(unittest.TestCase):
         lock = self.base / 'lock'
         hostid = self.base / 'hostid'
         hostid.write_bytes(b'1234')
-        script = self.base / 'mount-workspace'
-        text = (ROOT / 'live/mount-workspace').read_text()
+        script = self.base / 'workspace-mount'
+        text = (ROOT / 'live/workspace-mount').read_text()
         text = text.replace('/mnt/workspace', str(mp)).replace('/run/lock/level1vault-workspace.lock', str(lock)).replace('/etc/hostid', str(hostid))
         script.write_text(text)
         for name in ('flock', 'modprobe', 'udevadm', 'zgenhostid'):
@@ -114,8 +114,8 @@ esac''')
         first = subprocess.run(['bash', str(ROOT / '01-configure-live.sh')], cwd=self.base,
                                env=self.env, capture_output=True, text=True)
         self.assertEqual(first.returncode, 0, first.stderr)
-        target = self.base / 'config/includes.chroot/usr/local/sbin/mount-workspace'
-        self.assertEqual(target.read_bytes(), (ROOT / 'live/mount-workspace').read_bytes())
+        target = self.base / 'config/includes.chroot/usr/local/sbin/workspace-mount'
+        self.assertEqual(target.read_bytes(), (ROOT / 'live/workspace-mount').read_bytes())
         self.assertEqual(target.stat().st_mode & 0o777, 0o755)
         self.assertIn('linux-image linux-headers', self.calls())
         self.assertIn('syslinux grub-efi', self.calls())

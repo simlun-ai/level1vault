@@ -8,9 +8,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck ./*.sh docker/*.sh tests/*.sh live/mount-workspace live/90-zfs.hook.chroot
+      - run: shellcheck ./*.sh docker/*.sh tests/*.sh live/workspace-mount live/workspace-umount live/*.hook.chroot
       - run: for f in ./*.sh docker/*.sh tests/*.sh; do bash -n "$f"; done
-      - run: sh -n live/mount-workspace live/90-zfs.hook.chroot
+      - run: sh -n live/workspace-mount live/workspace-umount live/*.hook.chroot
       - run: python3 -m unittest discover -s tests -v
   container-assembly:
     runs-on: ubuntu-22.04
@@ -20,3 +20,5 @@ jobs:
       - run: docker build -t level1vault-builder:test -f docker/Dockerfile docker
       # This stage must work unprivileged: no host ZFS or loop devices exposed.
       - run: docker run --rm --mount "type=bind,source=$PWD,target=/src,readonly" level1vault-builder:test bash /src/tests/test_assembly.sh
+      - name: Verify account and sudo in disposable Trixie container
+        run: docker run --rm --mount "type=bind,source=$PWD,target=/src,readonly" level1vault-builder:test bash /src/tests/test_account.sh

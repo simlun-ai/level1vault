@@ -21,11 +21,13 @@ lb config \
   --initsystem systemd \
   --linux-flavours amd64 \
   --linux-packages 'linux-image linux-headers' \
-  --bootappend-live 'boot=live components nopersistence noeject hostname=level1vault' \
+  --bootappend-live 'boot=live components nopersistence noeject hostname=level1vault username=simlun live-config.nocomponents=user-setup,sudo' \
   "$@"
 
 mkdir -p config/package-lists config/includes.chroot/usr/local/sbin config/hooks/live
 cp "$SOURCE_DIR/live/packages.list.chroot" config/package-lists/appliance.list.chroot
-install -m 0755 "$SOURCE_DIR/live/mount-workspace" config/includes.chroot/usr/local/sbin/mount-workspace
+install -m 0755 "$SOURCE_DIR/live/workspace-mount" config/includes.chroot/usr/local/sbin/workspace-mount
+install -m 0755 "$SOURCE_DIR/live/workspace-umount" config/includes.chroot/usr/local/sbin/workspace-umount
+install -m 0755 "$SOURCE_DIR/live/50-account.hook.chroot" config/hooks/live/50-account.hook.chroot
 install -m 0755 "$SOURCE_DIR/live/90-zfs.hook.chroot" config/hooks/live/90-zfs.hook.chroot
 printf 'Configured in %s. Now run: sudo lb build\n' "$PWD"

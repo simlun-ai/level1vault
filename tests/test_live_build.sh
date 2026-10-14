@@ -14,7 +14,12 @@ KERNEL=$(cat "$ROOT/usr/local/share/level1vault/kernel-version")
 chroot "$ROOT" modinfo -k "$KERNEL" zfs
 VERMAGIC=$(chroot "$ROOT" modinfo -k "$KERNEL" -F vermagic zfs)
 [[ $VERMAGIC == "$KERNEL "* ]] || { echo 'ZFS kernel vermagic mismatch' >&2; exit 1; }
-test -x "$ROOT/usr/local/sbin/mount-workspace"
+test -x "$ROOT/usr/local/sbin/workspace-mount"
+test -x "$ROOT/usr/local/sbin/workspace-umount"
+[[ $(chroot "$ROOT" id -u simlun) == 2000 && $(chroot "$ROOT" id -g simlun) == 2000 ]]
+chroot "$ROOT" visudo -cf /etc/sudoers
+chroot "$ROOT" su - simlun -c 'test "$(sudo -n id -u)" = 0'
+chroot "$ROOT" su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspace-umount"'
 test ! -e "$ROOT/etc/hostid"
 test ! -e "$ROOT/etc/zfs/zpool.cache"
 for unit in zfs-import-cache.service zfs-import-scan.service zfs-mount.service; do

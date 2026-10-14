@@ -3,8 +3,8 @@ set -eu
 POOL=workspace
 DATASET=workspace/data
 MOUNTPOINT=/mnt/workspace
-[ "$#" -eq 0 ] || { echo 'Usage: sudo mount-workspace' >&2; exit 2; }
-[ "$(id -u)" -eq 0 ] || { echo 'Run: sudo /usr/local/sbin/mount-workspace' >&2; exit 1; }
+[ "$#" -eq 0 ] || { echo 'Usage: sudo workspace-mount' >&2; exit 2; }
+[ "$(id -u)" -eq 0 ] || { echo 'Run: sudo /usr/local/sbin/workspace-mount' >&2; exit 1; }
 # Serialize manual calls. The lock lives in the RAM overlay.
 exec 9>/run/lock/level1vault-workspace.lock
 flock -x 9

@@ -2,8 +2,9 @@
 
 ## Automated coverage
 
+- Account/password verification and passwordless sudo/PATH checks in a disposable Trixie container.
 - Shell syntax and ShellCheck across builders, Docker entrypoint, live hook/runtime helper and assembly test.
-- Seventeen mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
+- Twenty-two mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
 - CI on Ubuntu 22.04 builds the actual Debian Trixie toolchain container and runs file-only assembly **without privileged mode**. A small synthetic ISO exercises real GPT creation, FAT population, per-drive GRUB EFI output, metadata checksums, medium UUID markers, unique identifiers and empty data partitions.
 
 The synthetic kernel/initrd are dummy payloads: that assembly test does not boot Linux or compile DKMS.
@@ -13,24 +14,37 @@ The synthetic kernel/initrd are dummy payloads: that assembly test does not boot
 [Full Debian Live build on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38636756155) passed in approximately 17 minutes. It built the actual ISO and both default 12 GiB images, then extracted SquashFS and inspected:
 
 - ZFS module presence and vermagic matching target kernel `6.12.111+deb13-amd64`.
-- Executable mount-workspace and absence of baked-in hostid/pool cache.
+- Executable workspace-mount and absence of baked-in hostid/pool cache.
 - Masked automatic pool import/mount services and mount generator.
 - Live-boot components in the actual initramfs.
 - Prepared-image state markers and checksums for both images and metadata.
 
 The workflow keeps diagnostic logs/manifests as an Actions artifact. It can also be rerun manually from GitHub Actions. Kernel/package versions depend on the configured Debian mirrors; this records one verified build, not a package pin.
 
-Real host ZFS initialization, loading the target module in a booted guest, UEFI boot and physical USB tests remain unverified. Continue with the checks below; a successful module presence/vermagic check does not prove it loads on the target machine.
+The operator verified README section 4 in QEMU, including the normal guest boot/mount/reboot sequence, on 2026-10-15. QEMU required desktop-user execution and writable image/OVMF files; no kvm group change was needed. Host-owned checksum files require `sudo tee`. The new account/helper changes below still need a rebuilt-image boot check; physical USB and degraded/rejoin tests remain unconfirmed. Continue with the checks below; a successful module presence/vermagic check does not prove it loads on the target machine.
 
 ## Required Ubuntu + Docker build checks
 
 1. On Ubuntu 22.04, the existing zpool/zfs tools communicate with its running module. Existing host pools remain unaffected throughout the workflow.
 2. `sudo ./build-container.sh "$PWD/build"` completes a real live-build inside Trixie. Capture build.log and builder-image.json. The hook verifies one Debian target kernel and matching ZFS DKMS module even though container uname reports Ubuntu's kernel.
-3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable mount-workspace, no zfs-initramfs package.
+3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable workspace-mount, no zfs-initramfs package.
 4. Inspect initramfs with lsinitramfs: live-boot and required USB/FAT drivers present. ZFS is data only, not a root-boot dependency.
 5. File assembly leaves IMAGES-PREPARED and PREPARED-SHA256SUMS, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.
 6. On the host, run 03-initialize-workspace.sh. Verify one mirror is created, only lz4_compress is enabled, workspace/data is noauto, the pool is exported, loops detached, and READY/final SHA256SUMS/WORKSPACE-INFO.txt exist.
 7. Check final checksums before VM tests. Checksums must be refreshed after VM writes, with pool exported and VM stopped.
+
+## Verify the new account and helpers after rebuilding
+
+```bash
+id simlun                         # uid=2000, primary gid=2000
+sudo -n id -u                      # 0, without prompting
+command -v workspace-mount workspace-umount
+sudo workspace-mount
+cd /
+sudo workspace-umount
+```
+
+The login password is `password`. Confirm the existing console autologin selects simlun. On an already-booted older image the old account and helper names persist until its OS payload is updated and rebooted.
 
 ## VM matrix
 
@@ -79,7 +93,7 @@ ls -l /etc/systemd/system-generators/zfs-mount-generator
 ip -br link
 ip -br addr
 sudo zpool list
-sudo /usr/local/sbin/mount-workspace
+sudo /usr/local/sbin/workspace-mount
 sudo zfs get mountpoint,canmount,mounted,org.openzfs.systemd:ignore workspace/data
 sudo zpool status -gP workspace
 ```

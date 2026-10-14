@@ -2,7 +2,7 @@
 
 Two independently bootable, stateless Debian 13 Live USB images with one shared OpenZFS mirror. Build on an **amd64 Ubuntu 22.04 workstation with working ZFS**, using Debian Trixie tools inside Docker. The target boots through x86-64 UEFI with Secure Boot disabled.
 
-Each default 12 GiB image has a GPT, a 4 GiB FAT32 ESP holding GRUB and the live payload, and an approximately 8 GiB data partition. SquashFS provides the read-only base; a nonpersistent RAM overlay holds OS changes. The `workspace/data` dataset mounts at `/mnt/workspace` only after `sudo mount-workspace`.
+Each default 12 GiB image has a GPT, a 4 GiB FAT32 ESP holding GRUB and the live payload, and an approximately 8 GiB data partition. SquashFS provides the read-only base; a nonpersistent RAM overlay holds OS changes. The `workspace/data` dataset mounts at `/mnt/workspace` only after `sudo workspace-mount`.
 
 | Work | Where | Entry point |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ Each default 12 GiB image has a GPT, a 4 GiB FAT32 ESP holding GRUB and the live
 
 Docker shares the running host kernel. The container compiles ZFS **for Debian's target kernel**, with the Debian headers in the live-build chroot; it does not need to load that module. The host creates the pool using its own installed `zpool`/`zfs` and loaded module. Neither host kernel headers nor `/lib/modules` are bind-mounted into the container.
 
-**State of validation:** [the full Debian Live build passed on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38636756155), including real DKMS compilation, initramfs generation and both 12 GiB boot images. The extracted SquashFS module matches kernel `6.12.111+deb13-amd64`; automatic import/mount disabling and final checksums also passed inspection. ShellCheck, 17 behavior tests and file-only assembly tests pass as well. Actual VM/UEFI boot and host/guest pool import still need your test run. See [validation](docs/VALIDATION.md) and the [implementation review](docs/REVIEW.md).
+**State of validation:** [the full Debian Live build passed on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38636756155), including real DKMS compilation, initramfs generation and both 12 GiB boot images. The extracted SquashFS module matches kernel `6.12.111+deb13-amd64`; automatic import/mount disabling and final checksums also passed inspection. The operator verified section 4 in QEMU on the preceding image, including normal boot, workspace mounting and reboot persistence. The account/helper changes in this revision require a rebuilt-image check; physical USB and degraded/rejoin tests remain unconfirmed. See [validation](docs/VALIDATION.md) and the [implementation review](docs/REVIEW.md).
 
 ## 1. Prepare the Ubuntu workstation
 
@@ -97,15 +97,16 @@ Never attach the images to QEMU while the host has their pool imported or their 
 
 ```bash
 cp /usr/share/OVMF/OVMF_VARS_4M.fd ./ovmf-test-vars.fd
+sudo chown "$(id -u):$(id -g)" usb-a.img usb-b.img ovmf-test-vars.fd
 qemu-system-x86_64 \
-  -machine q35,accel=kvm -m 4096 -smp 2 \
+  -machine q35,accel=kvm -cpu host -m 4096 -smp 2 \
   -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
   -drive if=pflash,format=raw,file=./ovmf-test-vars.fd \
   -drive if=virtio,format=raw,file=./usb-a.img \
   -drive if=virtio,format=raw,file=./usb-b.img
 ```
 
-On Ubuntu 22.04 installations that supply `OVMF_CODE.fd` and `OVMF_VARS.fd` instead of the `_4M` files, replace both paths with that matching pair. Check `ls /usr/share/OVMF` first. Use `accel=tcg` if KVM is unavailable. Secure Boot must be disabled. The live console normally autologs in as `user`; Debian live user-setup normally uses password `live`. No SSH server or remote authentication is configured.
+On Ubuntu 22.04 installations that supply `OVMF_CODE.fd` and `OVMF_VARS.fd` instead of the `_4M` files, replace both paths with that matching pair. Check `ls /usr/share/OVMF` first. Run QEMU as your desktop user, without sudo, to avoid GTK authorization errors. KVM access was already available on the tested workstation; group changes are only necessary if /dev/kvm access is denied. Use `accel=tcg` and omit `-cpu host` if KVM is unavailable. Secure Boot must be disabled. The live console autologs in as `simlun` (UID 2000, primary GID 2000), with password `password` and passwordless sudo. `/usr/local/sbin` is included in the login PATH and sudo secure_path. No SSH server or remote authentication is configured.
 
 Inside the guest:
 
@@ -114,21 +115,21 @@ cat /proc/cmdline
 findmnt -t overlay,squashfs,tmpfs
 sudo modprobe zfs
 sudo zpool list                    # workspace should not be imported yet
-sudo /usr/local/sbin/mount-workspace
+sudo workspace-mount
 sudo zpool status workspace        # ONLINE with both members present
 printf 'persistent\n' | sudo tee /mnt/workspace/check.txt
 printf 'ephemeral\n' | sudo tee /etc/reset-check
 cd /
-sudo zpool export workspace
+sudo workspace-umount
 sudo reboot
 ```
 
-After reboot `/etc/reset-check` must be absent; manually mount the workspace and confirm `check.txt` survives. Cleanly export again before shutting down. Also boot **A alone and B alone**, using fresh OVMF variables, and perform the degraded/rejoin tests in [VALIDATION.md](docs/VALIDATION.md). Virtio tests do not replace USB transport/hardware tests.
+After reboot `/etc/reset-check` must be absent; manually mount the workspace and confirm `check.txt` survives. Run `cd /` then `sudo workspace-umount` before shutting down. Also boot **A alone and B alone**, using fresh OVMF variables, and perform the degraded/rejoin tests in [VALIDATION.md](docs/VALIDATION.md). Virtio tests do not replace USB transport/hardware tests.
 
 VM writes change the raw image hashes. After completing tests, with the pool exported, VM stopped and loops detached, record new hashes:
 
 ```bash
-(cd build/out && sha256sum usb-a.img usb-b.img images.json > SHA256SUMS)
+(cd build/out && sha256sum usb-a.img usb-b.img images.json | sudo tee SHA256SUMS)
 ```
 
 ## 5. Write physical USB drives on Ubuntu
@@ -161,12 +162,13 @@ The data partition remains approximately 8 GiB; unused physical capacity stays u
 
 ## 6. Operation and recovery
 
+`workspace-umount` takes the same lock as the mount helper, syncs only the workspace pool, then exports it without forcing. It succeeds harmlessly when already exported. A busy/failed export exits nonzero; close applications and leave the workspace in every shell before retrying. It never powers off the machine itself.
+
 ```bash
-sudo /usr/local/sbin/mount-workspace
+sudo workspace-mount
 # Before shutdown, removing drives or changing hosts:
 cd /
-sudo zpool sync workspace
-sudo zpool export workspace
+sudo workspace-umount
 sudo poweroff
 ```
 
@@ -181,7 +183,7 @@ sudo modprobe zfs
 [ -s /etc/hostid ] || sudo zgenhostid
 sudo zpool import -d /dev/disk/by-partuuid
 sudo zpool import -f -N -d /dev/disk/by-partuuid -o cachefile=none VERIFIED_POOL_GUID
-sudo /usr/local/sbin/mount-workspace
+sudo workspace-mount
 ```
 
 For online/replacement procedures and divergent-history restrictions, see [REVIEW.md](docs/REVIEW.md#recovery-details). Never run `zpool create` on a surviving member, `zpool add` to replace a mirror member, or `zpool upgrade` just to dismiss the expected feature warning. Do not unplug the running boot medium: SquashFS is still read from it unless explicitly copied to RAM.
