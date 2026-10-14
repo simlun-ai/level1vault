@@ -18,7 +18,7 @@ test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-umount"
 [[ $(chroot "$ROOT" id -u simlun) == 2000 && $(chroot "$ROOT" id -g simlun) == 2000 ]]
 chroot "$ROOT" visudo -cf /etc/sudoers
-chroot "$ROOT" su - simlun -c 'test "$(sudo -n id -u)" = 0'
+chroot "$ROOT" su - simlun -c 'sudo -n id -u' | grep -qx 0
 chroot "$ROOT" su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspace-umount"'
 test ! -e "$ROOT/etc/hostid"
 test ! -e "$ROOT/etc/zfs/zpool.cache"

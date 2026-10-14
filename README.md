@@ -96,7 +96,7 @@ If initialization fails, `INITIALIZING` remains and reruns are refused. Check `s
 Never attach the images to QEMU while the host has their pool imported or their loop mappings active. Keep only one active owner of this mirror. From `build/out/`:
 
 ```bash
-cp /usr/share/OVMF/OVMF_VARS_4M.fd ./ovmf-test-vars.fd
+sudo cp /usr/share/OVMF/OVMF_VARS_4M.fd ./ovmf-test-vars.fd
 sudo chown "$(id -u):$(id -g)" usb-a.img usb-b.img ovmf-test-vars.fd
 qemu-system-x86_64 \
   -machine q35,accel=kvm -cpu host -m 4096 -smp 2 \

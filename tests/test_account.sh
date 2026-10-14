@@ -16,7 +16,7 @@ lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
 lib.crypt.restype = ctypes.c_char_p
 assert lib.crypt(b'password', entry.encode()) == entry.encode()
 PY
-su - simlun -c 'test "$(sudo -n id -u)" = 0'
+su - simlun -c 'sudo -n id -u' | grep -qx 0
 su - simlun -c 'command -v workspace-mount && command -v workspace-umount'
 su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspace-umount"'
 grep -qx LIVE_USERNAME=simlun /etc/live/config.conf.d/level1vault.conf
