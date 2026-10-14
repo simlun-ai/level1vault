@@ -1,0 +1,14 @@
+name: Check scripts
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  scripts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck 01-configure-live.sh 02-assemble-images.sh live/mount-workspace live/90-zfs.hook.chroot
+      - run: bash -n 01-configure-live.sh 02-assemble-images.sh
+      - run: sh -n live/mount-workspace live/90-zfs.hook.chroot
+      - run: python3 -m unittest discover -s tests -v

@@ -1,0 +1,40 @@
+#!/bin/sh
+set -eu
+POOL=workspace
+DATASET=workspace/data
+MOUNTPOINT=/mnt/workspace
+[ "$#" -eq 0 ] || { echo 'Usage: sudo mount-workspace' >&2; exit 2; }
+[ "$(id -u)" -eq 0 ] || { echo 'Run: sudo /usr/local/sbin/mount-workspace' >&2; exit 1; }
+# Serialize manual calls. The lock lives in the RAM overlay.
+exec 9>/run/lock/level1vault-workspace.lock
+flock -x 9
+modprobe zfs
+[ -s /etc/hostid ] || zgenhostid
+udevadm settle
+if ! zpool list -H -o name "$POOL" >/dev/null 2>&1; then
+    # Name conflicts and active-host protection intentionally cause failure.
+    zpool import -N -d /dev/disk/by-partuuid -o cachefile=none "$POOL"
+fi
+# A fixed mountpoint is part of the contract, not a suggestion.
+[ "$(zfs get -H -o value mountpoint "$DATASET")" = "$MOUNTPOINT" ] || {
+    echo "ERROR: $DATASET must have mountpoint=$MOUNTPOINT" >&2; exit 1;
+}
+[ "$(zfs get -H -o value canmount "$DATASET")" = noauto ] || {
+    echo "ERROR: $DATASET must have canmount=noauto; inspect before changing it" >&2; exit 1;
+}
+mkdir -p "$MOUNTPOINT"
+if mountpoint -q "$MOUNTPOINT"; then
+    [ "$(findmnt -n -o SOURCE --mountpoint "$MOUNTPOINT")" = "$DATASET" ] || {
+        echo "ERROR: $MOUNTPOINT has a different filesystem mounted" >&2; exit 1;
+    }
+else
+    [ "$(zfs get -H -o value mounted "$DATASET")" = no ] || {
+        echo "ERROR: $DATASET is mounted elsewhere" >&2; exit 1;
+    }
+    [ -z "$(ls -A "$MOUNTPOINT")" ] || {
+        echo "ERROR: $MOUNTPOINT is not empty" >&2; exit 1;
+    }
+    zfs mount "$DATASET"
+fi
+findmnt --mountpoint "$MOUNTPOINT"
+zpool status "$POOL"

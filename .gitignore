@@ -1,0 +1,8 @@
+/build/
+/out/
+*.img
+*.iso
+*.fd
+*.log
+*.sha256
+__pycache__/

@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+# Do not install zfs-initramfs: ZFS is data only and not a boot dependency.
+if dpkg-query -W -f='${Status}' zfs-initramfs 2>/dev/null | grep -q 'install ok installed'; then
+    echo 'ERROR: zfs-initramfs is unexpected in this data-only live image' >&2
+    exit 1
+fi
+count=0
+for mods in /lib/modules/*; do
+    [ -d "$mods" ] || continue
+    version=${mods##*/}
+    [ -f "/boot/vmlinuz-$version" ] || continue
+    count=$((count + 1))
+    kernel_version=$version
+    [ -d "/usr/src/linux-headers-$version" ] || {
+        echo "ERROR: missing headers for $version" >&2; exit 1;
+    }
+    dkms autoinstall -k "$version"
+    depmod "$version"
+    modinfo -k "$version" zfs >/dev/null
+done
+[ "$count" -eq 1 ] || { echo "ERROR: expected one kernel, found $count" >&2; exit 1; }
+
+# Prevent import/mount through services, cached generator units, or stale build identity.
+systemctl mask zfs-import-cache.service zfs-import-scan.service zfs-import.service zfs-mount.service
+mkdir -p /etc/systemd/system-generators
+ln -sf /dev/null /etc/systemd/system-generators/zfs-mount-generator
+rm -f /etc/hostid /etc/zfs/zpool.cache
+if [ -d /etc/zfs/zfs-list.cache ]; then
+    find /etc/zfs/zfs-list.cache -type f -delete
+fi
+# Rebuild only after module verification and removal of build-host identity/caches.
+update-initramfs -u -k all
+mkdir -p /usr/local/share/level1vault
+dpkg-query -W -f='${binary:Package}\t${Version}\n' | sort > /usr/local/share/level1vault/packages.tsv
+dpkg-query -W -f='${Version}\n' zfsutils-linux > /usr/local/share/level1vault/zfsutils-version
+printf '%s\n' "$kernel_version" > /usr/local/share/level1vault/kernel-version
