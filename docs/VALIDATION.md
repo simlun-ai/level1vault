@@ -6,7 +6,21 @@
 - Seventeen mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
 - CI on Ubuntu 22.04 builds the actual Debian Trixie toolchain container and runs file-only assembly **without privileged mode**. A small synthetic ISO exercises real GPT creation, FAT population, per-drive GRUB EFI output, metadata checksums, medium UUID markers, unique identifiers and empty data partitions.
 
-The synthetic kernel/initrd are dummy payloads: this test does not boot Linux or compile DKMS. This workspace has no Docker/loop/KVM runtime. Full live-build, real host ZFS initialization and UEFI/hardware tests remain required; passing CI must not be interpreted as their completion.
+The synthetic kernel/initrd are dummy payloads: that assembly test does not boot Linux or compile DKMS.
+
+## Full build verified on 2026-10-14
+
+[Full Debian Live build on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38636756155) passed in approximately 17 minutes. It built the actual ISO and both default 12 GiB images, then extracted SquashFS and inspected:
+
+- ZFS module presence and vermagic matching target kernel `6.12.111+deb13-amd64`.
+- Executable mount-workspace and absence of baked-in hostid/pool cache.
+- Masked automatic pool import/mount services and mount generator.
+- Live-boot components in the actual initramfs.
+- Prepared-image state markers and checksums for both images and metadata.
+
+The workflow keeps diagnostic logs/manifests as an Actions artifact. It can also be rerun manually from GitHub Actions. Kernel/package versions depend on the configured Debian mirrors; this records one verified build, not a package pin.
+
+Real host ZFS initialization, loading the target module in a booted guest, UEFI boot and physical USB tests remain unverified. Continue with the checks below; a successful module presence/vermagic check does not prove it loads on the target machine.
 
 ## Required Ubuntu + Docker build checks
 

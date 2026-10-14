@@ -14,11 +14,11 @@ Each default 12 GiB image has a GPT, a 4 GiB FAT32 ESP holding GRUB and the live
 
 Docker shares the running host kernel. The container compiles ZFS **for Debian's target kernel**, with the Debian headers in the live-build chroot; it does not need to load that module. The host creates the pool using its own installed `zpool`/`zfs` and loaded module. Neither host kernel headers nor `/lib/modules` are bind-mounted into the container.
 
-**State of validation:** shell and mocked behavior tests plus a real file-only assembly test are in CI. A full live-build/DKMS build and an Ubuntu-to-Debian boot/import cycle still require execution. See [validation](docs/VALIDATION.md) and the [implementation review](docs/REVIEW.md).
+**State of validation:** [the full Debian Live build passed on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38636756155), including real DKMS compilation, initramfs generation and both 12 GiB boot images. The extracted SquashFS module matches kernel `6.12.111+deb13-amd64`; automatic import/mount disabling and final checksums also passed inspection. ShellCheck, 17 behavior tests and file-only assembly tests pass as well. Actual VM/UEFI boot and host/guest pool import still need your test run. See [validation](docs/VALIDATION.md) and the [implementation review](docs/REVIEW.md).
 
 ## 1. Prepare the Ubuntu workstation
 
-Use local, rootful Docker Engine on amd64 Linux. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. Have at least 40 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
+Use local, rootful Docker Engine on amd64 Linux. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. The first full CI build took about 17 minutes on its runner; workstation time varies. Have at least 40 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
 
 If Docker is not installed, Ubuntu's package is sufficient for this workflow:
 
