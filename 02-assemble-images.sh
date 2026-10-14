@@ -11,6 +11,7 @@ ISO=$(realpath -- "$1")
 [[ -f "$ISO" ]] || { echo "No ISO at $ISO" >&2; exit 1; }
 # Keep the host toolchain consistent with the live system.
 [[ $(dpkg --print-architecture) == amd64 ]] || { echo 'amd64 host required' >&2; exit 1; }
+# shellcheck source=/dev/null
 source /etc/os-release
 [[ $ID == debian && $VERSION_ID == 13 ]] || { echo 'Debian 13 host required' >&2; exit 1; }
 modprobe zfs
@@ -28,7 +29,7 @@ OUT_DIR=$(realpath -m -- "${2:-$PWD/out}")
 mkdir -- "$OUT_DIR"
 AIMG="$OUT_DIR/usb-a.img"
 BIMG="$OUT_DIR/usb-b.img"
-A= B= ISOMNT= ESPMNT= POOL_CREATED=0
+A='' B='' ISOMNT='' ESPMNT='' POOL_CREATED=0
 cleanup() {
   local rc=$? safe=1
   trap - EXIT
