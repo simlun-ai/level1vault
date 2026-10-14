@@ -1,5 +1,7 @@
 # Implementation review — 2026-10-14
 
+Updated for the Trixie-container / Ubuntu-host build split. The original draft and initial all-Debian implementation remain in Git history.
+
 Scope: all three files in the supplied archive. The original implementation is preserved in Git history. This review corrects source/configuration and command handling; it does not establish that a complete image boots on hardware.
 
 ## Findings and changes
@@ -14,34 +16,38 @@ Scope: all three files in the supplied archive. The original implementation is p
 | automatic mounts | Masking zfs-mount.service alone does not cover mount-generator units. `canmount=on` allows broad mounts. | Mask generator, clear caches, mask import services; create data with noauto and generator-ignore property. |
 | FAT32 assembly | `cp -a` copies Unix ownership/modes and can attempt symlinks; FAT does not support them. | Copy selected kernel/initrd with dereferencing and no Unix metadata. Enforce per-file limit and formatted ESP free space. |
 | ISO payload | Assumes stable kernel aliases and omits optional medium UUID markers. | Prefer manifest-selected versioned files, accept aliases, retain `.disk` markers. Single kernel is a build invariant. |
+| Container boundary | Docker shares the host kernel; Debian zpool in a container would talk to Ubuntu's loaded module. | Compile target DKMS with Debian headers in the chroot; create the pool with host tools. Container assembly uses only regular files, sgdisk and mtools. |
 | EFI loader | grub-install is reasonable on normal systems, but introduces host filesystem/disk probing when assembling loop images. | Standalone EFI image with an embedded search for that ESP UUID; load external menu. No NVRAM writes. Firmware validation remains required. |
 | live-media | Parameter is a preferred device, not strict fencing to it. | Document fallback semantics; boot each image alone to prove independence. |
-| pool format | Pool is created using the host OpenZFS version; default feature set may be newer than live userland. | Require equal Debian zfsutils package versions and matching host loaded-kmod/userland versions. Do not upgrade features casually. |
-| cleanup | Draft detaches loop devices even after a failed pool export. | Preserve loops if export or unmount fails; propagate failure and remove readiness marker. Partial outputs require investigation/deletion, not resuming blindly. |
+| pool format | Pool is created using the host OpenZFS version; default feature set may be newer than live userland. | Host creates with -d and enables only lz4_compress, a shared baseline for Ubuntu 22.04 OpenZFS 2.1 and Debian 13. Package version equality is not required. Do not upgrade features. |
+| cleanup | Draft detaches loop devices even after a failed pool export. | Host initializer preserves loops after failed export or uncertain pool-creation state. INITIALIZING blocks reruns after failure; READY appears only after successful export/detach and final hashes. Assembly uses no mounts/loops. |
 | mount helper | Could report success with a changed dataset mountpoint, obscure a nonempty directory, or race another invocation. | Lock; validate expected properties/mount source; reject nonempty mountpoint or dataset mounted elsewhere. Import has no force option. |
 | boot identity | Per-boot random hostid is valid for clean exports; unclean shutdown can cause foreign-host refusal. | Retained deliberately, documented manual fenced force import by numeric pool GUID. It is not a multi-host coordination mechanism. |
 | resilver | Wait command can return when no recovery is running, including a missing device. | Require final status, both members ONLINE and error inspection; provide online/replace procedures. |
 | flashing | GPT backup initially remains at the raw image end on larger sticks. Clones duplicate IDs. | Relocate backup GPT with sgdisk -e; document no original loops / duplicate physical members on same host. |
 | OS updates | Original rsync -a repeats FAT metadata issue; copy is not atomic. | Stage regular files, use rsync -rt, preserve UUID markers, update one boot environment at a time with backup. |
-| reproducibility | Rolling mirrors, unrecorded packages and randomized identities. | Track source and package manifests, build versions, checksums and identifiers. Snapshot pinning remains an operator-selected input. No claim of bit-for-bit disk reproduction. |
+| reproducibility | Rolling mirrors, unrecorded packages and randomized identities. | Track source, Docker image identity, package manifests, prepared/final checksums and pool identifiers. Snapshot pinning remains an operator-selected input. No claim of bit-for-bit disk reproduction. |
 | mirror architecture | One pool across both partitions is correct. Separate writable branches cannot be merged. | Preserve single-owner rule, explicitly test degraded write followed by authoritative-member resilver. |
 
-## Rebuilding from fixed package inputs
+## Reproducibility
 
-For the first boot attempt, use ordinary Debian 13 mirrors and record all versions. For later repeatable package selection, provision the build VM itself from a selected Debian snapshot and configure live-build against the same timestamp. Use a verified snapshot timestamp (`YYYYMMDDTHHMMSSZ`) at https://snapshot.debian.org/; availability of a timestamp is not verified by these scripts.
+Default Debian mirrors and the `debian:trixie` tag move over time. The wrapper records the builder image identity in `build/builder-image.json`; the chroot records package/kernel versions, and the host records its ZFS versions and pool GUID in `WORKSPACE-INFO.txt`.
 
-From a fresh build directory:
+For repeatable package inputs, select a verified Debian base image digest and Debian archive snapshot timestamp. Pin both the Dockerfile's toolchain package sources and live-build's bootstrap/chroot/security mirrors; pinning only the Docker image tag or only live-build mirrors is insufficient. The Dockerfile accepts `DEBIAN_IMAGE`; changing its APT sources to a historical snapshot is an explicit release configuration task.
+
+Example live-build arguments (replace the timestamp and digest with verified values):
 
 ```bash
 snapshot=REPLACE_WITH_VERIFIED_TIMESTAMP
-../01-configure-live.sh \
+sudo env DEBIAN_IMAGE=debian:trixie@sha256:VERIFIED_DIGEST \
+  ./build-container.sh "$PWD/build-pinned" \
   --mirror-bootstrap "https://snapshot.debian.org/archive/debian/$snapshot/" \
   --mirror-chroot "https://snapshot.debian.org/archive/debian/$snapshot/" \
   --mirror-chroot-security "https://snapshot.debian.org/archive/debian-security/$snapshot/" \
   --apt-options '--yes -o Acquire::Check-Valid-Until=false'
 ```
 
-Keep archive signature verification enabled. Disabling validity-expiry checks allows historical signed metadata; use only for the selected historical snapshot. Test that the selected archive contains trixie, trixie-updates and trixie-security as configured. Host GRUB, live-build, debootstrap, kernel headers and OpenZFS are also inputs, so a live-build mirror pin alone is insufficient. Record their versions in the build VM. New assembly intentionally produces different filesystem/GPT/pool identities. Never redistribute initialized pool images as generic replacements for an existing member.
+Keep archive signature verification enabled. Expiry bypass is only for the selected historical signed snapshot. Verify trixie, trixie-updates and trixie-security are available. Record the Dockerfile and host ZFS environment with each release. New disk assembly deliberately generates new filesystem/GPT identities and host initialization creates a new pool GUID: raw images are not bit-identical reproducible outputs.
 
 ## Recovery details
 
@@ -55,7 +61,7 @@ lsblk -o PATH,SIZE,FSTYPE,PARTUUID,UUID,MODEL,SERIAL
 ls -l /dev/disk/by-partuuid/
 ```
 
-If a known member remains unavailable, identify its numeric vdev GUID in status and its matching PARTUUID from BUILD-INFO.txt. After confirming they are the same original member, try bringing it online:
+If a known member remains unavailable, identify its numeric vdev GUID in status and its matching PARTUUID from images.json. After confirming they are the same original member, try bringing it online:
 
 ```bash
 sudo zpool online workspace EXISTING_MEMBER_GUID
@@ -65,7 +71,7 @@ sudo zpool status -gP workspace
 
 If its path cannot be resolved, do not blindly replace it with a stale copy. Inspect labels with `sudo zdb -l /dev/disk/by-partuuid/VERIFIED_PARTUUID`; zdb is supplied by zfsutils-linux. A normal replacement is for a genuinely failed/lost device, not an attempt to reconcile independently written members.
 
-For a **new replacement USB**, first prepare its boot environment without creating a new pool or overwriting the survivor. Use the assembly script's partition/ESP/standalone-GRUB steps as the design reference, but assign fresh GPT/FAT IDs and its own embedded/menu UUID. There is intentionally no automated replacement builder yet. The replacement ZFS partition must be at least the old member's size. Once it has a new, empty, verified partition:
+For a **new replacement USB**, first prepare its boot environment without creating a new pool or overwriting the survivor. Use the assembly script's file-based partition/ESP/standalone-GRUB steps as the design reference, but assign fresh GPT/FAT IDs and its own embedded/menu UUID. There is intentionally no automated replacement builder yet. The replacement ZFS partition must be at least the old member's size. Once it has a new, empty, verified partition:
 
 ```bash
 # MUTATES the selected replacement partition; double-check serial and PARTUUID.
