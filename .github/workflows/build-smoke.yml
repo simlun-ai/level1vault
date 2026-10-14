@@ -1,0 +1,41 @@
+name: Full Debian Live build
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '*.sh'
+      - 'docker/**'
+      - 'live/**'
+      - 'tests/test_live_build.sh'
+      - '.github/workflows/build-smoke.yml'
+permissions:
+  contents: read
+concurrency:
+  group: full-build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build real Debian Live ISO and boot images
+        run: sudo ./build-container.sh "$PWD/build"
+      - name: Inspect target ZFS module, initramfs and image artifacts
+        run: |
+          sudo docker run --rm \
+            --mount "type=bind,source=$PWD,target=/src,readonly" \
+            --mount "type=bind,source=$PWD/build,target=/build,readonly" \
+            level1vault-builder:trixie bash /src/tests/test_live_build.sh /build
+      - name: Save build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-build-diagnostics
+          if-no-files-found: ignore
+          path: |
+            build/build.log
+            build/builder-image.json
+            build/out/BUILD-INFO.txt
+            build/out/images.json

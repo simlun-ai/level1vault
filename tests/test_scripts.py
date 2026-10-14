@@ -140,7 +140,11 @@ esac''')
                 self.assertEqual(result.returncode, export_rc)
 
     def test_container_wrapper_keeps_host_kernel_and_zfs_out(self):
-        self.tool('docker', 'echo "docker $*" >> "$LOG"')
+        self.tool('docker', '''echo "docker $*" >> "$LOG"
+case "$1" in
+context) echo unix:///var/run/docker.sock;;
+info) echo '{"OSType":"linux","Architecture":"x86_64","SecurityOptions":[]}';;
+esac''')
         self.tool('uname', 'echo x86_64')
         output = self.base / 'build'
         result = subprocess.run(['bash', str(ROOT / 'build-container.sh'), str(output)],

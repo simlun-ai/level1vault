@@ -18,7 +18,7 @@ Docker shares the running host kernel. The container compiles ZFS **for Debian's
 
 ## 1. Prepare the Ubuntu workstation
 
-Use local, rootful Docker Engine on amd64 Linux. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. Have at least 40 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory.
+Use local, rootful Docker Engine on amd64 Linux. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. Have at least 40 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
 
 If Docker is not installed, Ubuntu's package is sufficient for this workflow:
 
@@ -41,12 +41,12 @@ The live-build container runs with `--privileged` because its chroot build needs
 ## 2. Build the live system and boot images in Docker
 
 ```bash
-git clone https://github.com/simlun-ai/level1vault.git
+git clone --branch main https://github.com/simlun-ai/level1vault.git
 cd level1vault
 sudo ./build-container.sh "$PWD/build"
 ```
 
-Use the PR branch until this workflow is merged. The wrapper builds `level1vault-builder:trixie`, then runs live-build and file-only disk assembly. It refuses an existing build directory, preventing accidental reuse of stale chroots/configuration. A later build can use `"$PWD/build-next"` instead.
+The workflow is available on `main`. The wrapper builds `level1vault-builder:trixie`, then runs live-build and file-only disk assembly. It refuses an existing build directory, preventing accidental reuse of stale chroots/configuration. A later build can use `"$PWD/build-next"` instead.
 
 The live image includes one Debian amd64 kernel and matching headers. Its chroot hook runs `dkms autoinstall -k <target-version>`, `depmod` and `modinfo` for that kernel, then regenerates initramfs. No running-host `uname -r` is used to select the target kernel. `zfs-initramfs` is excluded because the data pool must not be a boot dependency. Import/mount services and the ZFS systemd mount generator are disabled.
 
@@ -68,7 +68,7 @@ build/
     IMAGES-PREPARED
 ```
 
-`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts may be root-owned; readable files can be inspected normally. Do not recursively chown or remove a failed chroot until its mounts have been checked.
+`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts may be root-owned; readable files can be inspected normally. To report a build failure, include the final 100 lines of `build/build.log` and the complete error printed by the wrapper. Do not recursively chown or remove a failed chroot until its mounts have been checked.
 
 For configuration customization, pass extra `lb config` options after the build directory. Do not override kernel flavour, architecture or boot layout without updating the associated checks. For frozen package inputs and base image digest selection, see [reproducibility](docs/REVIEW.md#reproducibility).
 
@@ -105,7 +105,7 @@ qemu-system-x86_64 \
   -drive if=virtio,format=raw,file=./usb-b.img
 ```
 
-Check `ls /usr/share/OVMF` for available firmware names; use a matching CODE/VARS pair. Use `accel=tcg` if KVM is unavailable. Secure Boot must be disabled. The live console normally autologs in as `user`; Debian live user-setup normally uses password `live`. No SSH server or remote authentication is configured.
+On Ubuntu 22.04 installations that supply `OVMF_CODE.fd` and `OVMF_VARS.fd` instead of the `_4M` files, replace both paths with that matching pair. Check `ls /usr/share/OVMF` first. Use `accel=tcg` if KVM is unavailable. Secure Boot must be disabled. The live console normally autologs in as `user`; Debian live user-setup normally uses password `live`. No SSH server or remote authentication is configured.
 
 Inside the guest:
 

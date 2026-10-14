@@ -2,7 +2,7 @@
 set -euo pipefail
 # File-only assembly: no root, loop devices, mounts, udev, or ZFS module required.
 [[ $# -eq 2 ]] || { echo "Usage: $0 ISO NEW_OUTPUT_DIRECTORY" >&2; exit 2; }
-for cmd in xorriso unsquashfs sgdisk mkfs.vfat mmd mcopy grub-mkstandalone \
+for cmd in xorriso unsquashfs sgdisk mkfs.vfat mcopy grub-mkstandalone \
   blkid python3 realpath truncate sha256sum stat cp dd mktemp; do
   command -v "$cmd" >/dev/null || { echo "Missing command: $cmd" >&2; exit 1; }
 done

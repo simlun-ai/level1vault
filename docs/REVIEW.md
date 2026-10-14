@@ -2,7 +2,7 @@
 
 Updated for the Trixie-container / Ubuntu-host build split. The original draft and initial all-Debian implementation remain in Git history.
 
-Scope: all three files in the supplied archive. The original implementation is preserved in Git history. This review corrects source/configuration and command handling; it does not establish that a complete image boots on hardware.
+Scope: the build wrappers, live configuration, runtime helper, host initializer, CI/tests and operator documentation. The original implementation is preserved in Git history. This review corrects source/configuration and command handling; it does not establish that a complete image boots on hardware.
 
 ## Findings and changes
 
@@ -14,7 +14,7 @@ Scope: all three files in the supplied archive. The original implementation is p
 | DKMS | Presence check is useful, but an empty kernel loop could succeed. Existing initramfs was not refreshed after identity/cache cleanup. | Exactly one kernel required; matching headers/DKMS/depmod/modinfo; regenerate initramfs afterward. Guest modprobe is required to validate loadability. |
 | ZFS boot dependency | Data pool must not be needed for boot. | Exclude zfs-initramfs; reject unexpected installation. Compile ZFS into SquashFS, not at each boot. |
 | automatic mounts | Masking zfs-mount.service alone does not cover mount-generator units. `canmount=on` allows broad mounts. | Mask generator, clear caches, mask import services; create data with noauto and generator-ignore property. |
-| FAT32 assembly | `cp -a` copies Unix ownership/modes and can attempt symlinks; FAT does not support them. | Copy selected kernel/initrd with dereferencing and no Unix metadata. Enforce per-file limit and formatted ESP free space. |
+| FAT32 assembly | `cp -a` copies Unix ownership/modes and can attempt symlinks; FAT does not support them. | Copy selected kernel/initrd with dereferencing and no Unix metadata. Enforce per-file limit and a size budget; mtools rejects an overflowing ESP. |
 | ISO payload | Assumes stable kernel aliases and omits optional medium UUID markers. | Prefer manifest-selected versioned files, accept aliases, retain `.disk` markers. Single kernel is a build invariant. |
 | Container boundary | Docker shares the host kernel; Debian zpool in a container would talk to Ubuntu's loaded module. | Compile target DKMS with Debian headers in the chroot; create the pool with host tools. Container assembly uses only regular files, sgdisk and mtools. |
 | EFI loader | grub-install is reasonable on normal systems, but introduces host filesystem/disk probing when assembling loop images. | Standalone EFI image with an embedded search for that ESP UUID; load external menu. No NVRAM writes. Firmware validation remains required. |
