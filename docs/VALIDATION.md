@@ -1,21 +1,22 @@
 # Acceptance checklist
 
-## Checks completed in this workspace
+## Automated coverage
 
-- Shell syntax checks for both builders, the hook and runtime helper.
-- Ten behavior tests (mocked system tools): config generation/overwrite refusal, first import, repeat mount, import refusal, foreign mount, wrong mountpoint/noauto property, nonempty mountpoint, root check, and export/unmount failure cleanup.
-- Review against Debian 13 and OpenZFS manuals.
+- Shell syntax and ShellCheck across builders, Docker entrypoint, live hook/runtime helper and assembly test.
+- Seventeen mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
+- CI on Ubuntu 22.04 builds the actual Debian Trixie toolchain container and runs file-only assembly **without privileged mode**. A small synthetic ISO exercises real GPT creation, FAT population, per-drive GRUB EFI output, metadata checksums, medium UUID markers, unique identifiers and empty data partitions.
 
-Not available here: live-build, debootstrap, shellcheck, QEMU/OVMF, loop devices, /dev/kvm, or a Debian 13 host. Thus no ISO was built, no real ZFS pool created, no real EFI loader executed, and no hardware tests performed. GitHub Actions runs shellcheck and these mock tests; it does not build/boot disk images.
+The synthetic kernel/initrd are dummy payloads: this test does not boot Linux or compile DKMS. This workspace has no Docker/loop/KVM runtime. Full live-build, real host ZFS initialization and UEFI/hardware tests remain required; passing CI must not be interpreted as their completion.
 
-## Required build checks in Debian 13
+## Required Ubuntu + Docker build checks
 
-1. Host zpool --version reports matching userland and loaded module versions. Running kernel headers exist; modprobe zfs works.
-2. Configuration build finishes with pipefail enabled. Capture build.log and the live-build package list. Hook reports exactly one kernel and ZFS DKMS success.
-3. Inspect SquashFS: matching ZFS module under /lib/modules/<kernel>, no /etc/hostid or zpool.cache, masked import/mount units and generator override, executable mount-workspace, no zfs-initramfs package.
-4. Inspect initramfs with lsinitramfs: live-boot scripts and disk/FAT/USB drivers available, no build-host hostid/cache or ZFS-root boot flow. Data ZFS need not be in initramfs.
-5. Assembly finishes with READY present, two distinct FAT UUIDs and PARTUUIDs, one pool GUID, correct partition sizes, and valid SHA256SUMS. Check sfdisk --verify on each image.
-6. Mount each ESP read-only: all three live payload files are regular files and EFI/BOOT/BOOTX64.EFI exists. No host pool or loop mappings remain after assembly.
+1. On Ubuntu 22.04, the existing zpool/zfs tools communicate with its running module. Existing host pools remain unaffected throughout the workflow.
+2. `sudo ./build-container.sh "$PWD/build"` completes a real live-build inside Trixie. Capture build.log and builder-image.json. The hook verifies one Debian target kernel and matching ZFS DKMS module even though container uname reports Ubuntu's kernel.
+3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable mount-workspace, no zfs-initramfs package.
+4. Inspect initramfs with lsinitramfs: live-boot and required USB/FAT drivers present. ZFS is data only, not a root-boot dependency.
+5. File assembly leaves IMAGES-PREPARED and PREPARED-SHA256SUMS, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.
+6. On the host, run 03-initialize-workspace.sh. Verify one mirror is created, only lz4_compress is enabled, workspace/data is noauto, the pool is exported, loops detached, and READY/final SHA256SUMS/WORKSPACE-INFO.txt exist.
+7. Check final checksums before VM tests. Checksums must be refreshed after VM writes, with pool exported and VM stopped.
 
 ## VM matrix
 
@@ -35,7 +36,7 @@ Keep the raw images on only one machine/VM owner. Export before shutting down. U
 | B alone after resilver | Read-only import sees the file written during A-only operation. |
 | USB emulation | Both images boot and discover FAT/PARTUUID devices as USB rather than only virtio. |
 
-Read-only test (after confirming no other owner, substitute numeric pool GUID):
+Read-only test (after confirming no other owner, substitute numeric pool GUID from WORKSPACE-INFO.txt):
 
 ```bash
 sudo modprobe zfs

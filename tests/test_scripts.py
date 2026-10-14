@@ -123,25 +123,38 @@ esac''')
                                env=self.env, capture_output=True, text=True)
         self.assertNotEqual(again.returncode, 0)
 
-    def test_cleanup_retains_loops_when_export_or_unmount_fails(self):
-        text = (ROOT / '02-assemble-images.sh').read_text()
+    def test_cleanup_retains_loops_when_export_fails(self):
+        text = (ROOT / '03-initialize-workspace.sh').read_text()
         cleanup = text.split('cleanup() {', 1)[1].split('\ntrap cleanup EXIT', 1)[0]
-        for export_rc, umount_rc, expected_detach in ((1, 0, False), (0, 1, False), (0, 0, True)):
-            with self.subTest(export_rc=export_rc, umount_rc=umount_rc):
+        for export_rc in (0, 1):
+            with self.subTest(export_rc=export_rc):
                 self.log.unlink(missing_ok=True)
                 self.tool('zpool', f'echo "zpool $*" >> "$LOG"\nexit {export_rc}')
-                self.tool('mountpoint', 'exit 0')
-                self.tool('umount', f'echo "umount $*" >> "$LOG"\nexit {umount_rc}')
                 self.tool('losetup', 'echo "losetup $*" >> "$LOG"')
                 script = self.base / 'cleanup.sh'
-                script.write_text('''#!/bin/bash
-A=/dev/mock-a B=/dev/mock-b POOL_CREATED=1
-OUT_DIR="$PWD" ESPMNT=/nonexistent ISOMNT=
-cleanup() {''' + cleanup + '\ntrue\ncleanup\n')
+                script.write_text('#!/bin/bash\nA=/dev/mock-a B=/dev/mock-b POOL_CREATED=1\n'
+                                  'OUT_DIR="$PWD"\ncleanup() {' + cleanup + '\ntrue\ncleanup\n')
                 result = subprocess.run(['bash', str(script)], env=self.env, cwd=self.base,
                                         capture_output=True, text=True)
-                self.assertEqual('losetup -d' in self.calls(), expected_detach)
-                self.assertEqual(result.returncode, 0 if expected_detach else 1)
+                self.assertEqual('losetup -d' in self.calls(), export_rc == 0)
+                self.assertEqual(result.returncode, export_rc)
+
+    def test_container_wrapper_keeps_host_kernel_and_zfs_out(self):
+        self.tool('docker', 'echo "docker $*" >> "$LOG"')
+        self.tool('uname', 'echo x86_64')
+        output = self.base / 'build'
+        result = subprocess.run(['bash', str(ROOT / 'build-container.sh'), str(output)],
+                                env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('--privileged', self.calls())
+        self.assertIn('target=/src,readonly', self.calls())
+        self.assertIn('bind-propagation=rprivate', self.calls())
+        self.assertNotIn('/lib/modules', self.calls())
+        self.assertNotIn('/run/udev', self.calls())
+        self.assertNotIn('zpool', self.calls())
+        again = subprocess.run(['bash', str(ROOT / 'build-container.sh'), str(output)],
+                               env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(again.returncode, 0)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
