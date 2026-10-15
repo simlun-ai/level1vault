@@ -25,7 +25,7 @@ with open(os.environ['CALLS'], 'a') as f:
     f.write(json.dumps(args) + '\\n')
 if args[0] == 'context': print('unix:///var/run/docker.sock')
 if args[0] == 'info': print(json.dumps(dict(OSType='linux', Architecture='x86_64', SecurityOptions=[])))
-if args[:2] == ['buildx', 'inspect'] and '--format' in args: print('docker-container')
+if args[:2] == ['buildx', 'inspect']: print('Driver: docker-container')
 if args[:2] == ['buildx', 'build']:
     if os.environ.get('FAIL_EXPORT'): sys.exit(42)
     if '--build-context' in args:

@@ -28,7 +28,7 @@ if ! docker buildx inspect "$BUILDX_BUILDER" >/dev/null 2>&1; then
   docker buildx create --name "$BUILDX_BUILDER" --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' >/dev/null
 fi
-DRIVER=$(docker buildx inspect "$BUILDX_BUILDER" --format '{{.Driver}}')
+DRIVER=$(LC_ALL=C docker buildx inspect "$BUILDX_BUILDER" | awk '$1 == "Driver:" {print $2}')
 [[ $DRIVER == docker-container ]] || { echo 'Dedicated builder must use docker-container driver' >&2; exit 1; }
 docker buildx inspect "$BUILDX_BUILDER" --bootstrap >/dev/null
 base=(docker buildx build --builder "$BUILDX_BUILDER" --platform linux/amd64 \

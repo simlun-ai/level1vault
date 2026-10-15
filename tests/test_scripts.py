@@ -164,7 +164,7 @@ esac''')
         self.tool('docker', '''echo "docker $*" >> "$LOG"
 case "$1" in
 context) echo unix:///var/run/docker.sock;;
-buildx) case "$*" in *--format*) echo docker-container;; esac;;
+buildx) case "$2" in inspect) echo "Driver: docker-container";; esac;;
 info) echo '{"OSType":"linux","Architecture":"x86_64","SecurityOptions":[]}';;
 esac''')
         self.tool('uname', 'echo x86_64')
