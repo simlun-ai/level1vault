@@ -1,6 +1,7 @@
 /build/
 /build-*/
 /out/
+/qemu-results/
 *.img
 *.iso
 *.fd

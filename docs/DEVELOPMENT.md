@@ -17,6 +17,7 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 | `make test` | ShellCheck, shell syntax checks and Python unit/behavior tests |
 | `make test-unit` | Only Python unit/behavior tests |
 | `make test-container` | Build the toolchain and test real disk assembly and account/login configuration in separate sandboxed BuildKit stages |
+| `make test-qemu PAIR=1` | Boot disposable copies of an initialized active pair and verify reboot, degraded writes, and rejoin; see [QEMU](QEMU.md) |
 | `make check-build` | Inspect an existing full build's SquashFS, module, initramfs and prepared artifacts |
 | `make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1` | Real ZFS integration, **only on a disposable VM** |
 | `make clean` | Remove legacy build work while preserving artifacts |
@@ -61,11 +62,13 @@ sudo apt install -y make python3 zfsutils-linux gdisk udev
 make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1
 ```
 
-`make test` never enables or runs this suite. No automated test writes physical USB drives.
+`make test` never enables or runs this suite or QEMU. No automated test writes physical USB drives.
+
+QEMU testing uses `scripts/test-qemu.py`, the guest checks in `tests/qemu-guest.sh`, and the ordered scenarios in `tests/qemu-scenarios.json`. After changing checks or scenarios, run `python3 scripts/qemu-docs.py` to regenerate [the manual commands](QEMU-CHECKS.md). The normal unit tests reject documentation drift. The generated manual and runner use the same guest checks, not separately maintained copies.
 
 ## CI
 
-`.github/workflows/check.yml` uses `make test`, `make test-container` and `make test-zfs` in separate Ubuntu 22.04 jobs. The full-build workflow uses `make build` then `make check-build`, retaining diagnostic artifacts on failure. These are the same entrypoints as local runs.
+`.github/workflows/check.yml` uses `make test`, `make test-container` and `make test-zfs` in separate Ubuntu 22.04 jobs. The full-build workflow uses `make build`, `make check-build`, and then initializes a disposable active pair and runs `make test-qemu` under TCG. It retains build diagnostics, serial logs and the QEMU result report on failure. These are the same entrypoints as local runs. The CI passphrase is public test-only data, never a deployment secret.
 
 `make check-build` expects prepared, uninitialized images. Run it before `make initialize`; later initialization intentionally changes the data partitions and image checksums. Full builds and hardware acceptance remain separate from the fast tests. See [validation](VALIDATION.md).
 

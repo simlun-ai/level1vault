@@ -1,0 +1,32 @@
+[
+  {
+    "name": "both-reboot",
+    "drives": ["a", "b"],
+    "purpose": "Both drives boot, the workspace persists, and the root overlay resets.",
+    "steps": [["boot"], ["mount", "ONLINE"], ["write", "initial"], ["export"], ["reboot"], ["boot"], ["mount", "ONLINE"], ["verify", "initial"], ["export"]]
+  },
+  {
+    "name": "a-alone",
+    "drives": ["a"],
+    "purpose": "Drive A boots independently and accepts degraded writes.",
+    "steps": [["boot"], ["mount", "DEGRADED"], ["verify", "initial"], ["write", "from-a"], ["export"]]
+  },
+  {
+    "name": "rejoin-a",
+    "drives": ["a", "b"],
+    "purpose": "Drive B rejoins and the mirror retains A's degraded write.",
+    "steps": [["boot"], ["mount", "rejoining"], ["rejoin"], ["verify", "from-a"], ["export"]]
+  },
+  {
+    "name": "b-alone",
+    "drives": ["b"],
+    "purpose": "Drive B boots independently and accepts degraded writes.",
+    "steps": [["boot"], ["mount", "DEGRADED"], ["verify", "from-a"], ["write", "from-b"], ["export"]]
+  },
+  {
+    "name": "rejoin-b",
+    "drives": ["a", "b"],
+    "purpose": "Drive A rejoins and the mirror retains B's degraded write.",
+    "steps": [["boot"], ["mount", "rejoining"], ["rejoin"], ["verify", "from-b"], ["export"]]
+  }
+]

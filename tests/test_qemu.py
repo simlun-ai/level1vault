@@ -1,0 +1,133 @@
+"""Check QEMU orchestration safety and manual/automated acceptance parity."""
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest.mock import Mock, patch
+
+ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('test_qemu_runner', ROOT / 'scripts/test-qemu.py')
+runner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runner)
+
+
+class QemuTests(unittest.TestCase):
+    def setUp(self):
+        # Prepare small initialized artifacts without accessing host ZFS.
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.out = self.base / 'out'
+        self.out.mkdir()
+        self.sysfs = self.base / 'sys'
+        self.sysfs.mkdir()
+        (self.out / 'READY').touch()
+        (self.out / 'WORKSPACE-INFO.txt').write_text('pair=1\nstate=active\n')
+        for name in ('usb-a.img', 'usb-b.img', 'images.json'):
+            (self.out / name).write_text(name)
+        self.checksums = {name: runner.digest(self.out / name)
+                          for name in ('usb-a.img', 'usb-b.img', 'images.json')}
+        (self.out / 'SHA256SUMS').write_text(''.join(f'{checksum}  {name}\n'
+                                                  for name, checksum in self.checksums.items()))
+
+    def verify(self):
+        return runner.verify_inputs(self.out, '1', self.sysfs)
+
+    def test_preflight_checks_identity_checksums_and_partial_setup(self):
+        self.assertEqual(self.verify(), self.checksums)
+        (self.out / 'INITIALIZING').touch()
+        with self.assertRaisesRegex(RuntimeError, 'completed'):
+            self.verify()
+        (self.out / 'INITIALIZING').unlink()
+        (self.out / 'usb-a.img').write_text('changed')
+        with self.assertRaisesRegex(RuntimeError, 'Checksum mismatch'):
+            self.verify()
+
+    def test_rejects_attached_images_and_symlinks(self):
+        entry = self.sysfs / 'loop0/loop/backing_file'
+        entry.parent.mkdir(parents=True)
+        entry.write_text(str(self.out / 'usb-a.img'))
+        with self.assertRaisesRegex(RuntimeError, 'attached'):
+            self.verify()
+        entry.unlink()
+        (self.out / 'usb-a.img').unlink()
+        (self.out / 'usb-a.img').symlink_to(self.out / 'usb-b.img')
+        with self.assertRaisesRegex(RuntimeError, 'regular files'):
+            self.verify()
+
+    def test_rejects_replica_wrong_pair_and_unexpected_checksum_paths(self):
+        for info in ('pair=1\nstate=replica\n', 'pair=2\nstate=active\n'):
+            (self.out / 'WORKSPACE-INFO.txt').write_text(info)
+            with self.assertRaisesRegex(RuntimeError, 'active pair'):
+                self.verify()
+        (self.out / 'WORKSPACE-INFO.txt').write_text('pair=1\nstate=active\n')
+        with (self.out / 'SHA256SUMS').open('a') as stream:
+            stream.write('a' * 64 + '  ../../unexpected\n')
+        with self.assertRaisesRegex(RuntimeError, 'Unexpected'):
+            self.verify()
+
+    def test_serial_patch_preserves_boot_arguments_and_refuses_ambiguity(self):
+        original = 'menuentry test {\n    linux /live/vmlinuz boot=live nopersistence\n}\n'
+        modified = runner.serial_config(original)
+        self.assertIn('boot=live nopersistence console=tty0 console=ttyS0,115200n8', modified)
+        self.assertEqual(modified.replace(' console=tty0 console=ttyS0,115200n8', ''), original)
+        for invalid in (modified, original + original, 'no live entry'):
+            with self.assertRaises(RuntimeError):
+                runner.serial_config(invalid)
+
+    def test_qemu_arguments_never_attach_source_disks_or_network(self):
+        work = self.base / 'copies'
+        args = runner.qemu_args(work, ['b'], Path('/code.fd'), work / 'vars.fd', 'tcg')
+        self.assertIn(f'if=virtio,format=raw,file={work}/usb-b.img', args)
+        self.assertFalse(any('usb-a.img' in arg or str(self.out) in arg for arg in args))
+        self.assertEqual(args[args.index('-nic') + 1], 'none')
+        self.assertEqual(args[args.index('-monitor') + 1], 'none')
+        self.assertNotIn('-virtfs', args)
+
+    def test_copy_operations_patch_only_verified_copies(self):
+        work = self.base / 'copies'
+        work.mkdir()
+
+        def fake_command(*args):
+            if args[0] == 'qemu-img':
+                Path(args[-1]).write_bytes(Path(args[-2]).read_bytes())
+            elif args[-2] == '::/boot/grub/grub.cfg':
+                Path(args[-1]).write_text('linux /live/vmlinuz boot=live\n')
+            else:
+                self.assertIn(str(work), args[args.index('-i') + 1])
+            return ''
+
+        with patch.object(runner, 'command', side_effect=fake_command):
+            runner.prepare_copies(self.out, work, self.checksums)
+        self.assertEqual(self.verify(), self.checksums)
+        self.assertIn('console=ttyS0', (work / 'grub-b.cfg').read_text())
+
+    def test_unlock_exchange_is_not_logged_even_on_failure(self):
+        child = Mock()
+        log = child.logfile_read
+        guest = runner.Guest(child, Mock(), 10)
+
+        def failed_expect(*args, **kwargs):
+            self.assertIsNone(child.logfile_read)
+            raise RuntimeError('failed')
+
+        child.expect.side_effect = failed_expect
+        with self.assertRaises(RuntimeError):
+            guest.run('bash checks mount', 'not-a-real-secret')
+        self.assertIs(child.logfile_read, log)
+        self.assertNotIn('not-a-real-secret', child.sendline.call_args.args[0])
+
+    def test_manual_checks_are_generated_from_the_actual_suite(self):
+        subprocess.run([sys.executable, str(ROOT / 'scripts/qemu-docs.py'), '--check'], check=True)
+        scenarios = json.loads(runner.SCENARIOS.read_text())
+        self.assertEqual([s['drives'] for s in scenarios], [['a', 'b'], ['a'], ['a', 'b'], ['b'], ['a', 'b']])
+        for scenario in scenarios:
+            self.assertEqual(scenario['steps'][0], ['boot'])
+            self.assertEqual(scenario['steps'][-1], ['export'])
+
+
+if __name__ == '__main__':
+    unittest.main()

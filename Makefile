@@ -16,7 +16,7 @@ SUDO ?= sudo
 export BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH
 
 # Expose the supported project lifecycle commands.
-.PHONY: help build builder assemble initialize verify lint test-unit test test-container test-zfs check-build clean cache-clean
+.PHONY: help build builder assemble initialize verify lint test-unit test test-container test-zfs test-qemu check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
@@ -27,6 +27,7 @@ help:
 	  'make verify [OUT=...]             Check READY and final image checksums' \
 	  'make test                        Run local lint and unit/behavior tests' \
 	  'make test-container              Test real assembly and login in Trixie' \
+	  'make test-qemu PAIR=1            Test UEFI boot and recovery on disposable copies' \
 	  'make test-zfs                     Real ZFS tests; disposable VM only (see docs)' \
 	  'make check-build                 Inspect an already-built live system' \
 	  'make clean                       Remove legacy build work; preserve artifacts' \
@@ -72,6 +73,10 @@ test: lint test-unit
 # Verify image assembly and account setup in Debian.
 test-container:
 	$(SUDO) env BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" bash scripts/buildkit.sh test
+
+# Verify boot and workspace recovery without changing the original images.
+test-qemu:
+	python3 scripts/test-qemu.py --out "$$OUT" --pair "$$PAIR" $(QEMU_ARGS)
 
 # Deliberately excluded from `make test`: do not opt a workstation into this.
 test-zfs:
