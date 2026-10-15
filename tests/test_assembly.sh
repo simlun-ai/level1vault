@@ -47,3 +47,5 @@ if IMAGE_MIB=512 ESP_MIB=64 "$SOURCE_DIR/02-assemble-images.sh" "$TASK_TMP/input
   echo 'ERROR: overwrote existing output' >&2; exit 1
 fi
 (cd "$TASK_TMP/out" && sha256sum -c PREPARED-SHA256SUMS)
+
+if [[ -n ${TEST_ISO_OUTPUT:-} ]]; then cp "$TASK_TMP/input.iso" "$TEST_ISO_OUTPUT"; fi

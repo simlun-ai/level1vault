@@ -164,6 +164,7 @@ esac''')
         self.tool('docker', '''echo "docker $*" >> "$LOG"
 case "$1" in
 context) echo unix:///var/run/docker.sock;;
+buildx) case "$*" in *--format*) echo docker-container;; esac;;
 info) echo '{"OSType":"linux","Architecture":"x86_64","SecurityOptions":[]}';;
 esac''')
         self.tool('uname', 'echo x86_64')
@@ -171,9 +172,11 @@ esac''')
         result = subprocess.run(['bash', str(ROOT / 'build-container.sh'), str(output)],
                                 env=self.env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('--privileged', self.calls())
-        self.assertIn('target=/src,readonly', self.calls())
-        self.assertIn('bind-propagation=rprivate', self.calls())
+        self.assertIn('--allow security.insecure', self.calls())
+        self.assertIn('--target artifacts', self.calls())
+        self.assertIn('type=local,dest=', self.calls())
+        self.assertIn('ASSEMBLY_ID=', self.calls())
+        self.assertNotIn('docker run', self.calls())
         self.assertNotIn('/lib/modules', self.calls())
         self.assertNotIn('/run/udev', self.calls())
         self.assertNotIn('zpool', self.calls())

@@ -6,9 +6,9 @@ Each default 12 GiB image has a GPT, a 4 GiB FAT32 ESP holding GRUB and the live
 
 | Work | Where | Entry point |
 | --- | --- | --- |
-| Install build tools | Trixie Docker image | `docker/Dockerfile` |
-| Build Debian kernel, initramfs, SquashFS and target ZFS DKMS module | Privileged Trixie build container | `build-container.sh`, `01-configure-live.sh` |
-| Construct GPT images, FAT filesystems, per-drive UEFI loaders | Trixie container; file operations only | `02-assemble-images.sh` |
+| Install build tools | Trixie Docker image | `docker/Dockerfile` toolchain stage |
+| Build Debian kernel, initramfs, SquashFS and target ZFS DKMS module | Privileged BuildKit live stage | `build-container.sh`, `01-configure-live.sh` |
+| Construct GPT images, FAT filesystems, per-drive UEFI loaders | Sandboxed BuildKit assembly stage; file operations only | `02-assemble-images.sh` |
 | Initialize one ZFS mirror across both image data partitions | Linux host, using its existing ZFS stack and loop devices | `03-initialize-workspace.sh` |
 | QEMU tests and physical USB writing | Linux host | [QEMU](QEMU.md) and [USB writing](USB.md) |
 
@@ -60,3 +60,5 @@ Assembly uses `xorriso` to extract the ISO, `sgdisk` to partition regular files,
 - [Pool create](https://manpages.debian.org/trixie/zfsutils-linux/zpool-create.8.en.html), [import](https://manpages.debian.org/trixie/zfsutils-linux/zpool-import.8.en.html), [export](https://manpages.debian.org/trixie/zfsutils-linux/zpool-export.8.en.html)
 - [Online](https://manpages.debian.org/trixie/zfsutils-linux/zpool-online.8.en.html), [replace](https://manpages.debian.org/trixie/zfsutils-linux/zpool-replace.8.en.html), [wait](https://manpages.debian.org/trixie/zfsutils-linux/zpool-wait.8.en.html)
 - [Pool feature compatibility](https://manpages.debian.org/trixie/zfsutils-linux/zpool-features.7.en.html)
+
+The current [BuildKit pipeline](BUILDKIT.md) exports artifacts from scratch stages. The table of design findings above records the original review; host/container ZFS separation still applies.

@@ -28,7 +28,7 @@ The operator verified the [QEMU procedure](QEMU.md), including the normal guest 
 ## Required Linux host + Docker build checks
 
 1. On the Linux host, the existing zpool/zfs tools communicate with its running module. Existing host pools remain unaffected throughout the workflow.
-2. `make build` completes a real live-build inside Trixie. Capture build.log and builder-image.json. The hook verifies one Debian target kernel and matching ZFS DKMS module even though container uname reports the host's kernel.
+2. `make build` completes a real live-build inside Trixie. Capture build.log, builder-info.txt and build-metadata.json. The hook verifies one Debian target kernel and matching ZFS DKMS module even though container uname reports the host's kernel.
 3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable workspace-mount, no zfs-initramfs package.
 4. Inspect initramfs with lsinitramfs: live-boot and required USB/FAT drivers present. ZFS is data only, not a root-boot dependency.
 5. File assembly leaves IMAGES-PREPARED and PREPARED-SHA256SUMS, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.
@@ -125,3 +125,7 @@ Unexpected power-loss recovery should use a separate disposable image pair; it c
 ## N-pair and ordered-failover acceptance after rebuilding
 
 Follow [PAIRS.md](PAIRS.md) to provision unique numbered pairs. Exercise at least four IDs, including 2 and 10, to verify numeric order. Verify shared-checkpoint full and incremental receives, passphrase unlock, UID/GID 2000 ownership, read-only replica use, both members ONLINE and clean scrubs. Rotate one offsite copy at a time. On disposable images, interrupt and resume full/incremental transfers, fence/export the active pair, activate the next numeric ID in place, make UID 2000 writes, and rebind the remaining replicas using their common checkpoint. Repeat failover and verify names/identities stay stable. Confirm incomplete receives, an observably active former owner, absent fencing acknowledgement, divergent writes/snapshots and source changes without --rebind all fail safely. Record completed checkpoints, IDs and physical-device locations outside the pools.
+
+## BuildKit refactor acceptance
+
+The historical runs above validated the earlier Docker-run pipeline. The BuildKit PR must additionally pass sandboxed test stages, two scratch/local exports with distinct identities, and a complete privileged live-build plus exported-ISO inspection. No boot/runtime code changes are intended. Operator boot tests of the new output and measured disk usage remain acceptance checks.

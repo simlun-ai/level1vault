@@ -1,11 +1,22 @@
 name: Full Debian Live build
 on:
+  pull_request:
+    paths:
+      - '*.sh'
+      - 'Makefile'
+      - '.dockerignore'
+      - 'scripts/**'
+      - 'docker/**'
+      - 'live/**'
+      - 'tests/test_live_build.sh'
+      - '.github/workflows/build-smoke.yml'
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - '*.sh'
       - 'Makefile'
+      - '.dockerignore'
       - 'scripts/**'
       - 'docker/**'
       - 'live/**'
@@ -18,14 +29,19 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+        with:
+          name: level1vault
+          buildkitd-flags: --allow-insecure-entitlement security.insecure
       - name: Build real Debian Live ISO and boot images
-        run: make build
+        run: make build SUDO=
       - name: Inspect target ZFS module, initramfs and image artifacts
-        run: make check-build
+        run: make check-build SUDO=
       - name: Save build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -34,6 +50,8 @@ jobs:
           if-no-files-found: ignore
           path: |
             build/build.log
-            build/builder-image.json
+            build/builder-info.txt
+            build/build-metadata.json
+            build/live-build.log
             build/out/BUILD-INFO.txt
             build/out/images.json

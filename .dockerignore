@@ -1,0 +1,12 @@
+# An allowlist keeps workspaces, initialized images and Git data out of BuildKit.
+**
+!01-configure-live.sh
+!02-assemble-images.sh
+!live/
+!live/**
+!docker/
+!docker/Dockerfile
+!docker/build-in-container.sh
+!tests/
+!tests/*.sh
+**/__pycache__
