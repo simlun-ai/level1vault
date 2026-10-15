@@ -37,23 +37,19 @@ The wrapper creates a dedicated BuildKit builder, builds the ISO and file-only i
 
 Successful output:
 
-```text
-build/
-  builder-info.txt                  # dedicated BuildKit instance
-  build-metadata.json               # successful solve metadata
-  live-build.log                    # successful live-build stage log
-  build.log
-  live-image-amd64.hybrid.iso        # intermediate ISO
-  out/
-    usb-a.img
-    usb-b.img
-    images.json                     # target kernel/ZFS versions and per-image identities
-    BUILD-INFO.txt
-    PREPARED-SHA256SUMS
-    IMAGES-PREPARED
-```
+| Output | Purpose |
+| --- | --- |
+| `build/default/live/live-image-amd64.hybrid.iso` | Stage 1 live ISO |
+| `build/default/live/live-build.log` | Successful live-build log |
+| `build/default/pairs/1/usb-a.img`, `usb-b.img` | Stage 2 bootable pair |
+| `build/default/pairs/1/images.json` | Target versions and per-image identities |
+| `build/default/pairs/1/BUILD-INFO.txt` | Assembly record |
+| `build/default/pairs/1/PREPARED-SHA256SUMS`, `IMAGES-PREPARED` | Stage 2 completion and checksums |
+| `build/default/builder-info.txt`, `build-metadata.json`, `build.log` | Pipeline records |
+| `build/default/validation/<test-run>/` | Optional workstation acceptance reports |
 
-`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts may be root-owned; readable files can be inspected normally. To report a build failure, include the final 100 lines of `build/build.log` and the complete error printed by the wrapper. The chroot stays inside BuildKit; failed-stage output is available in the streamed host build.log.
+
+`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts may be root-owned; readable files can be inspected normally. To report a build failure, include the final 100 lines of `build/default/build.log` and the complete error printed by the wrapper. The chroot stays inside BuildKit; failed-stage output is available in the streamed host build.log.
 
 For configuration customization, pass extra `lb config` options after the build directory. Do not override kernel flavour, architecture or boot layout without updating the associated checks. For frozen package inputs and base image digest selection, see [reproducibility](#reproducibility).
 
@@ -64,9 +60,9 @@ Run this in the host workstation shell:
 ```bash
 make initialize PAIR=1 ACTIVE=1
 # Enter/confirm the workspace encryption passphrase at ZFS's stdin prompt.
-test -f build/out/READY
-cat build/out/WORKSPACE-INFO.txt
-(cd build/out && sha256sum -c SHA256SUMS)
+test -f build/default/pairs/1/READY
+cat build/default/pairs/1/WORKSPACE-INFO.txt
+(cd build/default/pairs/1 && sha256sum -c SHA256SUMS)
 ```
 
 This verifies the prepared checksums, refuses attached/previously initialized images, attaches both files using loop devices, verifies their data PARTUUIDs and blank signatures, and creates **one pool across both partitions**. Nothing is created on physical USBs at this stage.
@@ -88,7 +84,7 @@ Example live-build arguments (replace the timestamp and digest with verified val
 ```bash
 snapshot=REPLACE_WITH_VERIFIED_TIMESTAMP
 sudo env DEBIAN_IMAGE=debian:trixie@sha256:VERIFIED_DIGEST \
-  ./build-container.sh "$PWD/build-pinned" \
+  ./pipeline/buildkit.sh build "$PWD/build-pinned" \
   --mirror-bootstrap "https://snapshot.debian.org/archive/debian/$snapshot/" \
   --mirror-chroot "https://snapshot.debian.org/archive/debian/$snapshot/" \
   --mirror-chroot-security "https://snapshot.debian.org/archive/debian-security/$snapshot/" \

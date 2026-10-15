@@ -2,7 +2,7 @@
 
 ## Automated coverage
 
-- `make test-qemu PAIR=N` implements workstation-only UEFI boot, reboot persistence/overlay reset, encrypted mounting, ownership, independent A/B boot, degraded writes and rejoin/scrub checks on disposable image copies. CI does not launch VMs; it only lints and unit-tests the runner and checks documentation consistency. See [QEMU testing](QEMU.md) and the [shared manual checks](QEMU-CHECKS.md); implementation and mocked runner tests alone do not constitute a successful VM run. Record the first successful workstation suite run below once verified.
+- `make test-qemu PAIR=N` implements workstation-only UEFI boot, reboot persistence/overlay reset, encrypted mounting, ownership, independent A/B boot, degraded writes and rejoin/scrub checks on disposable image copies. CI does not launch VMs; it only lints and unit-tests the runner and checks documentation consistency. See [QEMU testing](QEMU.md) and the [shared manual checks](../stages/04-test-pair/README.md); implementation and mocked runner tests alone do not constitute a successful VM run. Record the first successful workstation suite run below once verified.
 - Account/password verification, real PAM login/MOTD display and passwordless sudo/PATH checks in a disposable Trixie container.
 - Shell syntax and ShellCheck across builders, Docker entrypoint, live hook/runtime helper and assembly test.
 - Mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
@@ -33,7 +33,7 @@ The operator verified the [QEMU procedure](QEMU.md), including the normal guest 
 3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable workspace-mount, no zfs-initramfs package.
 4. Inspect initramfs with lsinitramfs: live-boot and required USB/FAT drivers present. ZFS is data only, not a root-boot dependency.
 5. File assembly leaves IMAGES-PREPARED and PREPARED-SHA256SUMS, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.
-6. On the host, run 03-initialize-workspace.sh. Verify one mirror is created, LZ4 plus encryption and its required dependencies are enabled, workspace-1/data is noauto, the pool is exported, loops detached, and READY/final SHA256SUMS/WORKSPACE-INFO.txt exist.
+6. On the host, run stages/03-initialize-pair/initialize.sh. Verify one mirror is created, LZ4 plus encryption and its required dependencies are enabled, workspace-1/data is noauto, the pool is exported, loops detached, and READY/final SHA256SUMS/WORKSPACE-INFO.txt exist.
 7. Check final checksums before VM tests. Checksums must be refreshed after VM writes, with pool exported and VM stopped.
 
 ## Verify the new account and helpers after rebuilding

@@ -8,11 +8,11 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 
 | Command | Result |
 | --- | --- |
-| `make build` | Build the Trixie toolchain, live ISO and first prepared image pair in a new `build/` |
+| `make build` | Build the Trixie toolchain, live ISO and first prepared image pair in a new `build/default/` |
 | `make initialize PAIR=1 ACTIVE=1` | Initialize the first writable encrypted mirror on the host; prompt for its passphrase |
 | `make verify` | Require `READY` and verify final image/manifest checksums |
-| `make assemble OUT=build/pair-2` | Reuse the existing ISO to assemble a new pair with unique identities |
-| `make initialize PAIR=2 OUT=build/pair-2` | Initialize an empty replica; its first receive creates the encrypted data filesystem |
+| `make assemble PAIR=2` | Reuse the existing ISO to assemble a new pair with unique identities |
+| `make initialize PAIR=2` | Initialize an empty replica; its first receive creates the encrypted data filesystem |
 | `make builder` | Create/bootstrap the dedicated BuildKit builder |
 | `make test` | ShellCheck, shell syntax checks and Python unit/behavior tests |
 | `make test-unit` | Only Python unit/behavior tests |
@@ -23,17 +23,17 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 | `make clean` | Remove legacy build work while preserving artifacts |
 | `make cache-clean` | Prune unused cache on the dedicated BuildKit builder |
 
-`BUILD_DIR` defaults to `build`; `OUT` defaults to `$(BUILD_DIR)/out`. Relative paths are relative to the repository root. Override them consistently:
+`BUILD_DIR` defaults to `build/default`; `PAIR` defaults to `1`, and `OUT` defaults to `$(BUILD_DIR)/pairs/$(PAIR)`. Relative paths are relative to the repository root. Override them consistently:
 
 ```bash
 make build BUILD_DIR=build-next
 make initialize BUILD_DIR=build-next PAIR=5 ACTIVE=1
-make verify OUT=build-next/out
+make verify OUT=build-next/pairs/5
 ```
 
 Only set `ACTIVE=1` when provisioning the initial writable pair for a deployment. Additional pairs default to replicas. Do not provision a second independent active pair as a failover shortcut; follow [pair operations](PAIRS.md).
 
-Assembly requires an existing ISO; BuildKit builds or reuses its toolchain stage. `OUT` must be a new directory beneath `BUILD_DIR`. Use a local rootful Docker Engine throughout, as for the full build. `BUILDX_BUILDER` and `DEBIAN_IMAGE` select the dedicated BuildKit instance and Debian base image. See the [BuildKit reference](BUILDKIT.md). For advanced live-build arguments, use `build-container.sh BUILD_DIR ...` directly; see [build reference](BUILD.md#reproducibility).
+Assembly requires an existing ISO; BuildKit builds or reuses its toolchain stage. `OUT` must be a new directory beneath `BUILD_DIR`. Use a local rootful Docker Engine throughout, as for the full build. `BUILDX_BUILDER` and `DEBIAN_IMAGE` select the dedicated BuildKit instance and Debian base image. See the [BuildKit reference](BUILDKIT.md). For advanced live-build arguments, use `pipeline/buildkit.sh build BUILD_DIR ...` directly; see [build reference](BUILD.md#reproducibility).
 
 ## Local tests on Linux
 
@@ -64,7 +64,7 @@ make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1
 
 `make test` never enables or runs this suite or QEMU. No automated test writes physical USB drives.
 
-QEMU testing uses `scripts/test-qemu.py`, the guest checks in `tests/qemu-guest.sh`, and the ordered scenarios in `tests/qemu-scenarios.json`. After changing checks or scenarios, run `python3 scripts/qemu-docs.py` to regenerate [the manual commands](QEMU-CHECKS.md). The normal unit tests reject documentation drift. The generated manual and runner use the same guest checks, not separately maintained copies.
+QEMU testing uses `stages/04-test-pair/run.py`, the guest checks in `stages/04-test-pair/guest-checks.sh`, and the ordered scenarios in `stages/04-test-pair/scenarios.json`. After changing checks or scenarios, run `python3 stages/04-test-pair/generate-manual.py` to regenerate [the manual commands](../stages/04-test-pair/README.md). The normal unit tests reject documentation drift. The generated manual and runner use the same guest checks, not separately maintained copies.
 
 ## CI
 
@@ -96,10 +96,17 @@ There is intentionally no target that deletes initialized image pairs. They can 
 
 ## Repository map
 
-- `Makefile`: everyday host commands and shared CI entrypoints.
-- `01-configure-live.sh`, `02-assemble-images.sh`, `03-initialize-workspace.sh`: live configuration, file-only disk assembly and native host ZFS initialization.
-- `docker/`, `build-container.sh`: Trixie build environment and host wrapper.
-- `live/`: account/ZFS build hooks, package list and runtime workspace commands.
-- `scripts/`: Makefile support for container tests/assembly and guarded cleanup.
-- `tests/`: mocked behavior, real container and disposable-VM ZFS tests.
-- `docs/`: operator and technical reference.
+| Owner | Responsibility |
+| --- | --- |
+| `Makefile` | Public lifecycle commands used locally and in CI |
+| `pipeline/` | BuildKit graph, builder/export orchestration, cleanup, lint and test collection |
+| `stages/01-build-live/` | Live configuration, packages, hooks, ISO build, inspection and tests |
+| `stages/02-assemble-pair/` | File-only disk assembly and stage tests |
+| `stages/03-initialize-pair/` | Host ZFS initialization, verification and tests |
+| `stages/04-test-pair/` | Workstation QEMU runner, shared guest checks, generated manual and tests |
+| `stages/05-write-usb/` | Manual physical disk-writing procedure |
+| `runtime/` | Shipped workspace commands and behavior tests |
+| `integration-tests/zfs/` | Native cross-stage pool integration on explicitly disposable environments |
+| `docs/` | Cross-cutting operator and technical references |
+
+Each stage README defines its inputs, outputs, command, failure handling, and tests. See the [stage index](README.md). There is no generic shared scripts directory; orchestration lives in `pipeline/`, while implementation belongs to a stage or the runtime.

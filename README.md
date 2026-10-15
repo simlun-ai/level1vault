@@ -4,7 +4,7 @@ A stateless Debian 13 Live system on pairs of bootable USB drives. Each pair hol
 
 ## Build
 
-Use an **Linux amd64 workstation with working ZFS**, local rootful Docker with Buildx, and at least 80 GiB free. Debian build tools run inside Docker. [Setup and build details →](docs/BUILD.md)
+Use a **Linux amd64 workstation with working ZFS**, local rootful Docker with Buildx, and at least 80 GiB free. Debian build tools run inside Docker. [Setup and build details →](docs/BUILD.md)
 
 ```bash
 git clone https://github.com/simlun-ai/level1vault.git
@@ -14,7 +14,7 @@ make initialize PAIR=1 ACTIVE=1   # enter a new workspace passphrase
 make verify
 ```
 
-The two ready-to-write images are `build/out/usb-a.img` and `usb-b.img`. Each needs a USB drive of at least 12 GiB (16 GiB recommended). Optional: [test in QEMU first](docs/QEMU.md).
+The two ready-to-write images are `build/default/pairs/1/usb-a.img` and `usb-b.img`. Each needs a USB drive of at least 12 GiB (16 GiB recommended). Optional: [test in QEMU first](docs/QEMU.md).
 
 ## Write the USB drives
 
@@ -28,14 +28,14 @@ lsblk -o NAME,PATH,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINTS
 
 ```bash
 make verify
-sudo dd if=build/out/usb-a.img of=/dev/sda bs=4M conv=fsync status=progress
-sudo dd if=build/out/usb-b.img of=/dev/sdb bs=4M conv=fsync status=progress
+sudo dd if=build/default/pairs/1/usb-a.img of=/dev/sda bs=4M conv=fsync status=progress
+sudo dd if=build/default/pairs/1/usb-b.img of=/dev/sdb bs=4M conv=fsync status=progress
 sudo sgdisk -e /dev/sda
 sudo sgdisk -e /dev/sdb
 sudo partprobe /dev/sda /dev/sdb
 ```
 
-Label the sticks **1-A** and **1-B**. [Writing details and other output directories →](docs/USB.md)
+Label the sticks **1-A** and **1-B**. [Writing details and other output directories →](stages/05-write-usb/README.md)
 
 ## Use the live system
 

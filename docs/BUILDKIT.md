@@ -2,7 +2,7 @@
 
 [Documentation index](README.md)
 
-The Dockerfile produces files through `FROM scratch` targets and BuildKit's local exporter. It does not publish or load a runnable builder image. `make build` keeps the same output layout consumed by host initialization and USB writing.
+The Dockerfile produces files through `FROM scratch` targets and BuildKit's local exporter. It does not publish or load a runnable builder image. `make build` exports stage outputs under `BUILD_DIR/live/` and `BUILD_DIR/pairs/PAIR/`.
 
 ## Stages and boundaries
 
@@ -11,7 +11,7 @@ The Dockerfile produces files through `FROM scratch` targets and BuildKit's loca
 | `toolchain`, `source` | Debian Trixie tools and allowlisted source files | No |
 | `live` | live-build, Debian target kernel/DKMS, ISO; remove the temporary chroot before committing the layer | `RUN --security=insecure` |
 | `assembly` | File-only GPT/FAT/GRUB assembly from the live ISO | No |
-| `artifacts` | Scratch stage exporting ISO, live-build log and `out/` | No commands |
+| `artifacts` | Scratch stage exporting `live/` and `pairs/PAIR/` | No commands |
 | `pair-assembly`, `pair-artifacts` | Assemble/export another pair from an existing ISO | No |
 | `test-assembly`, `test-account`, `test-results` | Sandboxed assembly/login tests and scratch result export | No |
 | `inspection`, `inspection-results` | Inspect an existing ISO; host wrapper separately checks prepared image hashes | No |
@@ -26,8 +26,8 @@ Install Docker Engine with the Buildx plugin; verify `sudo docker buildx version
 
 ```bash
 make builder                       # create/bootstrap the dedicated builder
-make build                         # local export into a fresh build/
-make assemble OUT=build/pair-2      # fresh identities from the existing ISO
+make build                         # local export into a fresh build/default/
+make assemble PAIR=2      # fresh identities from the existing ISO
 make test-container                # real BuildKit tests, including two exports
 make check-build                   # before host ZFS initialization
 make cache-clean                   # prune unused cache on this builder only
@@ -51,7 +51,7 @@ BuildKit retains intermediate cache on its own Docker volume. `make cache-clean`
 
 ## Output, space and failures
 
-A successful full export contains `live-image-amd64.hybrid.iso`, `live-build.log` and the prepared `out/` pair. The wrapper adds `build.log` (plain BuildKit output, including failures), `builder-info.txt` and `build-metadata.json` (successful solve metadata/provenance). No chroot is exported. BuildKit cannot export an unsuccessful stage's files; use the streamed host `build.log` for failed live-build diagnostics.
+A successful full export contains `live/live-image-amd64.hybrid.iso`, `live/live-build.log` and the prepared `pairs/PAIR/` images. The wrapper adds `build.log` (plain BuildKit output, including failures), `builder-info.txt` and `build-metadata.json` (successful solve metadata/provenance). No chroot is exported. BuildKit cannot export an unsuccessful stage's files; use the streamed host `build.log` for failed live-build diagnostics.
 
 Allow at least 80 GiB free across Docker storage and output storage for a full build, with more for retained versions. Raw images are 24 GiB per pair; do not rely on sparse allocation surviving BuildKit layer/export processing. The full workflow must be tested on the intended filesystem and storage budget. Inspection transfers only the ISO to avoid another copy of the raw pair.
 

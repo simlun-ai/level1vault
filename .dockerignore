@@ -1,12 +1,12 @@
-# An allowlist keeps workspaces, initialized images and Git data out of BuildKit.
+# Only container stages and the installed runtime may enter the build context.
 **
-!01-configure-live.sh
-!02-assemble-images.sh
-!live/
-!live/**
-!docker/
-!docker/Dockerfile
-!docker/build-in-container.sh
-!tests/
-!tests/*.sh
+!pipeline/
+!pipeline/Dockerfile
+!stages/
+!stages/01-build-live/
+!stages/01-build-live/**
+!stages/02-assemble-pair/
+!stages/02-assemble-pair/**
+!runtime/
+!runtime/workspace-*
 **/__pycache__

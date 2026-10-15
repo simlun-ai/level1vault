@@ -2,25 +2,23 @@ name: Full Debian Live build
 on:
   pull_request:
     paths:
-      - '*.sh'
       - 'Makefile'
       - '.dockerignore'
-      - 'scripts/**'
-      - 'docker/**'
-      - 'live/**'
-      - 'tests/test_live_build.sh'
+      - 'pipeline/**'
+      - 'stages/01-build-live/**'
+      - 'stages/02-assemble-pair/**'
+      - 'runtime/**'
       - '.github/workflows/build-smoke.yml'
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - '*.sh'
       - 'Makefile'
       - '.dockerignore'
-      - 'scripts/**'
-      - 'docker/**'
-      - 'live/**'
-      - 'tests/test_live_build.sh'
+      - 'pipeline/**'
+      - 'stages/01-build-live/**'
+      - 'stages/02-assemble-pair/**'
+      - 'runtime/**'
       - '.github/workflows/build-smoke.yml'
 permissions:
   contents: read
@@ -49,9 +47,9 @@ jobs:
           name: live-build-diagnostics
           if-no-files-found: ignore
           path: |
-            build/build.log
-            build/builder-info.txt
-            build/build-metadata.json
-            build/live-build.log
-            build/out/BUILD-INFO.txt
-            build/out/images.json
+            build/default/build.log
+            build/default/builder-info.txt
+            build/default/build-metadata.json
+            build/default/live/live-build.log
+            build/default/pairs/1/BUILD-INFO.txt
+            build/default/pairs/1/images.json

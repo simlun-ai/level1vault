@@ -6,11 +6,11 @@ Each default 12 GiB image has a GPT, a 4 GiB FAT32 ESP holding GRUB and the live
 
 | Work | Where | Entry point |
 | --- | --- | --- |
-| Install build tools | Trixie Docker image | `docker/Dockerfile` toolchain stage |
-| Build Debian kernel, initramfs, SquashFS and target ZFS DKMS module | Privileged BuildKit live stage | `build-container.sh`, `01-configure-live.sh` |
-| Construct GPT images, FAT filesystems, per-drive UEFI loaders | Sandboxed BuildKit assembly stage; file operations only | `02-assemble-images.sh` |
-| Initialize one ZFS mirror across both image data partitions | Linux host, using its existing ZFS stack and loop devices | `03-initialize-workspace.sh` |
-| QEMU tests and physical USB writing | Linux host | [QEMU](QEMU.md) and [USB writing](USB.md) |
+| Install build tools | Trixie Docker image | `pipeline/Dockerfile` toolchain stage |
+| Build Debian kernel, initramfs, SquashFS and target ZFS DKMS module | Privileged BuildKit live stage | `pipeline/buildkit.sh build`, `stages/01-build-live/configure.sh` |
+| Construct GPT images, FAT filesystems, per-drive UEFI loaders | Sandboxed BuildKit assembly stage; file operations only | `stages/02-assemble-pair/assemble.sh` |
+| Initialize one ZFS mirror across both image data partitions | Linux host, using its existing ZFS stack and loop devices | `stages/03-initialize-pair/initialize.sh` |
+| QEMU tests and physical USB writing | Linux host | [QEMU](QEMU.md) and [USB writing](../stages/05-write-usb/README.md) |
 
 Docker shares the running host kernel. The container compiles ZFS **for Debian's target kernel**, with the Debian headers in the live-build chroot; it does not need to load that module. The host creates the pool using its own installed `zpool`/`zfs` and loaded module. Neither host kernel headers nor `/lib/modules` are bind-mounted into the container.
 

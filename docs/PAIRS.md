@@ -14,7 +14,7 @@ Every pair uses `/mnt/workspace`, so only one dataset is mounted there at a time
 
 ## Provision N fresh pairs
 
-Build the OS once using the [quick start](../README.md#build). The build's `out/` is the first prepared pair. Initialize it as pair 1, the initial active copy:
+Build the OS once using the [quick start](../README.md#build). The build's `build/default/pairs/1/` is the first prepared pair. Initialize it as pair 1, the initial active copy:
 
 ```bash
 make initialize PAIR=1 ACTIVE=1
@@ -27,18 +27,18 @@ Choose any desired pair count. This example adds pairs 2 through 4; changing the
 ```bash
 PAIR_COUNT=4
 for pair in $(seq 2 "$PAIR_COUNT"); do
-  make assemble OUT="build/pair-$pair"
-  make initialize OUT="build/pair-$pair" PAIR="$pair"
+  make assemble PAIR="$pair"
+  make initialize PAIR="$pair"
 done
 ```
 
 Each new assembly must use a new output directory: it generates unique GPT, PARTUUID and ESP identities. Each initialization creates a separate mirror and pool GUID. Without `--active`, initialization creates an empty receive target in `replica` state. The first raw receive creates its encrypted data filesystem using the source's encryption key; do not independently create/encrypt that filesystem. A `READY` marker means the pair can be flashed, **not that it contains a completed replica**.
 
-Follow [Writing USB drives](USB.md) for each pair, choosing its output directory and verified physical USB devices. Label both sticks with numeric pair ID and A/B identity. Keep each `WORKSPACE-INFO.txt` and a record of physical serials/location outside the pools. Never create another pair by cloning initialized images. Do not connect image loops and flashed physical copies of the same pair concurrently.
+Follow [Writing USB drives](../stages/05-write-usb/README.md) for each pair, choosing its output directory and verified physical USB devices. Label both sticks with numeric pair ID and A/B identity. Keep each `WORKSPACE-INFO.txt` and a record of physical serials/location outside the pools. Never create another pair by cloning initialized images. Do not connect image loops and flashed physical copies of the same pair concurrently.
 
 ## Initial replication and periodic rotation
 
-Connect the active pair and the intended destination pairs to one exclusive pool owner. The live OS installs the helpers in `/usr/local/sbin`; on a Linux host you can use `sudo ./live/workspace-sync ...` directly from the checkout with native ZFS and Python 3.
+Connect the active pair and the intended destination pairs to one exclusive pool owner. The live OS installs the helpers in `/usr/local/sbin`; on a Linux host you can use `sudo ./runtime/workspace-sync ...` directly from the checkout with native ZFS and Python 3.
 
 Sources and destinations are explicit. One command can update any number of destinations:
 
