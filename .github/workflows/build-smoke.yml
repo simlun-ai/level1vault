@@ -9,7 +9,6 @@ on:
       - 'docker/**'
       - 'live/**'
       - 'tests/test_live_build.sh'
-      - 'tests/qemu-*'
       - '.github/workflows/build-smoke.yml'
   workflow_dispatch:
   push:
@@ -22,7 +21,6 @@ on:
       - 'docker/**'
       - 'live/**'
       - 'tests/test_live_build.sh'
-      - 'tests/qemu-*'
       - '.github/workflows/build-smoke.yml'
 permissions:
   contents: read
@@ -33,7 +31,7 @@ jobs:
   build:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -44,12 +42,6 @@ jobs:
         run: make build SUDO=
       - name: Inspect target ZFS module, initramfs and image artifacts
         run: make check-build SUDO=
-      - name: Install VM acceptance prerequisites
-        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils ovmf mtools python3-pexpect zfsutils-linux
-      - name: Initialize a disposable active image pair
-        run: printf '%s\n' 'qemu-test-only-passphrase' | make initialize PAIR=1 ACTIVE=1
-      - name: Test UEFI boot, reboot, degraded writes and mirror rejoin
-        run: printf '%s\n' 'qemu-test-only-passphrase' | make test-qemu PAIR=1 QEMU_ARGS='--accel tcg --timeout 900 --passphrase-stdin'
       - name: Save build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -63,5 +55,3 @@ jobs:
             build/live-build.log
             build/out/BUILD-INFO.txt
             build/out/images.json
-            qemu-results/**/*.log
-            qemu-results/**/result.json

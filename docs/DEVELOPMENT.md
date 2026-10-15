@@ -68,7 +68,9 @@ QEMU testing uses `scripts/test-qemu.py`, the guest checks in `tests/qemu-guest.
 
 ## CI
 
-`.github/workflows/check.yml` uses `make test`, `make test-container` and `make test-zfs` in separate Ubuntu 22.04 jobs. The full-build workflow uses `make build`, `make check-build`, and then initializes a disposable active pair and runs `make test-qemu` under TCG. It retains build diagnostics, serial logs and the QEMU result report on failure. These are the same entrypoints as local runs. The CI passphrase is public test-only data, never a deployment secret.
+`.github/workflows/check.yml` uses `make test`, `make test-container` and `make test-zfs` in separate Ubuntu 22.04 jobs. The full-build workflow uses `make build` then `make check-build`, retaining build diagnostics on failure. These are the same entrypoints as local runs.
+
+**CI does not launch VMs.** QEMU boot/recovery acceptance is an explicit workstation operation through `make test-qemu PAIR=N`. CI still lints the guest checks, unit-tests the runner without launching QEMU, and checks that the manual acceptance instructions match the shared test sources. Native file-backed ZFS integration on the disposable CI runner remains separate and does not launch a guest.
 
 `make check-build` expects prepared, uninitialized images. Run it before `make initialize`; later initialization intentionally changes the data partitions and image checksums. Full builds and hardware acceptance remain separate from the fast tests. See [validation](VALIDATION.md).
 

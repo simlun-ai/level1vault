@@ -4,6 +4,8 @@
 
 ## Automated workstation test
 
+This is an opt-in workstation test, not a CI job. CI checks the runner's code and documentation consistency without launching a VM.
+
 Run this after `make initialize PAIR=1 ACTIVE=1`, with an initialized **active** pair. Stop other VMs using the images and detach their host loop mappings first. Keep them idle until copying finishes. The runner verifies `SHA256SUMS`, rejects loop-attached sources, and copies both images with `qemu-img`'s normal source locking. It never imports a pool on the host, opens a physical disk, or writes the original images.
 
 Install QEMU, its image tools, OVMF, mtools and Python pexpect using your distribution's package manager. For example, on Ubuntu:

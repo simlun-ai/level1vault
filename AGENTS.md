@@ -27,6 +27,7 @@
 
 ## Validation and delivery
 
+- Do not launch VMs in CI. QEMU acceptance is an explicit workstation command; CI may lint and unit-test its runner without booting guests.
 - Run `make test` for script changes. Run relevant container, image, or ZFS integration checks when behavior changes.
 - Keep real host ZFS integration tests restricted to explicitly enabled disposable VMs; never silently opt a workstation in.
 - Distinguish passing mocks, actual builds, VM acceptance, and physical-device verification in reports.

@@ -2,7 +2,7 @@
 
 ## Automated coverage
 
-- `make test-qemu PAIR=N` implements real UEFI boot, reboot persistence/overlay reset, encrypted mounting, ownership, independent A/B boot, degraded writes and rejoin/scrub checks on disposable image copies. The full-build CI job invokes it after initialization. See [QEMU testing](QEMU.md) and the [shared manual checks](QEMU-CHECKS.md); implementation and mocked runner tests alone do not constitute a successful VM run. Record the first successful run below once verified.
+- `make test-qemu PAIR=N` implements workstation-only UEFI boot, reboot persistence/overlay reset, encrypted mounting, ownership, independent A/B boot, degraded writes and rejoin/scrub checks on disposable image copies. CI does not launch VMs; it only lints and unit-tests the runner and checks documentation consistency. See [QEMU testing](QEMU.md) and the [shared manual checks](QEMU-CHECKS.md); implementation and mocked runner tests alone do not constitute a successful VM run. Record the first successful workstation suite run below once verified.
 - Account/password verification, real PAM login/MOTD display and passwordless sudo/PATH checks in a disposable Trixie container.
 - Shell syntax and ShellCheck across builders, Docker entrypoint, live hook/runtime helper and assembly test.
 - Mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
