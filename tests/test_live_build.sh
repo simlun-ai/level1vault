@@ -16,6 +16,9 @@ VERMAGIC=$(chroot "$ROOT" modinfo -k "$KERNEL" -F vermagic zfs)
 [[ $VERMAGIC == "$KERNEL "* ]] || { echo 'ZFS kernel vermagic mismatch' >&2; exit 1; }
 test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-umount"
+test -x "$ROOT/usr/local/sbin/workspace-sync"
+chroot "$ROOT" python3 /usr/local/sbin/workspace-sync --help >/dev/null
+grep -qx 'Hello, world' "$ROOT/etc/motd"
 [[ $(chroot "$ROOT" id -u simlun) == 2000 && $(chroot "$ROOT" id -g simlun) == 2000 ]]
 chroot "$ROOT" visudo -cf /etc/sudoers
 chroot "$ROOT" su - simlun -c 'sudo -n id -u' | grep -qx 0

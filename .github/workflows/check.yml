@@ -22,3 +22,11 @@ jobs:
       - run: docker run --rm --mount "type=bind,source=$PWD,target=/src,readonly" level1vault-builder:test bash /src/tests/test_assembly.sh
       - name: Verify account and sudo in disposable Trixie container
         run: docker run --rm --mount "type=bind,source=$PWD,target=/src,readonly" level1vault-builder:test bash /src/tests/test_account.sh
+  zfs-integration:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y zfsutils-linux gdisk
+      - name: Exercise encryption and replication on disposable file-backed mirrors
+        run: sudo env LEVEL1VAULT_DISPOSABLE_TEST_VM=1 python3 tests/integration_zfs.py

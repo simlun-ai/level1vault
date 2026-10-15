@@ -27,7 +27,7 @@ class ScriptTests(unittest.TestCase):
         return subprocess.run(['sh', str(script)], env=self.env, capture_output=True, text=True)
 
     def workspace(self, *, imported=False, mounted=False, source='workspace/data',
-                  mountpoint=None, canmount='noauto', import_fails=False):
+                  mountpoint=None, canmount='noauto', import_fails=False, encrypted=True, key_fails=False):
         mp = self.base / 'workspace'
         mp.mkdir()
         lock = self.base / 'lock'
@@ -52,7 +52,13 @@ get) case "$5" in
 mountpoint) echo '{mountpoint or mp}';;
 canmount) echo '{canmount}';;
 mounted) echo no;;
+org.level1vault:pair) echo primary;;
+encryption) echo {'aes-256-gcm' if encrypted else 'off'};;
+encryptionroot) echo workspace/data;;
+keyformat) echo passphrase;;
+keystatus) echo unavailable;;
 esac;;
+load-key) exit {1 if key_fails else 0};;
 mount) exit 0;;
 esac''')
         self.tool('mountpoint', f'exit {0 if mounted else 1}')
@@ -68,6 +74,18 @@ esac''')
         self.assertIn('zpool import -N -d /dev/disk/by-partuuid -o cachefile=none workspace', self.calls())
         self.assertIn('zfs mount workspace/data', self.calls())
         self.assertNotIn('import -f', self.calls())
+
+    def test_key_failure_never_mounts(self):
+        result = self.run_script(self.workspace(key_fails=True))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('zfs load-key -L prompt workspace/data', self.calls())
+        self.assertNotIn('zfs mount ', self.calls())
+
+    def test_unencrypted_workspace_is_rejected(self):
+        result = self.run_script(self.workspace(encrypted=False))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('zfs load-key', self.calls())
+        self.assertNotIn('zfs mount ', self.calls())
 
     def test_already_mounted_is_idempotent(self):
         result = self.run_script(self.workspace(imported=True, mounted=True))
@@ -132,7 +150,7 @@ esac''')
                 self.tool('zpool', f'echo "zpool $*" >> "$LOG"\nexit {export_rc}')
                 self.tool('losetup', 'echo "losetup $*" >> "$LOG"')
                 script = self.base / 'cleanup.sh'
-                script.write_text('#!/bin/bash\nA=/dev/mock-a B=/dev/mock-b POOL_CREATED=1\n'
+                script.write_text('#!/bin/bash\nA=/dev/mock-a B=/dev/mock-b POOL_CREATED=1 POOL=workspace\n'
                                   'OUT_DIR="$PWD"\ncleanup() {' + cleanup + '\ntrue\ncleanup\n')
                 result = subprocess.run(['bash', str(script)], env=self.env, cwd=self.base,
                                         capture_output=True, text=True)

@@ -2,8 +2,18 @@
 set -euo pipefail
 # HOST ONLY: use the workstation's own ZFS userland and running kernel module.
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo on the host' >&2; exit 1; }
-[[ $# -eq 1 ]] || { echo "Usage: $0 PREPARED_OUTPUT_DIRECTORY" >&2; exit 2; }
-for cmd in zpool zfs modprobe losetup udevadm blkid wipefs sha256sum python3 flock realpath; do
+[[ $# -ge 1 && $# -le 3 ]] || { echo "Usage: $0 PREPARED_OUTPUT_DIRECTORY [primary|backup1|backup2] [--receive-only]" >&2; exit 2; }
+PAIR=${2:-primary}
+case "$PAIR" in
+  primary) POOL=workspace;;
+  backup1|backup2) POOL=workspace-$PAIR;;
+  *) echo 'Unknown pair' >&2; exit 2;;
+esac
+RECEIVE_ONLY=${3:-}
+[[ -z $RECEIVE_ONLY || ( $RECEIVE_ONLY == --receive-only && $PAIR == primary ) ]] || {
+  echo '--receive-only is only for restoring into a fresh primary' >&2; exit 2;
+}
+for cmd in zpool zfs modprobe losetup udevadm blkid wipefs sha256sum python3 flock realpath mktemp chown chmod; do
   command -v "$cmd" >/dev/null || { echo "Missing host command: $cmd" >&2; exit 1; }
 done
 OUT_DIR=$(realpath -- "$1")
@@ -27,21 +37,21 @@ modprobe zfs
 # This exercises the installed userland against the loaded host module. Ubuntu's
 # module and package version strings need not exactly equal Debian's (or each other).
 zpool list -H >/dev/null
-if zpool list -H -o name workspace >/dev/null 2>&1; then
-  echo 'Host already has workspace imported; refusing to touch it' >&2; exit 1
+if zpool list -H -o name "$POOL" >/dev/null 2>&1; then
+  echo "Host already has $POOL imported; refusing to touch it" >&2; exit 1
 fi
 for img in "$OUT_DIR/usb-a.img" "$OUT_DIR/usb-b.img"; do
   [[ -f $img && ! -L $img ]] || { echo "Invalid image: $img" >&2; exit 1; }
   [[ -z $(losetup -j "$img") ]] || { echo "Image already attached: $img" >&2; exit 1; }
 done
-A='' B='' POOL_CREATED=0
+A='' B='' POOL_CREATED=0 MOUNT_ROOT=''
 cleanup() {
   local rc=$? safe=1
   trap - EXIT
   set +e
   if [[ $POOL_CREATED == 1 ]]; then
-    zpool export workspace || { echo 'ERROR: export failed; retaining loop devices' >&2; safe=0; }
-  elif [[ -n $A || -n $B ]] && zpool list -H -o name workspace >/dev/null 2>&1; then
+    zpool export "$POOL" || { echo 'ERROR: export failed; retaining loop devices' >&2; safe=0; }
+  elif [[ -n $A || -n $B ]] && zpool list -H -o name "$POOL" >/dev/null 2>&1; then
     # Covers interruption immediately after create, before POOL_CREATED was set.
     echo 'Pool exists with uncertain creation state; retaining loops for inspection' >&2
     safe=0
@@ -53,6 +63,9 @@ cleanup() {
   if [[ $safe == 0 ]]; then
     echo "Inspect workspace before detaching A=$A B=$B" >&2
     rc=1
+  fi
+  if [[ $safe == 1 && -n ${MOUNT_ROOT:-} ]]; then
+    rmdir "$MOUNT_ROOT/mnt/workspace" "$MOUNT_ROOT/mnt" "$MOUNT_ROOT" 2>/dev/null || true
   fi
   if [[ $rc != 0 ]]; then
     rm -f "$OUT_DIR/READY"
@@ -85,21 +98,36 @@ PY
 done
 # A conservative shared on-disk format, supported by Ubuntu 22.04 OpenZFS 2.1
 # and Debian 13 OpenZFS 2.3. Do not enable all of the creator's available features.
-zpool create -d -o feature@lz4_compress=enabled \
+MOUNT_ROOT=$(mktemp -d)
+zpool create -d -R "$MOUNT_ROOT" -o feature@lz4_compress=enabled \
+  -o feature@encryption=enabled \
   -o ashift=12 -o cachefile=none -O mountpoint=none -O canmount=off \
-  workspace mirror "${A}p2" "${B}p2"
+  -O org.level1vault:pair="$PAIR" "$POOL" mirror "${A}p2" "${B}p2"
 POOL_CREATED=1
-zfs create -u -o mountpoint=/mnt/workspace -o canmount=noauto \
-  -o compression=lz4 -o atime=off -o org.openzfs.systemd:ignore=on workspace/data
+if [[ $PAIR == primary && -z $RECEIVE_ONLY ]]; then
+  # ZFS reads stdin itself (hidden prompt/confirmation on a terminal). No key
+  # file, shell variable, argument or log ever contains the passphrase.
+  zfs create -u -o encryption=aes-256-gcm -o keyformat=passphrase -o keylocation=prompt \
+    -o mountpoint=/mnt/workspace -o canmount=noauto -o compression=lz4 \
+    -o atime=off -o org.openzfs.systemd:ignore=on "$POOL/data"
+  # Mount beneath a private altroot, never over the host's /mnt/workspace.
+  zfs mount "$POOL/data"
+  chown 2000:2000 "$MOUNT_ROOT/mnt/workspace"
+  chmod 0750 "$MOUNT_ROOT/mnt/workspace"
+  zfs unmount "$POOL/data"
+else
+  echo 'Empty receive target: data will be created by workspace-sync.'
+fi
 {
   date -u +initialized_at=%FT%TZ
   zpool --version
-  printf 'pool_guid=%s\n' "$(zpool get -H -o value guid workspace)"
-  printf 'enabled_feature_policy=lz4_compress_only\n'
-  zpool status -gP workspace
-  zpool get all workspace
+  printf 'pool_guid=%s\n' "$(zpool get -H -o value guid "$POOL")"
+  printf 'pair=%s\npool=%s\n' "$PAIR" "$POOL"
+  printf 'enabled_feature_policy=lz4_compress,encryption_and_dependencies\n'
+  zpool status -gP "$POOL"
+  zpool get all "$POOL"
 } > "$OUT_DIR/WORKSPACE-INFO.txt"
-zpool export workspace
+zpool export "$POOL"
 POOL_CREATED=0
 losetup -d "$A"
 A=''

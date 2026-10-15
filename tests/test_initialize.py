@@ -19,7 +19,7 @@ class InitializeTests(unittest.TestCase):
         self.out.mkdir()
         self.log = self.base/'calls'
         self.env = dict(os.environ, PATH=f'{self.bin}:{os.environ["PATH"]}',
-                        LOG=str(self.log), STATE=str(self.base/'pool'), MOCK=str(self.base))
+                        LOG=str(self.log), STATE=str(self.base/'pool'), MOCK=str(self.base), TMPDIR=str(self.base))
         self.tool('modprobe', ':')
         self.tool('udevadm', ':')
         self.tool('zpool', '''
@@ -31,6 +31,8 @@ get) echo 123456;;
 --version) printf 'zfs-2.1.5-ubuntu\nzfs-kmod-2.1.5-ubuntu-kernel\n';;
 esac''')
         self.tool('zfs', ':')
+        self.tool('chown', ':')
+        self.tool('chmod', ':')
         self.tool('wipefs', 'if [ "${OLD_SIGNATURE:-0}" = 1 ]; then echo zfs_member; fi')
         self.tool('blkid', 'case "$*" in *loop-ap2) echo aaa;; *loop-bp2) echo bbb;; esac')
         self.tool('losetup', '''case "$1" in
@@ -59,8 +61,8 @@ esac''')
         p.write_text(f'#!/bin/sh\nset -eu\necho "{name} $*" >> "$LOG"\n'+body+'\n')
         p.chmod(0o755)
 
-    def run_initialize(self):
-        return subprocess.run(['bash', str(self.script), str(self.out)], env=self.env, capture_output=True, text=True)
+    def run_initialize(self, *args):
+        return subprocess.run(['bash', str(self.script), str(self.out), *args], env=self.env, capture_output=True, text=True)
 
     def calls(self):
         return self.log.read_text() if self.log.exists() else ''
@@ -68,7 +70,10 @@ esac''')
     def test_ubuntu_versions_and_conservative_pool_creation(self):
         r = self.run_initialize()
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn('zpool create -d -o feature@lz4_compress=enabled', self.calls())
+        self.assertIn('zpool create -d -R ', self.calls())
+        self.assertIn('-o feature@lz4_compress=enabled -o feature@encryption=enabled', self.calls())
+        self.assertIn('-o encryption=aes-256-gcm -o keyformat=passphrase -o keylocation=prompt', self.calls())
+        self.assertIn('chown 2000:2000', self.calls())
         self.assertIn('-o canmount=noauto', self.calls())
         self.assertEqual(self.calls().count('zpool export workspace'), 1)
         self.assertEqual(self.calls().count('losetup -d'), 2)
@@ -111,4 +116,20 @@ esac''')
         self.assertEqual(self.run_initialize().returncode, 0)
         self.log.write_text('')
         self.assertNotEqual(self.run_initialize().returncode, 0)
+        self.assertEqual(self.calls(), '')
+
+    def test_backups_are_distinct_empty_receive_targets(self):
+        r = self.run_initialize('backup1')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('org.level1vault:pair=backup1 workspace-backup1 mirror', self.calls())
+        self.assertNotIn('zfs create', self.calls())
+        self.assertNotIn('zpool export workspace\n', self.calls())
+
+    def test_receive_only_primary_has_no_independently_encrypted_data(self):
+        r = self.run_initialize('primary', '--receive-only')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn('zfs create', self.calls())
+
+    def test_bad_pair_rejected_before_changes(self):
+        self.assertNotEqual(self.run_initialize('backup3').returncode, 0)
         self.assertEqual(self.calls(), '')

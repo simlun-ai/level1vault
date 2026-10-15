@@ -30,3 +30,6 @@ LIVE_CONFIG_NOCOMPONENTS=user-setup,sudo
 CONFIG
 [ "$(id -u simlun)" -eq 2000 ]
 [ "$(id -g simlun)" -eq 2000 ]
+
+# PAM login (including the live console) displays this static message.
+printf 'Hello, world\n' > /etc/motd

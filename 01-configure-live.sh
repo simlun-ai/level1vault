@@ -28,6 +28,7 @@ mkdir -p config/package-lists config/includes.chroot/usr/local/sbin config/hooks
 cp "$SOURCE_DIR/live/packages.list.chroot" config/package-lists/appliance.list.chroot
 install -m 0755 "$SOURCE_DIR/live/workspace-mount" config/includes.chroot/usr/local/sbin/workspace-mount
 install -m 0755 "$SOURCE_DIR/live/workspace-umount" config/includes.chroot/usr/local/sbin/workspace-umount
+install -m 0755 "$SOURCE_DIR/live/workspace-sync" config/includes.chroot/usr/local/sbin/workspace-sync
 install -m 0755 "$SOURCE_DIR/live/50-account.hook.chroot" config/hooks/live/50-account.hook.chroot
 install -m 0755 "$SOURCE_DIR/live/90-zfs.hook.chroot" config/hooks/live/90-zfs.hook.chroot
 printf 'Configured in %s. Now run: sudo lb build\n' "$PWD"

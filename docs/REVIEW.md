@@ -19,7 +19,7 @@ Scope: the build wrappers, live configuration, runtime helper, host initializer,
 | Container boundary | Docker shares the host kernel; Debian zpool in a container would talk to Ubuntu's loaded module. | Compile target DKMS with Debian headers in the chroot; create the pool with host tools. Container assembly uses only regular files, sgdisk and mtools. |
 | EFI loader | grub-install is reasonable on normal systems, but introduces host filesystem/disk probing when assembling loop images. | Standalone EFI image with an embedded search for that ESP UUID; load external menu. No NVRAM writes. Firmware validation remains required. |
 | live-media | Parameter is a preferred device, not strict fencing to it. | Document fallback semantics; boot each image alone to prove independence. |
-| pool format | Pool is created using the host OpenZFS version; default feature set may be newer than live userland. | Host creates with -d and enables only lz4_compress, a shared baseline for Ubuntu 22.04 OpenZFS 2.1 and Debian 13. Package version equality is not required. Do not upgrade features. |
+| pool format | Pool is created using the host OpenZFS version; default feature set may be newer than live userland. | Host creates with -d and enables lz4_compress plus encryption and its required dependencies, a shared baseline for Ubuntu 22.04 OpenZFS 2.1 and Debian 13. Package version equality is not required. Do not upgrade features. |
 | cleanup | Draft detaches loop devices even after a failed pool export. | Host initializer preserves loops after failed export or uncertain pool-creation state. INITIALIZING blocks reruns after failure; READY appears only after successful export/detach and final hashes. Assembly uses no mounts/loops. |
 | mount helper | Could report success with a changed dataset mountpoint, obscure a nonempty directory, or race another invocation. | Lock; validate expected properties/mount source; reject nonempty mountpoint or dataset mounted elsewhere. Import has no force option. |
 | boot identity | Per-boot random hostid is valid for clean exports; unclean shutdown can cause foreign-host refusal. | Retained deliberately, documented manual fenced force import by numeric pool GUID. It is not a multi-host coordination mechanism. |
@@ -28,6 +28,10 @@ Scope: the build wrappers, live configuration, runtime helper, host initializer,
 | OS updates | Original rsync -a repeats FAT metadata issue; copy is not atomic. | Stage regular files, use rsync -rt, preserve UUID markers, update one boot environment at a time with backup. |
 | reproducibility | Rolling mirrors, unrecorded packages and randomized identities. | Track source, Docker image identity, package manifests, prepared/final checksums and pool identifiers. Snapshot pinning remains an operator-selected input. No claim of bit-for-bit disk reproduction. |
 | mirror architecture | One pool across both partitions is correct. Separate writable branches cannot be merged. | Preserve single-owner rule, explicitly test degraded write followed by authoritative-member resilver. |
+
+## Encrypted multi-pair extension — 2026-10-15
+
+New primary datasets use AES-256-GCM/passphrase encryption and root ownership 2000:2000. Backups are separate named pools, receive raw encrypted snapshots, remain read-only, and bind to source pool/dataset GUIDs. No force receive, automatic rollback or automatic snapshot deletion is used. Resumable receives retain held source snapshots, with independent bases for each destination. Full/incremental interrupted receives and restoration into a new primary were exercised against Ubuntu 22.04's real ZFS stack in CI. See [pair operations](PAIRS.md), and [validation](VALIDATION.md). Physical USB/degraded boot testing remains an operator acceptance step.
 
 ## Reproducibility
 

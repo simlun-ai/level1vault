@@ -1,7 +1,12 @@
 #!/bin/sh
 set -eu
-POOL=workspace
-[ "$#" -eq 0 ] || { echo 'Usage: sudo workspace-umount' >&2; exit 2; }
+[ "$#" -le 1 ] || { echo 'Usage: sudo workspace-umount [primary|backup1|backup2|all]' >&2; exit 2; }
+case "${1:-all}" in
+    primary) POOLS=workspace;;
+    backup1|backup2) POOLS=workspace-$1;;
+    all) POOLS='workspace-backup1 workspace-backup2 workspace';;
+    *) echo 'Unknown pair' >&2; exit 2;;
+esac
 [ "$(id -u)" -eq 0 ] || { echo 'Run: sudo workspace-umount' >&2; exit 1; }
 # Both helpers share this lock so import/mount cannot race with sync/export.
 exec 9>/run/lock/level1vault-workspace.lock
@@ -9,9 +14,9 @@ flock -x 9
 cd /
 modprobe zfs
 pools=$(zpool list -H -o name)
+for POOL in $POOLS; do
 if ! printf '%s\n' "$pools" | grep -Fxq "$POOL"; then
-    echo 'workspace is already exported.'
-    exit 0
+    continue
 fi
 zpool sync "$POOL"
 # Export unmounts the datasets. Never force a busy pool or power off on failure.
@@ -19,4 +24,5 @@ if ! zpool export "$POOL"; then
     echo 'Export failed. Leave /mnt/workspace in every shell and stop processes using it, then retry before poweroff.' >&2
     exit 1
 fi
-echo 'workspace synced and exported; safe to power off.'
+done
+echo 'Selected workspace pools synced and exported; safe to disconnect those pairs.'

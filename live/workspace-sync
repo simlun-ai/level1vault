@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""Local, one-way raw ZFS replication for the three level1vault pairs."""
+import argparse
+import datetime
+import fcntl
+import os
+import subprocess
+import sys
+import uuid
+
+PROPERTY = 'org.level1vault:'
+POOLS = {'primary': 'workspace', 'backup1': 'workspace-backup1', 'backup2': 'workspace-backup2'}
+
+
+def run(*args):
+    return subprocess.check_output(args, text=True).strip()
+
+
+def command(*args):
+    subprocess.run(args, check=True)
+
+
+def prop(dataset, name):
+    return run('zfs', 'get', '-H', '-p', '-o', 'value', name, dataset)
+
+
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
+def snapshots(dataset):
+    rows = run('zfs', 'list', '-H', '-p', '-t', 'snapshot', '-o', 'name,guid',
+               '-s', 'createtxg', '-r', dataset)
+    return [tuple(row.split('\t')) for row in rows.splitlines()
+            if row.startswith(dataset + '@')]
+
+
+def hold(snapshot, tag):
+    rows = run('zfs', 'holds', '-H', snapshot)
+    if not any(row.split('\t')[1] == tag for row in rows.splitlines()):
+        command('zfs', 'hold', tag, snapshot)
+
+
+def release_older(dataset, latest, tag):
+    for snapshot, _ in snapshots(dataset):
+        if snapshot == latest:
+            continue
+        rows = run('zfs', 'holds', '-H', snapshot)
+        if any(row.split('\t')[1] == tag for row in rows.splitlines()):
+            command('zfs', 'release', tag, snapshot)
+
+
+def transfer(send, destination, readonly):
+    # Both exit statuses matter. No shell, plaintext stream, force or rollback.
+    receive = ['zfs', 'receive', '-u', '-s', '-o', 'canmount=noauto',
+               '-o', 'mountpoint=/mnt/workspace', '-o', 'readonly=' + readonly,
+               '-o', 'org.openzfs.systemd:ignore=on', destination]
+    sender = subprocess.Popen(send, stdout=subprocess.PIPE)
+    receiver = None
+    try:
+        receiver = subprocess.Popen(receive, stdin=sender.stdout)
+        sender.stdout.close()
+        receive_rc = receiver.wait()
+        send_rc = sender.wait()
+    except BaseException:
+        if sender.stdout is not None:
+            sender.stdout.close()
+        for process in (sender, receiver):
+            if process is not None and process.poll() is None:
+                process.terminate()
+        for process in (sender, receiver):
+            if process is not None:
+                process.wait()
+        raise
+    require(send_rc == 0 and receive_rc == 0,
+            'Transfer failed; keep the source snapshots and rerun the same command to resume. '
+            'No rollback or snapshot deletion was performed.')
+
+
+def import_pair(pair):
+    pool = POOLS[pair]
+    imported = run('zpool', 'list', '-H', '-o', 'name').splitlines()
+    if pool not in imported:
+        command('zpool', 'import', '-N', '-d', '/dev/disk/by-partuuid', '-o', 'cachefile=none', pool)
+    require(prop(pool, PROPERTY + 'pair') == pair, f'{pool}: pair identity does not match {pair}')
+    return pool
+
+
+def validate_data(dataset):
+    require(prop(dataset, 'encryption') == 'aes-256-gcm' and
+            prop(dataset, 'encryptionroot') == dataset and
+            prop(dataset, 'keyformat') == 'passphrase',
+            f'{dataset}: expected a passphrase-encrypted encryption root')
+    require(run('zfs', 'list', '-H', '-o', 'name', '-t', 'filesystem,volume', '-r', dataset) == dataset,
+            'Child datasets are not supported; refusing an incomplete backup')
+
+
+def synchronize(backup, restore=False):
+    source_pair, target_pair = (backup, 'primary') if restore else ('primary', backup)
+    source_pool = import_pair(source_pair)
+    target_pool = import_pair(target_pair)
+    source = source_pool + '/data'
+    target = target_pool + '/data'
+    source_guid = run('zpool', 'get', '-H', '-o', 'value', 'guid', source_pool)
+    target_guid = run('zpool', 'get', '-H', '-o', 'value', 'guid', target_pool)
+    require(source_guid != target_guid, 'Source and destination must be independent pools')
+    require(run('zpool', 'list', '-H', '-o', 'health', target_pool) == 'ONLINE',
+            'Destination must be ONLINE with both mirror members before updating a backup/restore')
+    validate_data(source)
+    if restore:
+        require(prop(source, 'readonly') == 'on', 'Restore source must remain a read-only backup')
+    source_data_guid = prop(source, 'guid')
+    children = run('zfs', 'list', '-H', '-o', 'name', '-t', 'filesystem,volume', '-r', target_pool).splitlines()
+    require(set(children) <= {target_pool, target}, 'Unexpected datasets on destination; refusing')
+    exists = target in children
+    token = prop(target, 'receive_resume_token') if exists else '-'
+    pending = prop(target_pool, PROPERTY + 'pending-snapshot')
+    pending_guid = prop(target_pool, PROPERTY + 'pending-guid')
+    binding = prop(target_pool, PROPERTY + 'source-pool-guid')
+    data_binding = prop(target_pool, PROPERTY + 'source-data-guid')
+    # Bind the empty destination before any stream is written. Pool and dataset
+    # GUIDs prevent silently switching sources after a rebuild or restore.
+    if binding == '-' and data_binding == '-':
+        require(not exists and pending == '-', 'An existing destination cannot be adopted automatically')
+        command('zfs', 'set', PROPERTY + 'source-pool-guid=' + source_guid,
+                PROPERTY + 'source-data-guid=' + source_data_guid, target_pool)
+    else:
+        require(binding == source_guid and data_binding == source_data_guid,
+                'Destination belongs to a different source. See recovery/reseeding instructions.')
+    if exists:
+        require(prop(target, 'mounted') == 'no', 'Unmount the destination before receiving')
+        if token == '-':
+            validate_data(target)
+            require(prop(target, 'readonly') == ('off' if restore else 'on'),
+                    'Destination readonly policy changed; inspect for divergent writes')
+        # Raw receives require an unloaded destination key; do not prompt or
+        # retain a key merely because a backup was previously inspected.
+        if prop(target, 'keystatus') == 'available':
+            command('zfs', 'unload-key', target)
+    source_snaps = snapshots(source)
+    if pending != '-':
+        require((pending, pending_guid) in source_snaps, 'Pending source snapshot is missing or changed')
+        end = pending
+    else:
+        require(token == '-', 'Unmanaged interrupted receive; inspect before proceeding')
+        if restore:
+            require(not exists, 'Restore requires a fresh primary --receive-only pool')
+            require(bool(source_snaps), 'Backup has no completed snapshots to restore')
+            end, pending_guid = source_snaps[-1]
+        else:
+            # Preflight lineage BEFORE taking a new snapshot or writing pending state.
+            if exists:
+                dest_snaps = snapshots(target)
+                require(bool(dest_snaps), 'Existing destination has no common snapshot')
+                require(any(guid == dest_snaps[-1][1] for _, guid in source_snaps),
+                        'Latest destination snapshot is not in source history; refusing rollback')
+                require(prop(target, 'written') == '0', 'Destination contains writes since its last snapshot')
+            stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+            end = source + '@l1v-' + stamp + '-' + uuid.uuid4().hex[:8]
+            command('zfs', 'snapshot', end)
+            pending_guid = prop(end, 'guid')
+        hold(end, 'level1vault-' + target_guid)
+        command('zfs', 'set', PROPERTY + 'pending-snapshot=' + end,
+                PROPERTY + 'pending-guid=' + pending_guid, target_pool)
+    tag = 'level1vault-' + target_guid
+    hold(end, tag)
+    received = target + '@' + end.split('@', 1)[1]
+    dest_snaps = snapshots(target) if exists and token == '-' else []
+    if (received, pending_guid) not in dest_snaps:
+        if token != '-':
+            send = ['zfs', 'send', '-t', token]
+        elif exists:
+            require(not restore, 'Restore destination exists without a resumable transfer')
+            require(bool(dest_snaps), 'Destination has no usable incremental base')
+            base = next((name for name, guid in snapshots(source) if guid == dest_snaps[-1][1]), None)
+            require(base is not None, 'No common latest snapshot; refusing rollback')
+            require(prop(target, 'written') == '0', 'Destination has diverged; refusing rollback')
+            hold(base, tag)
+            send = ['zfs', 'send', '-w', '-p', '-i', base, end]
+        else:
+            send = ['zfs', 'send', '-w', '-p', end]
+        print(f'{source_pool} -> {target_pool}: {end}', flush=True)
+        transfer(send, target, 'off' if restore else 'on')
+    require(prop(received, 'guid') == pending_guid, 'Received snapshot GUID verification failed')
+    validate_data(target)
+    command('zfs', 'set', 'keylocation=prompt', target)
+    hold(received, tag)
+    command('zpool', 'sync', target_pool)
+    # Keep an independent incremental base for each offsite pair. No snapshots
+    # are deleted; old holds from this destination alone can now be released.
+    release_older(source, end, tag)
+    release_older(target, received, tag)
+    command('zfs', 'inherit', PROPERTY + 'pending-snapshot', target_pool)
+    command('zfs', 'inherit', PROPERTY + 'pending-guid', target_pool)
+    print(f'Verified {received}. Pools remain imported; run sudo workspace-umount before disconnecting.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--restore', action='store_true', help='restore latest backup into a fresh primary --receive-only pool')
+    parser.add_argument('backup', choices=['backup1', 'backup2'])
+    args = parser.parse_args()
+    require(os.geteuid() == 0, 'Run with sudo')
+    with open('/run/lock/level1vault-workspace.lock', 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        command('modprobe', 'zfs')
+        if not os.path.exists('/etc/hostid') or os.stat('/etc/hostid').st_size == 0:
+            command('zgenhostid')
+        command('udevadm', 'settle')
+        synchronize(args.backup, args.restore)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (RuntimeError, subprocess.CalledProcessError, OSError) as error:
+        print(f'ERROR: {error}', file=sys.stderr)
+        sys.exit(1)

@@ -21,3 +21,34 @@ su - simlun -c 'command -v workspace-mount && command -v workspace-umount'
 su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspace-umount"'
 grep -qx LIVE_USERNAME=simlun /etc/live/config.conf.d/level1vault.conf
 grep -qx LIVE_CONFIG_NOCOMPONENTS=user-setup,sudo /etc/live/config.conf.d/level1vault.conf
+
+grep -qx 'Hello, world' /etc/motd
+
+# Exercise real PAM/login on a pseudo-terminal, not just the MOTD file's presence.
+python3 - <<'PYLOGIN'
+import errno, os, pty, select, signal, time
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp('login', ['login', '-f', 'simlun'])
+output = b''
+try:
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if select.select([fd], [], [], 1)[0]:
+            try:
+                chunk = os.read(fd, 65536)
+            except OSError as e:
+                if e.errno == errno.EIO:
+                    break
+                raise
+            if not chunk:
+                break
+            output += chunk
+            if b'Hello, world' in output:
+                break
+    assert b'Hello, world' in output, output.decode(errors='replace')
+finally:
+    os.kill(pid, signal.SIGKILL)
+    os.waitpid(pid, 0)
+    os.close(fd)
+PYLOGIN

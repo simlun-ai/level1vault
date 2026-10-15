@@ -1,9 +1,14 @@
 #!/bin/sh
 set -eu
-POOL=workspace
-DATASET=workspace/data
+[ "$#" -le 1 ] || { echo 'Usage: sudo workspace-mount [primary|backup1|backup2]' >&2; exit 2; }
+PAIR=${1:-primary}
+case "$PAIR" in
+    primary) POOL=workspace;;
+    backup1|backup2) POOL=workspace-$PAIR;;
+    *) echo 'Unknown pair' >&2; exit 2;;
+esac
+DATASET=$POOL/data
 MOUNTPOINT=/mnt/workspace
-[ "$#" -eq 0 ] || { echo 'Usage: sudo workspace-mount' >&2; exit 2; }
 [ "$(id -u)" -eq 0 ] || { echo 'Run: sudo /usr/local/sbin/workspace-mount' >&2; exit 1; }
 # Serialize manual calls. The lock lives in the RAM overlay.
 exec 9>/run/lock/level1vault-workspace.lock
@@ -14,6 +19,19 @@ udevadm settle
 if ! zpool list -H -o name "$POOL" >/dev/null 2>&1; then
     # Name conflicts and active-host protection intentionally cause failure.
     zpool import -N -d /dev/disk/by-partuuid -o cachefile=none "$POOL"
+fi
+[ "$(zfs get -H -o value org.level1vault:pair "$POOL")" = "$PAIR" ] || {
+    echo 'Pair identity missing or wrong; expected a freshly initialized level1vault pair' >&2; exit 1;
+}
+if [ "$(zfs get -H -o value encryption "$DATASET")" != aes-256-gcm ] ||
+   [ "$(zfs get -H -o value encryptionroot "$DATASET")" != "$DATASET" ] ||
+   [ "$(zfs get -H -o value keyformat "$DATASET")" != passphrase ]; then
+    echo 'Expected a fresh passphrase-encrypted workspace' >&2; exit 1
+fi
+if [ "$PAIR" != primary ]; then
+    [ "$(zfs get -H -o value readonly "$DATASET")" = on ] || {
+        echo 'Backup has been made writable; inspect its history before use' >&2; exit 1;
+    }
 fi
 # A fixed mountpoint is part of the contract, not a suggestion.
 [ "$(zfs get -H -o value mountpoint "$DATASET")" = "$MOUNTPOINT" ] || {
@@ -34,6 +52,9 @@ else
     [ -z "$(ls -A "$MOUNTPOINT")" ] || {
         echo "ERROR: $MOUNTPOINT is not empty" >&2; exit 1;
     }
+    if [ "$(zfs get -H -o value keystatus "$DATASET")" = unavailable ]; then
+        zfs load-key -L prompt "$DATASET"
+    fi
     zfs mount "$DATASET"
 fi
 findmnt --mountpoint "$MOUNTPOINT"

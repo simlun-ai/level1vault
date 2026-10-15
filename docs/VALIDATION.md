@@ -2,10 +2,12 @@
 
 ## Automated coverage
 
-- Account/password verification and passwordless sudo/PATH checks in a disposable Trixie container.
+- Account/password verification, real PAM login/MOTD display and passwordless sudo/PATH checks in a disposable Trixie container.
 - Shell syntax and ShellCheck across builders, Docker entrypoint, live hook/runtime helper and assembly test.
-- Twenty-two mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
+- Thirty mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
 - CI on Ubuntu 22.04 builds the actual Debian Trixie toolchain container and runs file-only assembly **without privileged mode**. A small synthetic ISO exercises real GPT creation, FAT population, per-drive GRUB EFI output, metadata checksums, medium UUID markers, unique identifiers and empty data partitions.
+
+Real ZFS integration [passed on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38705477984) using newly created small GPT image pairs and loop devices. It exercised the actual host initializer, wrong/correct passphrase stdin input, filesystem root ownership/mode and a UID/GID 2000 write; raw full/incremental sends to two independent backup mirrors, including a full send with the source key unloaded; deliberately interrupted full and incremental receives followed by resume; independent per-destination snapshot holds; read-only backup unlock/read and mounted/divergent destination refusal; and interrupted/resumed raw restore into a fresh primary followed by simlun writes. A new primary GUID correctly refuses old backup bindings. This job changes only new file-backed mirrors on a disposable runner, not physical USB devices. Its script refuses use without the explicit disposable-test environment flag.
 
 The synthetic kernel/initrd are dummy payloads: that assembly test does not boot Linux or compile DKMS.
 
@@ -30,7 +32,7 @@ The operator verified README section 4 in QEMU, including the normal guest boot/
 3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable workspace-mount, no zfs-initramfs package.
 4. Inspect initramfs with lsinitramfs: live-boot and required USB/FAT drivers present. ZFS is data only, not a root-boot dependency.
 5. File assembly leaves IMAGES-PREPARED and PREPARED-SHA256SUMS, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.
-6. On the host, run 03-initialize-workspace.sh. Verify one mirror is created, only lz4_compress is enabled, workspace/data is noauto, the pool is exported, loops detached, and READY/final SHA256SUMS/WORKSPACE-INFO.txt exist.
+6. On the host, run 03-initialize-workspace.sh. Verify one mirror is created, LZ4 plus encryption and its required dependencies are enabled, workspace/data is noauto, the pool is exported, loops detached, and READY/final SHA256SUMS/WORKSPACE-INFO.txt exist.
 7. Check final checksums before VM tests. Checksums must be refreshed after VM writes, with pool exported and VM stopped.
 
 ## Verify the new account and helpers after rebuilding
@@ -38,8 +40,11 @@ The operator verified README section 4 in QEMU, including the normal guest boot/
 ```bash
 id simlun                         # uid=2000, primary gid=2000
 sudo -n id -u                      # 0, without prompting
-command -v workspace-mount workspace-umount
-sudo workspace-mount
+command -v workspace-mount workspace-umount workspace-sync
+cat /etc/motd                     # Hello, world
+sudo workspace-mount             # enter the encryption passphrase
+stat -c '%u:%g %a' /mnt/workspace # 2000:2000 750
+printf 'owned by simlun\n' > /mnt/workspace/simlun-write-test
 cd /
 sudo workspace-umount
 ```
@@ -70,6 +75,7 @@ Read-only test (after confirming no other owner, substitute numeric pool GUID fr
 sudo modprobe zfs
 [ -s /etc/hostid ] || sudo zgenhostid
 sudo zpool import -N -d /dev/disk/by-partuuid -o cachefile=none -o readonly=on POOL_GUID
+sudo zfs load-key -L prompt workspace/data
 sudo zfs mount workspace/data
 cat /mnt/workspace/check.txt
 sudo zpool status -gP workspace
@@ -94,7 +100,7 @@ ip -br link
 ip -br addr
 sudo zpool list
 sudo /usr/local/sbin/workspace-mount
-sudo zfs get mountpoint,canmount,mounted,org.openzfs.systemd:ignore workspace/data
+sudo zfs get mountpoint,canmount,mounted,encryption,keyformat,keystatus,org.openzfs.systemd:ignore workspace/data
 sudo zpool status -gP workspace
 ```
 
@@ -115,3 +121,7 @@ For single-image cases omit both the drive and device for the absent member. Do 
 Repeat A-only, B-only, both-member and degraded/rejoin cases on the intended UEFI machines with Secure Boot disabled. Confirm working NIC/storage firmware, USB stability under sustained writes, cold boot, minimum RAM, successful clean export, and boot-only recovery when the workspace is unavailable. Do not unplug the running boot medium: the SquashFS is normally still read from it. Always shut down/export before moving sticks.
 
 Unexpected power-loss recovery should use a separate disposable image pair; it can require explicit force import because this image's hostid changes each boot. A successful boot alone does not prove the ZFS workspace is healthy.
+
+## Three-pair acceptance after rebuilding
+
+Follow [PAIRS.md](PAIRS.md) to provision unique primary/backup1/backup2 pairs. For each backup verify initial full receive, a later incremental, unlocking with the primary passphrase, UID/GID 2000 ownership, read-only recovery, both members ONLINE and a clean scrub. Rotate one offsite copy at a time. Test interrupted-transfer resumption only on disposable images, then test `workspace-sync --restore` into a fresh receive-only primary. Confirm the new primary is writable, the recovery source is intact and older backup bindings refuse its new identity until deliberately reseeded. Record completed snapshot dates and pool/physical-device identities outside the pools.
