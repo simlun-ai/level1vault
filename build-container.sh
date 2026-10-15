@@ -38,5 +38,5 @@ docker run --rm --privileged --platform linux/amd64 \
   --mount "type=bind,source=$SOURCE_DIR,target=/src,readonly" \
   --mount "type=bind,source=$BUILD_DIR,target=/build,bind-propagation=rprivate" \
   "$BUILDER_IMAGE" bash /src/docker/build-in-container.sh "$@"
-printf 'Boot images prepared. On the host run: sudo %q %q\n' \
+printf 'Boot images prepared. On the host run: sudo %q %q PAIR_ID [--active]\n' \
   "$SOURCE_DIR/03-initialize-workspace.sh" "$BUILD_DIR/out"

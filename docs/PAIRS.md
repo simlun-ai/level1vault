@@ -14,10 +14,10 @@ Every pair uses `/mnt/workspace`, so only one dataset is mounted there at a time
 
 ## Provision N fresh pairs
 
-Build the OS once using README sections 1–2. The build's `out/` is the first prepared pair. Initialize it as pair 1, the initial active copy:
+Build the OS once using the [quick start](../README.md#build). The build's `out/` is the first prepared pair. Initialize it as pair 1, the initial active copy:
 
 ```bash
-sudo ./03-initialize-workspace.sh "$PWD/build/out" 1 --active
+make initialize PAIR=1 ACTIVE=1
 ```
 
 Enter/confirm the encryption passphrase through ZFS's own stdin prompt. This creates AES-256-GCM encrypted `workspace-1/data`, owned by `2000:2000`, mode `0750`. The passphrase is not stored in images or manifests.
@@ -27,18 +27,14 @@ Choose any desired pair count. This example adds pairs 2 through 4; changing the
 ```bash
 PAIR_COUNT=4
 for pair in $(seq 2 "$PAIR_COUNT"); do
-  sudo docker run --rm \
-    --mount "type=bind,source=$PWD,target=/src,readonly" \
-    --mount "type=bind,source=$PWD/build,target=/build" \
-    level1vault-builder:trixie bash /src/02-assemble-images.sh \
-    /build/live-image-amd64.hybrid.iso "/build/pair-$pair"
-  sudo ./03-initialize-workspace.sh "$PWD/build/pair-$pair" "$pair"
+  make assemble OUT="build/pair-$pair"
+  make initialize OUT="build/pair-$pair" PAIR="$pair"
 done
 ```
 
 Each new assembly must use a new output directory: it generates unique GPT, PARTUUID and ESP identities. Each initialization creates a separate mirror and pool GUID. Without `--active`, initialization creates an empty receive target in `replica` state. The first raw receive creates its encrypted data filesystem using the source's encryption key; do not independently create/encrypt that filesystem. A `READY` marker means the pair can be flashed, **not that it contains a completed replica**.
 
-Follow README section 5 for each pair, choosing its output directory and verified physical USB devices. Label both sticks with numeric pair ID and A/B identity. Keep each `WORKSPACE-INFO.txt` and a record of physical serials/location outside the pools. Never create another pair by cloning initialized images. Do not connect image loops and flashed physical copies of the same pair concurrently.
+Follow [Writing USB drives](USB.md) for each pair, choosing its output directory and verified physical USB devices. Label both sticks with numeric pair ID and A/B identity. Keep each `WORKSPACE-INFO.txt` and a record of physical serials/location outside the pools. Never create another pair by cloning initialized images. Do not connect image loops and flashed physical copies of the same pair concurrently.
 
 ## Initial replication and periodic rotation
 

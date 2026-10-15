@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '*.sh'
+      - 'Makefile'
+      - 'scripts/**'
       - 'docker/**'
       - 'live/**'
       - 'tests/test_live_build.sh'
@@ -21,13 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build real Debian Live ISO and boot images
-        run: sudo ./build-container.sh "$PWD/build"
+        run: make build
       - name: Inspect target ZFS module, initramfs and image artifacts
-        run: |
-          sudo docker run --rm \
-            --mount "type=bind,source=$PWD,target=/src,readonly" \
-            --mount "type=bind,source=$PWD/build,target=/build,readonly" \
-            level1vault-builder:trixie bash /src/tests/test_live_build.sh /build
+        run: make check-build
       - name: Save build diagnostics
         if: always()
         uses: actions/upload-artifact@v4

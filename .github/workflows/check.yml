@@ -8,20 +8,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck ./*.sh docker/*.sh tests/*.sh live/workspace-mount live/workspace-umount live/workspace-activate live/*.hook.chroot
-      - run: for f in ./*.sh docker/*.sh tests/*.sh; do bash -n "$f"; done
-      - run: sh -n live/workspace-mount live/workspace-umount live/workspace-activate live/*.hook.chroot
-      - run: python3 -m unittest discover -s tests -v
+      - run: make test
   container-assembly:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t level1vault-builder:test -f docker/Dockerfile docker
-      # This stage must work unprivileged: no host ZFS or loop devices exposed.
-      - run: docker run --rm --mount "type=bind,source=$PWD,target=/src,readonly" level1vault-builder:test bash /src/tests/test_assembly.sh
-      - name: Verify account and sudo in disposable Trixie container
-        run: docker run --rm --mount "type=bind,source=$PWD,target=/src,readonly" level1vault-builder:test bash /src/tests/test_account.sh
+      # Assembly and account tests run without privileged containers.
+      - run: make test-container
   zfs-integration:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
@@ -29,4 +23,4 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y zfsutils-linux gdisk
       - name: Exercise encryption and replication on disposable file-backed mirrors
-        run: sudo env LEVEL1VAULT_DISPOSABLE_TEST_VM=1 python3 tests/integration_zfs.py
+        run: make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1
