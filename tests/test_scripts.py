@@ -24,9 +24,9 @@ class ScriptTests(unittest.TestCase):
         file.chmod(0o755)
 
     def run_script(self, script):
-        return subprocess.run(['sh', str(script)], env=self.env, capture_output=True, text=True)
+        return subprocess.run(['sh', str(script), '1'], env=self.env, capture_output=True, text=True)
 
-    def workspace(self, *, imported=False, mounted=False, source='workspace/data',
+    def workspace(self, *, imported=False, mounted=False, source='workspace-1/data',
                   mountpoint=None, canmount='noauto', import_fails=False, encrypted=True, key_fails=False):
         mp = self.base / 'workspace'
         mp.mkdir()
@@ -42,7 +42,8 @@ class ScriptTests(unittest.TestCase):
         self.tool('id', 'echo 0')
         self.tool('zpool', f'''echo "zpool $*" >> "$LOG"
 case "$1" in
-list) exit {0 if imported else 1};;
+list) if [ "$*" = 'list -H -o name' ]; then echo workspace-1; exit 0; fi
+      exit {0 if imported else 1};;
 import) exit {1 if import_fails else 0};;
 status) exit 0;;
 esac''')
@@ -52,9 +53,11 @@ get) case "$5" in
 mountpoint) echo '{mountpoint or mp}';;
 canmount) echo '{canmount}';;
 mounted) echo no;;
-org.level1vault:pair) echo primary;;
+org.level1vault:pair) echo 1;;
+org.level1vault:state) echo active;;
+readonly) echo off;;
 encryption) echo {'aes-256-gcm' if encrypted else 'off'};;
-encryptionroot) echo workspace/data;;
+encryptionroot) echo workspace-1/data;;
 keyformat) echo passphrase;;
 keystatus) echo unavailable;;
 esac;;
@@ -71,14 +74,14 @@ esac''')
     def test_manual_import_and_mount(self):
         result = self.run_script(self.workspace())
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('zpool import -N -d /dev/disk/by-partuuid -o cachefile=none workspace', self.calls())
-        self.assertIn('zfs mount workspace/data', self.calls())
+        self.assertIn('zpool import -N -d /dev/disk/by-partuuid -o cachefile=none workspace-1', self.calls())
+        self.assertIn('zfs mount workspace-1/data', self.calls())
         self.assertNotIn('import -f', self.calls())
 
     def test_key_failure_never_mounts(self):
         result = self.run_script(self.workspace(key_fails=True))
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('zfs load-key -L prompt workspace/data', self.calls())
+        self.assertIn('zfs load-key -L prompt workspace-1/data', self.calls())
         self.assertNotIn('zfs mount ', self.calls())
 
     def test_unencrypted_workspace_is_rejected(self):
@@ -150,7 +153,7 @@ esac''')
                 self.tool('zpool', f'echo "zpool $*" >> "$LOG"\nexit {export_rc}')
                 self.tool('losetup', 'echo "losetup $*" >> "$LOG"')
                 script = self.base / 'cleanup.sh'
-                script.write_text('#!/bin/bash\nA=/dev/mock-a B=/dev/mock-b POOL_CREATED=1 POOL=workspace\n'
+                script.write_text('#!/bin/bash\nA=/dev/mock-a B=/dev/mock-b POOL_CREATED=1 POOL=workspace-1\n'
                                   'OUT_DIR="$PWD"\ncleanup() {' + cleanup + '\ntrue\ncleanup\n')
                 result = subprocess.run(['bash', str(script)], env=self.env, cwd=self.base,
                                         capture_output=True, text=True)

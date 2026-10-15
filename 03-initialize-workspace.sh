@@ -2,17 +2,14 @@
 set -euo pipefail
 # HOST ONLY: use the workstation's own ZFS userland and running kernel module.
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo on the host' >&2; exit 1; }
-[[ $# -ge 1 && $# -le 3 ]] || { echo "Usage: $0 PREPARED_OUTPUT_DIRECTORY [primary|backup1|backup2] [--receive-only]" >&2; exit 2; }
-PAIR=${2:-primary}
-case "$PAIR" in
-  primary) POOL=workspace;;
-  backup1|backup2) POOL=workspace-$PAIR;;
-  *) echo 'Unknown pair' >&2; exit 2;;
-esac
-RECEIVE_ONLY=${3:-}
-[[ -z $RECEIVE_ONLY || ( $RECEIVE_ONLY == --receive-only && $PAIR == primary ) ]] || {
-  echo '--receive-only is only for restoring into a fresh primary' >&2; exit 2;
-}
+[[ $# -ge 2 && $# -le 3 ]] || { echo "Usage: $0 PREPARED_OUTPUT_DIRECTORY PAIR_ID [--active]" >&2; exit 2; }
+PAIR=$2
+[[ $PAIR =~ ^[1-9][0-9]*$ ]] || { echo 'PAIR_ID must be a positive integer without leading zeros' >&2; exit 2; }
+POOL=workspace-$PAIR
+ACTIVE=${3:-}
+[[ -z $ACTIVE || $ACTIVE == --active ]] || { echo 'Expected --active or no flag' >&2; exit 2; }
+PAIR_STATE=replica
+[[ $ACTIVE != --active ]] || PAIR_STATE=active
 for cmd in zpool zfs modprobe losetup udevadm blkid wipefs sha256sum python3 flock realpath mktemp chown chmod; do
   command -v "$cmd" >/dev/null || { echo "Missing host command: $cmd" >&2; exit 1; }
 done
@@ -102,9 +99,9 @@ MOUNT_ROOT=$(mktemp -d)
 zpool create -d -R "$MOUNT_ROOT" -o feature@lz4_compress=enabled \
   -o feature@encryption=enabled \
   -o ashift=12 -o cachefile=none -O mountpoint=none -O canmount=off \
-  -O org.level1vault:pair="$PAIR" "$POOL" mirror "${A}p2" "${B}p2"
+  -O org.level1vault:pair="$PAIR" -O org.level1vault:state="$PAIR_STATE" "$POOL" mirror "${A}p2" "${B}p2"
 POOL_CREATED=1
-if [[ $PAIR == primary && -z $RECEIVE_ONLY ]]; then
+if [[ $ACTIVE == --active ]]; then
   # ZFS reads stdin itself (hidden prompt/confirmation on a terminal). No key
   # file, shell variable, argument or log ever contains the passphrase.
   zfs create -u -o encryption=aes-256-gcm -o keyformat=passphrase -o keylocation=prompt \
@@ -122,7 +119,7 @@ fi
   date -u +initialized_at=%FT%TZ
   zpool --version
   printf 'pool_guid=%s\n' "$(zpool get -H -o value guid "$POOL")"
-  printf 'pair=%s\npool=%s\n' "$PAIR" "$POOL"
+  printf 'pair=%s\npool=%s\nstate=%s\n' "$PAIR" "$POOL" "$PAIR_STATE"
   printf 'enabled_feature_policy=lz4_compress,encryption_and_dependencies\n'
   zpool status -gP "$POOL"
   zpool get all "$POOL"

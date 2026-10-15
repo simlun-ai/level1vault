@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
-"""Local, one-way raw ZFS replication for the three level1vault pairs."""
+"""Raw ZFS replication and explicit failover for numbered level1vault pairs."""
 import argparse
 import datetime
 import fcntl
 import os
+import re
 import subprocess
 import sys
 import uuid
 
 PROPERTY = 'org.level1vault:'
-POOLS = {'primary': 'workspace', 'backup1': 'workspace-backup1', 'backup2': 'workspace-backup2'}
+def pair_id(value):
+    if not re.fullmatch(r'[1-9][0-9]*', value):
+        raise argparse.ArgumentTypeError('PAIR_ID must be a positive integer without leading zeros')
+    return value
+
+
+def pool_name(pair):
+    return 'workspace-' + pair_id(pair)
 
 
 def run(*args):
@@ -79,7 +87,7 @@ def transfer(send, destination, readonly):
 
 
 def import_pair(pair):
-    pool = POOLS[pair]
+    pool = pool_name(pair)
     imported = run('zpool', 'list', '-H', '-o', 'name').splitlines()
     if pool not in imported:
         command('zpool', 'import', '-N', '-d', '/dev/disk/by-partuuid', '-o', 'cachefile=none', pool)
@@ -96,8 +104,8 @@ def validate_data(dataset):
             'Child datasets are not supported; refusing an incomplete backup')
 
 
-def synchronize(backup, restore=False):
-    source_pair, target_pair = (backup, 'primary') if restore else ('primary', backup)
+def synchronize(source_pair, target_pair, rebind=False, checkpoint=None):
+    require(source_pair != target_pair, 'Source and destination IDs must differ')
     source_pool = import_pair(source_pair)
     target_pool = import_pair(target_pair)
     source = source_pool + '/data'
@@ -106,10 +114,11 @@ def synchronize(backup, restore=False):
     target_guid = run('zpool', 'get', '-H', '-o', 'value', 'guid', target_pool)
     require(source_guid != target_guid, 'Source and destination must be independent pools')
     require(run('zpool', 'list', '-H', '-o', 'health', target_pool) == 'ONLINE',
-            'Destination must be ONLINE with both mirror members before updating a backup/restore')
+            'Destination must be ONLINE with both mirror members before updating a replica')
     validate_data(source)
-    if restore:
-        require(prop(source, 'readonly') == 'on', 'Restore source must remain a read-only backup')
+    require(prop(source_pool, PROPERTY + 'state') == 'active' and prop(source, 'readonly') == 'off',
+            'Source must be the explicitly activated writable pair')
+    require(prop(target_pool, PROPERTY + 'state') == 'replica', 'Destination must remain a replica')
     source_data_guid = prop(source, 'guid')
     children = run('zfs', 'list', '-H', '-o', 'name', '-t', 'filesystem,volume', '-r', target_pool).splitlines()
     require(set(children) <= {target_pool, target}, 'Unexpected datasets on destination; refusing')
@@ -119,20 +128,19 @@ def synchronize(backup, restore=False):
     pending_guid = prop(target_pool, PROPERTY + 'pending-guid')
     binding = prop(target_pool, PROPERTY + 'source-pool-guid')
     data_binding = prop(target_pool, PROPERTY + 'source-data-guid')
-    # Bind the empty destination before any stream is written. Pool and dataset
-    # GUIDs prevent silently switching sources after a rebuild or restore.
-    if binding == '-' and data_binding == '-':
-        require(not exists and pending == '-', 'An existing destination cannot be adopted automatically')
-        command('zfs', 'set', PROPERTY + 'source-pool-guid=' + source_guid,
-                PROPERTY + 'source-data-guid=' + source_data_guid, target_pool)
-    else:
-        require(binding == source_guid and data_binding == source_data_guid,
-                'Destination belongs to a different source. See recovery/reseeding instructions.')
+    new_binding = binding == '-' and data_binding == '-'
+    same_binding = binding == source_guid and data_binding == source_data_guid
+    if new_binding:
+        require((not exists or (rebind and token == '-')) and pending == '-',
+                'An existing destination requires --rebind and a completed common snapshot')
+    elif not same_binding:
+        require(rebind and exists and token == '-' and pending == '-',
+                'Destination belongs to another source. After failover use --rebind with a completed common snapshot.')
     if exists:
         require(prop(target, 'mounted') == 'no', 'Unmount the destination before receiving')
         if token == '-':
             validate_data(target)
-            require(prop(target, 'readonly') == ('off' if restore else 'on'),
+            require(prop(target, 'readonly') == 'on',
                     'Destination readonly policy changed; inspect for divergent writes')
         # Raw receives require an unloaded destination key; do not prompt or
         # retain a key merely because a backup was previously inspected.
@@ -144,22 +152,28 @@ def synchronize(backup, restore=False):
         end = pending
     else:
         require(token == '-', 'Unmanaged interrupted receive; inspect before proceeding')
-        if restore:
-            require(not exists, 'Restore requires a fresh primary --receive-only pool')
-            require(bool(source_snaps), 'Backup has no completed snapshots to restore')
-            end, pending_guid = source_snaps[-1]
-        else:
-            # Preflight lineage BEFORE taking a new snapshot or writing pending state.
-            if exists:
-                dest_snaps = snapshots(target)
-                require(bool(dest_snaps), 'Existing destination has no common snapshot')
-                require(any(guid == dest_snaps[-1][1] for _, guid in source_snaps),
-                        'Latest destination snapshot is not in source history; refusing rollback')
-                require(prop(target, 'written') == '0', 'Destination contains writes since its last snapshot')
-            stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-            end = source + '@l1v-' + stamp + '-' + uuid.uuid4().hex[:8]
-            command('zfs', 'snapshot', end)
+        # Check lineage BEFORE updating source bindings or pending state.
+        dest_snaps = snapshots(target) if exists else []
+        if exists:
+            require(bool(dest_snaps), 'Existing destination has no common snapshot')
+            require(any(guid == dest_snaps[-1][1] for _, guid in source_snaps),
+                    'Latest destination snapshot is not in source history; refusing rollback')
+            require(prop(target, 'written') == '0', 'Destination contains writes since its last snapshot')
+        if checkpoint is None:
+            end = create_checkpoint(source)
             pending_guid = prop(end, 'guid')
+        else:
+            end = checkpoint
+            matches = [(name, guid) for name, guid in source_snaps if name == end]
+            require(bool(matches), 'Requested source checkpoint does not exist')
+            _, pending_guid = matches[0]
+            if dest_snaps:
+                positions = {guid: i for i, (_, guid) in enumerate(source_snaps)}
+                require(positions[pending_guid] >= positions[dest_snaps[-1][1]],
+                        'Requested checkpoint is older than the destination; refusing rollback')
+        if new_binding or not same_binding:
+            command('zfs', 'set', PROPERTY + 'source-pool-guid=' + source_guid,
+                    PROPERTY + 'source-data-guid=' + source_data_guid, target_pool)
         hold(end, 'level1vault-' + target_guid)
         command('zfs', 'set', PROPERTY + 'pending-snapshot=' + end,
                 PROPERTY + 'pending-guid=' + pending_guid, target_pool)
@@ -171,7 +185,6 @@ def synchronize(backup, restore=False):
         if token != '-':
             send = ['zfs', 'send', '-t', token]
         elif exists:
-            require(not restore, 'Restore destination exists without a resumable transfer')
             require(bool(dest_snaps), 'Destination has no usable incremental base')
             base = next((name for name, guid in snapshots(source) if guid == dest_snaps[-1][1]), None)
             require(base is not None, 'No common latest snapshot; refusing rollback')
@@ -181,7 +194,7 @@ def synchronize(backup, restore=False):
         else:
             send = ['zfs', 'send', '-w', '-p', end]
         print(f'{source_pool} -> {target_pool}: {end}', flush=True)
-        transfer(send, target, 'off' if restore else 'on')
+        transfer(send, target, 'on')
     require(prop(received, 'guid') == pending_guid, 'Received snapshot GUID verification failed')
     validate_data(target)
     command('zfs', 'set', 'keylocation=prompt', target)
@@ -194,13 +207,82 @@ def synchronize(backup, restore=False):
     command('zfs', 'inherit', PROPERTY + 'pending-snapshot', target_pool)
     command('zfs', 'inherit', PROPERTY + 'pending-guid', target_pool)
     print(f'Verified {received}. Pools remain imported; run sudo workspace-umount before disconnecting.')
+    return end
+
+
+def create_checkpoint(source):
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    end = source + '@l1v-' + stamp + '-' + uuid.uuid4().hex[:8]
+    command('zfs', 'snapshot', end)
+    return end
+
+
+def discover_pairs():
+    names = run('zpool', 'list', '-H', '-o', 'name').splitlines()
+    # Import listings are discovery only: import_pair still uses normal active-
+    # host protection and never forces ambiguous/foreign ownership.
+    listing = subprocess.check_output(['zpool', 'import', '-d', '/dev/disk/by-partuuid'],
+                                      text=True, env=dict(os.environ, LC_ALL='C'))
+    names += re.findall(r'^\s*pool: (workspace-[1-9][0-9]*)\s*$', listing, re.MULTILINE)
+    return sorted({name[len('workspace-'):] for name in names
+                   if re.fullmatch(r'workspace-[1-9][0-9]*', name)}, key=int)
+
+
+def activate(pair, fenced=False):
+    require(fenced, 'Fence/disconnect the old active pair, then pass --fenced to acknowledge exclusive ownership')
+    pool = import_pair(pair)
+    data = pool + '/data'
+    # Refuse an observable split brain even when the fencing flag was supplied.
+    for other in run('zpool', 'list', '-H', '-o', 'name').splitlines():
+        if other != pool and re.fullmatch(r'workspace-[1-9][0-9]*', other):
+            require(prop(other, PROPERTY + 'state') not in ('active', 'activating'),
+                    f'{other} is still active/imported; export and fence it first')
+    validate_data(data)
+    require(prop(pool, PROPERTY + 'pending-snapshot') == '-' and
+            prop(data, 'receive_resume_token') == '-', 'Cannot activate an incomplete receive')
+    require(run('zpool', 'list', '-H', '-o', 'health', pool) in ('ONLINE', 'DEGRADED'),
+            'Candidate pool is not readable/healthy enough for activation')
+    state = prop(pool, PROPERTY + 'state')
+    if state == 'active':
+        require(prop(data, 'readonly') == 'off', 'Active pair readonly policy is inconsistent')
+        print(f'{pool} is already active.')
+        return
+    require(state in ('replica', 'activating'), 'Candidate is not a replica or interrupted activation')
+    require(prop(data, 'mounted') == 'no', 'Unmount the candidate before activation')
+    require(prop(data, 'readonly') == 'on' or state == 'activating', 'Replica has been made writable outside activation')
+    require(prop(data, 'written') == '0', 'Candidate contains writes since its last snapshot; inspect its history')
+    snaps = snapshots(data)
+    require(bool(snaps), 'Candidate has no completed replication snapshot')
+    # Stage role separately from readonly: mount/sync reject an incomplete
+    # activation. Repeating this command can finish it after interruption.
+    command('zfs', 'set', PROPERTY + 'state=activating',
+            PROPERTY + 'activated-from-guid=' + snaps[-1][1], pool)
+    command('zfs', 'set', 'readonly=off', data)
+    command('zfs', 'set', PROPERTY + 'state=active', pool)
+    command('zpool', 'sync', pool)
+    print(f'{pool} is active in place. Last completed snapshot: {snaps[-1][0]}. '
+          f'Run sudo workspace-mount {pair}; keep the former active pair fenced.')
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--restore', action='store_true', help='restore latest backup into a fresh primary --receive-only pool')
-    parser.add_argument('backup', choices=['backup1', 'backup2'])
-    args = parser.parse_args()
+    activation = sys.argv[1:2] == ['--activate']
+    if activation:
+        parser = argparse.ArgumentParser(prog='workspace-activate', description='Activate an existing numbered replica in place after fencing the old active pair.')
+        choice = parser.add_mutually_exclusive_group(required=True)
+        choice.add_argument('pair', nargs='?', type=pair_id)
+        choice.add_argument('--next', dest='after', type=pair_id, metavar='AFTER_ID',
+                            help='select the lowest visible pair ID greater than AFTER_ID; no wraparound')
+        parser.add_argument('--fenced', action='store_true', help='acknowledge the former active pair is fenced/disconnected')
+        args = parser.parse_args(sys.argv[2:])
+    else:
+        parser = argparse.ArgumentParser(description=__doc__)
+        parser.add_argument('--rebind', action='store_true', help='after failover, change source binding only with a verified common latest destination snapshot')
+        parser.add_argument('--snapshot', metavar='NAME', help='reuse an existing source checkpoint for separately rotated pairs')
+        parser.add_argument('source', type=pair_id)
+        parser.add_argument('targets', nargs='+', type=pair_id)
+        args = parser.parse_args()
+        require(len(set(args.targets)) == len(args.targets) and args.source not in args.targets,
+                'Source and destination IDs must be distinct')
     require(os.geteuid() == 0, 'Run with sudo')
     with open('/run/lock/level1vault-workspace.lock', 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -208,7 +290,32 @@ def main():
         if not os.path.exists('/etc/hostid') or os.stat('/etc/hostid').st_size == 0:
             command('zgenhostid')
         command('udevadm', 'settle')
-        synchronize(args.backup, args.restore)
+        if activation:
+            require(args.fenced, 'Fence/disconnect the former active pair and pass --fenced')
+            pair = args.pair
+            if args.after is not None:
+                candidates = [p for p in discover_pairs() if int(p) > int(args.after)]
+                require(bool(candidates), 'No visible pair follows that ID; connect the next surviving pair')
+                pair = candidates[0]
+            activate(pair, args.fenced)
+        else:
+            source_pool = import_pair(args.source)
+            source = source_pool + '/data'
+            validate_data(source)
+            require(prop(source_pool, PROPERTY + 'state') == 'active' and prop(source, 'readonly') == 'off',
+                    'Source must be the explicitly activated writable pair')
+            if args.snapshot:
+                require(re.fullmatch(r'[A-Za-z0-9_.:-]+', args.snapshot) is not None, 'Invalid snapshot name')
+                checkpoint = source + '@' + args.snapshot
+                prop(checkpoint, 'guid')  # fail before touching any destination
+            else:
+                checkpoint = create_checkpoint(source)
+            for target in args.targets:
+                completed = synchronize(args.source, target, args.rebind, checkpoint)
+                if completed != checkpoint:
+                    # Finish a saved interrupted endpoint, then catch up to the
+                    # shared checkpoint chosen for this whole invocation.
+                    synchronize(args.source, target, args.rebind, checkpoint)
 
 
 if __name__ == '__main__':

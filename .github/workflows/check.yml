@@ -8,9 +8,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck ./*.sh docker/*.sh tests/*.sh live/workspace-mount live/workspace-umount live/*.hook.chroot
+      - run: shellcheck ./*.sh docker/*.sh tests/*.sh live/workspace-mount live/workspace-umount live/workspace-activate live/*.hook.chroot
       - run: for f in ./*.sh docker/*.sh tests/*.sh; do bash -n "$f"; done
-      - run: sh -n live/workspace-mount live/workspace-umount live/*.hook.chroot
+      - run: sh -n live/workspace-mount live/workspace-umount live/workspace-activate live/*.hook.chroot
       - run: python3 -m unittest discover -s tests -v
   container-assembly:
     runs-on: ubuntu-22.04

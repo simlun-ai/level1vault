@@ -1,12 +1,11 @@
 #!/bin/sh
 set -eu
-[ "$#" -le 1 ] || { echo 'Usage: sudo workspace-mount [primary|backup1|backup2]' >&2; exit 2; }
-PAIR=${1:-primary}
+[ "$#" -eq 1 ] || { echo 'Usage: sudo workspace-mount PAIR_ID' >&2; exit 2; }
+PAIR=$1
 case "$PAIR" in
-    primary) POOL=workspace;;
-    backup1|backup2) POOL=workspace-$PAIR;;
-    *) echo 'Unknown pair' >&2; exit 2;;
+    ''|0*|*[!0-9]*) echo 'PAIR_ID must be a positive integer without leading zeros' >&2; exit 2;;
 esac
+POOL=workspace-$PAIR
 DATASET=$POOL/data
 MOUNTPOINT=/mnt/workspace
 [ "$(id -u)" -eq 0 ] || { echo 'Run: sudo /usr/local/sbin/workspace-mount' >&2; exit 1; }
@@ -28,10 +27,24 @@ if [ "$(zfs get -H -o value encryption "$DATASET")" != aes-256-gcm ] ||
    [ "$(zfs get -H -o value keyformat "$DATASET")" != passphrase ]; then
     echo 'Expected a fresh passphrase-encrypted workspace' >&2; exit 1
 fi
-if [ "$PAIR" != primary ]; then
-    [ "$(zfs get -H -o value readonly "$DATASET")" = on ] || {
-        echo 'Backup has been made writable; inspect its history before use' >&2; exit 1;
-    }
+STATE=$(zfs get -H -o value org.level1vault:state "$POOL")
+READONLY=$(zfs get -H -o value readonly "$DATASET")
+case "$STATE:$READONLY" in
+    active:off|replica:on) ;;
+    *) echo 'Pair state and readonly policy do not agree; inspect before use' >&2; exit 1;;
+esac
+if [ "$STATE" = active ]; then
+    pools=$(zpool list -H -o name)
+    for other in $pools; do
+        case "$other" in
+            workspace-*)
+                [ "$other" != "$POOL" ] || continue
+                other_state=$(zfs get -H -o value org.level1vault:state "$other")
+                case "$other_state" in
+                    active|activating) echo "$other is also active/imported; resolve ownership first" >&2; exit 1;;
+                esac;;
+        esac
+    done
 fi
 # A fixed mountpoint is part of the contract, not a suggestion.
 [ "$(zfs get -H -o value mountpoint "$DATASET")" = "$MOUNTPOINT" ] || {

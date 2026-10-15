@@ -29,9 +29,11 @@ Scope: the build wrappers, live configuration, runtime helper, host initializer,
 | reproducibility | Rolling mirrors, unrecorded packages and randomized identities. | Track source, Docker image identity, package manifests, prepared/final checksums and pool identifiers. Snapshot pinning remains an operator-selected input. No claim of bit-for-bit disk reproduction. |
 | mirror architecture | One pool across both partitions is correct. Separate writable branches cannot be merged. | Preserve single-owner rule, explicitly test degraded write followed by authoritative-member resilver. |
 
-## Encrypted multi-pair extension — 2026-10-15
+## Encrypted numbered-pair extension — 2026-10-15
 
-New primary datasets use AES-256-GCM/passphrase encryption and root ownership 2000:2000. Backups are separate named pools, receive raw encrypted snapshots, remain read-only, and bind to source pool/dataset GUIDs. No force receive, automatic rollback or automatic snapshot deletion is used. Resumable receives retain held source snapshots, with independent bases for each destination. Full/incremental interrupted receives and restoration into a new primary were exercised against Ubuntu 22.04's real ZFS stack in CI. See [pair operations](PAIRS.md), and [validation](VALIDATION.md). Physical USB/degraded boot testing remains an operator acceptance step.
+New active datasets use AES-256-GCM/passphrase encryption and root ownership 2000:2000. Any number of pairs use neutral numeric identities (`workspace-1`, `workspace-2`, …), with active/replica state stored independently. Replication sends one shared raw checkpoint to explicitly selected destinations; interrupted receives keep independent held bases. Fenced activation selects the next numeric ID in place and makes its existing data writable. A source rebind after failover requires a completed common latest destination snapshot; no force receive, rollback or snapshot deletion is used. See [pair operations](PAIRS.md) and [validation](VALIDATION.md).
+
+The operator confirmed independent boot of both real USB sticks on a laptop with Secure Boot disabled, plus a working ZFS mirror with both sticks connected. Physical degraded-write/rejoin and the newly introduced numbered failover workflow remain acceptance steps.
 
 ## Reproducibility
 
@@ -60,7 +62,7 @@ Before every recovery: stop all other pool owners, disconnect duplicate image/ph
 For a formerly disconnected **original member**, reattach both devices on the authoritative host and import with the mount helper. Inspect:
 
 ```bash
-sudo zpool status -gP workspace
+sudo zpool status -gP workspace-1
 lsblk -o PATH,SIZE,FSTYPE,PARTUUID,UUID,MODEL,SERIAL
 ls -l /dev/disk/by-partuuid/
 ```
@@ -68,9 +70,9 @@ ls -l /dev/disk/by-partuuid/
 If a known member remains unavailable, identify its numeric vdev GUID in status and its matching PARTUUID from images.json. After confirming they are the same original member, try bringing it online:
 
 ```bash
-sudo zpool online workspace EXISTING_MEMBER_GUID
-sudo zpool wait -t resilver workspace
-sudo zpool status -gP workspace
+sudo zpool online workspace-1 EXISTING_MEMBER_GUID
+sudo zpool wait -t resilver workspace-1
+sudo zpool status -gP workspace-1
 ```
 
 If its path cannot be resolved, do not blindly replace it with a stale copy. Inspect labels with `sudo zdb -l /dev/disk/by-partuuid/VERIFIED_PARTUUID`; zdb is supplied by zfsutils-linux. A normal replacement is for a genuinely failed/lost device, not an attempt to reconcile independently written members.
@@ -79,9 +81,9 @@ For a **new replacement USB**, first prepare its boot environment without creati
 
 ```bash
 # MUTATES the selected replacement partition; double-check serial and PARTUUID.
-sudo zpool replace workspace FAILED_MEMBER_GUID /dev/disk/by-partuuid/NEW_PARTUUID
-sudo zpool wait -t resilver workspace
-sudo zpool status -gP workspace
+sudo zpool replace workspace-1 FAILED_MEMBER_GUID /dev/disk/by-partuuid/NEW_PARTUUID
+sudo zpool wait -t resilver workspace-1
+sudo zpool status -gP workspace-1
 ```
 
 Do not use `zpool create`, do not dd an initialized old workspace image over a new member, and do not add a top-level vdev (`zpool add`). Require both ONLINE and a clean final status before independent use. Save the new member's identities and test its boot environment alone.

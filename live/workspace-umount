@@ -1,28 +1,35 @@
 #!/bin/sh
 set -eu
-[ "$#" -le 1 ] || { echo 'Usage: sudo workspace-umount [primary|backup1|backup2|all]' >&2; exit 2; }
-case "${1:-all}" in
-    primary) POOLS=workspace;;
-    backup1|backup2) POOLS=workspace-$1;;
-    all) POOLS='workspace-backup1 workspace-backup2 workspace';;
-    *) echo 'Unknown pair' >&2; exit 2;;
+[ "$#" -le 1 ] || { echo 'Usage: sudo workspace-umount [PAIR_ID|all]' >&2; exit 2; }
+PAIR=${1:-all}
+case "$PAIR" in
+    all) ;;
+    ''|0*|*[!0-9]*) echo 'Expected a positive PAIR_ID or all' >&2; exit 2;;
 esac
 [ "$(id -u)" -eq 0 ] || { echo 'Run: sudo workspace-umount' >&2; exit 1; }
-# Both helpers share this lock so import/mount cannot race with sync/export.
 exec 9>/run/lock/level1vault-workspace.lock
 flock -x 9
 cd /
 modprobe zfs
 pools=$(zpool list -H -o name)
+if [ "$PAIR" = all ]; then
+    # Numeric order, with no fixed number of configured pairs. No imports.
+    POOLS=$(printf '%s\n' "$pools" | grep -E '^workspace-[1-9][0-9]*$' | sort -t- -k2,2n)
+else
+    POOLS=workspace-$PAIR
+fi
 for POOL in $POOLS; do
-if ! printf '%s\n' "$pools" | grep -Fxq "$POOL"; then
-    continue
-fi
-zpool sync "$POOL"
-# Export unmounts the datasets. Never force a busy pool or power off on failure.
-if ! zpool export "$POOL"; then
-    echo 'Export failed. Leave /mnt/workspace in every shell and stop processes using it, then retry before poweroff.' >&2
-    exit 1
-fi
+    if ! printf '%s\n' "$pools" | grep -Fxq "$POOL"; then
+        continue
+    fi
+    [ "$(zfs get -H -o value org.level1vault:pair "$POOL")" = "${POOL#workspace-}" ] || {
+        echo "Pair identity mismatch for $POOL; refusing export" >&2; exit 1;
+    }
+    zpool sync "$POOL"
+    # Never force a busy pool or power off on failure.
+    if ! zpool export "$POOL"; then
+        echo 'Export failed. Leave /mnt/workspace in every shell and stop processes using it, then retry before poweroff.' >&2
+        exit 1
+    fi
 done
 echo 'Selected workspace pools synced and exported; safe to disconnect those pairs.'

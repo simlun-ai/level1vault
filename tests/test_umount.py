@@ -19,11 +19,12 @@ class UmountTests(unittest.TestCase):
         self.script = self.base/'umount'
         self.script.write_text(text)
         self.tool('id', 'echo 0')
+        self.tool('zfs', 'echo 1')
         for name in ('flock', 'modprobe'):
             self.tool(name, ':')
         self.tool('zpool', '''case "$1" in
 list) if [ "${LIST_FAIL:-0}" = 1 ]; then exit 1; fi
-      if [ "${IMPORTED:-1}" = 1 ]; then echo workspace; fi;;
+      if [ "${IMPORTED:-1}" = 1 ]; then echo workspace-1; fi;;
 sync) exit "${SYNC_FAIL:-0}";;
 export) exit "${EXPORT_FAIL:-0}";;
 esac''')
@@ -42,7 +43,7 @@ esac''')
     def test_sync_precedes_nonforced_export(self):
         self.assertEqual(self.run_helper().returncode, 0)
         calls = self.calls()
-        self.assertLess(calls.index('zpool sync workspace'), calls.index('zpool export workspace'))
+        self.assertLess(calls.index('zpool sync workspace-1'), calls.index('zpool export workspace-1'))
         self.assertNotIn(' -f', calls)
         self.assertNotIn('poweroff', calls)
         self.assertNotIn('zpool import', calls)

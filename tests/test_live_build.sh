@@ -17,6 +17,8 @@ VERMAGIC=$(chroot "$ROOT" modinfo -k "$KERNEL" -F vermagic zfs)
 test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-umount"
 test -x "$ROOT/usr/local/sbin/workspace-sync"
+test -x "$ROOT/usr/local/sbin/workspace-activate"
+chroot "$ROOT" /usr/local/sbin/workspace-activate --help >/dev/null
 chroot "$ROOT" python3 /usr/local/sbin/workspace-sync --help >/dev/null
 grep -qx 'Hello, world' "$ROOT/etc/motd"
 [[ $(chroot "$ROOT" id -u simlun) == 2000 && $(chroot "$ROOT" id -g simlun) == 2000 ]]

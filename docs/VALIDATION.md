@@ -4,10 +4,10 @@
 
 - Account/password verification, real PAM login/MOTD display and passwordless sudo/PATH checks in a disposable Trixie container.
 - Shell syntax and ShellCheck across builders, Docker entrypoint, live hook/runtime helper and assembly test.
-- Thirty mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
+- Thirty-four mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
 - CI on Ubuntu 22.04 builds the actual Debian Trixie toolchain container and runs file-only assembly **without privileged mode**. A small synthetic ISO exercises real GPT creation, FAT population, per-drive GRUB EFI output, metadata checksums, medium UUID markers, unique identifiers and empty data partitions.
 
-Real ZFS integration [passed on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38705477984) using newly created small GPT image pairs and loop devices. It exercised the actual host initializer, wrong/correct passphrase stdin input, filesystem root ownership/mode and a UID/GID 2000 write; raw full/incremental sends to two independent backup mirrors, including a full send with the source key unloaded; deliberately interrupted full and incremental receives followed by resume; independent per-destination snapshot holds; read-only backup unlock/read and mounted/divergent destination refusal; and interrupted/resumed raw restore into a fresh primary followed by simlun writes. A new primary GUID correctly refuses old backup bindings. This job changes only new file-backed mirrors on a disposable runner, not physical USB devices. Its script refuses use without the explicit disposable-test environment flag.
+Real ZFS integration [passed on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38711305462) using newly created small GPT image pairs and loop devices. The numbered-pair test uses IDs 1, 2, 3 and 10: encrypted initialization, wrong/correct stdin passphrases, UID/GID 2000 writes, shared full/incremental checkpoints, unloaded source keys, independent per-destination holds, interrupted/resumed full and incremental receives, read-only replica mounting and divergent/mounted destination refusal. It exercises in-place numeric failover 1→2→3, fencing/observable-active-owner refusal, explicit source rebinding with the existing destination dataset GUID preserved, and preservation/refusal of a returning former active pair with unreplicated writes. The test only writes new file-backed mirrors on a disposable runner, not physical USB devices, and requires an explicit disposable-test flag.
 
 The synthetic kernel/initrd are dummy payloads: that assembly test does not boot Linux or compile DKMS.
 
@@ -23,7 +23,7 @@ The synthetic kernel/initrd are dummy payloads: that assembly test does not boot
 
 The workflow keeps diagnostic logs/manifests as an Actions artifact. It can also be rerun manually from GitHub Actions. Kernel/package versions depend on the configured Debian mirrors; this records one verified build, not a package pin.
 
-The operator verified README section 4 in QEMU, including the normal guest boot/mount/reboot sequence, on 2026-10-15. QEMU required desktop-user execution and writable image/OVMF files; no kvm group change was needed. Host-owned checksum files require `sudo tee`. The new account/helper changes below still need a rebuilt-image boot check; physical USB and degraded/rejoin tests remain unconfirmed. Continue with the checks below; a successful module presence/vermagic check does not prove it loads on the target machine.
+The operator verified README section 4 in QEMU, including the normal guest boot/mount/reboot sequence, on 2026-10-15. QEMU required desktop-user execution and writable image/OVMF files; no kvm group change was needed. Host-owned checksum files require `sudo tee`. The operator subsequently confirmed each physical USB boots independently on a laptop after disabling Secure Boot, and the ZFS mirror works with both sticks connected. This confirms basic physical boot and both-member mirror operation. Physical degraded-write/rejoin and the new numbered-pair failover workflow remain unconfirmed. Continue with the checks below; a successful module presence/vermagic check does not prove it loads on the target machine.
 
 ## Required Ubuntu + Docker build checks
 
@@ -32,7 +32,7 @@ The operator verified README section 4 in QEMU, including the normal guest boot/
 3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable workspace-mount, no zfs-initramfs package.
 4. Inspect initramfs with lsinitramfs: live-boot and required USB/FAT drivers present. ZFS is data only, not a root-boot dependency.
 5. File assembly leaves IMAGES-PREPARED and PREPARED-SHA256SUMS, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.
-6. On the host, run 03-initialize-workspace.sh. Verify one mirror is created, LZ4 plus encryption and its required dependencies are enabled, workspace/data is noauto, the pool is exported, loops detached, and READY/final SHA256SUMS/WORKSPACE-INFO.txt exist.
+6. On the host, run 03-initialize-workspace.sh. Verify one mirror is created, LZ4 plus encryption and its required dependencies are enabled, workspace-1/data is noauto, the pool is exported, loops detached, and READY/final SHA256SUMS/WORKSPACE-INFO.txt exist.
 7. Check final checksums before VM tests. Checksums must be refreshed after VM writes, with pool exported and VM stopped.
 
 ## Verify the new account and helpers after rebuilding
@@ -42,7 +42,7 @@ id simlun                         # uid=2000, primary gid=2000
 sudo -n id -u                      # 0, without prompting
 command -v workspace-mount workspace-umount workspace-sync
 cat /etc/motd                     # Hello, world
-sudo workspace-mount             # enter the encryption passphrase
+sudo workspace-mount 1             # enter the encryption passphrase
 stat -c '%u:%g %a' /mnt/workspace # 2000:2000 750
 printf 'owned by simlun\n' > /mnt/workspace/simlun-write-test
 cd /
@@ -59,7 +59,7 @@ Keep the raw images on only one machine/VM owner. Export before shutting down. U
 | --- | --- |
 | A alone, clean firmware vars | Boots to usable console without importing ZFS; running root is overlay with SquashFS lower layer. |
 | B alone, clean firmware vars | Same, independently of A's ESP. |
-| Both disks | No workspace pool imported before manual command; helper imports ONLINE mirror, mounts only workspace/data. |
+| Both disks | No workspace pool imported before manual command; helper imports ONLINE mirror, mounts only workspace-1/data. |
 | Repeat helper | No second import, correct existing mount reported. |
 | Reboot | /etc/reset-check disappears; workspace test data survives clean export/import. |
 | A alone, read-only degraded import | Reads previously committed test data; pool is DEGRADED; does not modify its history. |
@@ -75,12 +75,12 @@ Read-only test (after confirming no other owner, substitute numeric pool GUID fr
 sudo modprobe zfs
 [ -s /etc/hostid ] || sudo zgenhostid
 sudo zpool import -N -d /dev/disk/by-partuuid -o cachefile=none -o readonly=on POOL_GUID
-sudo zfs load-key -L prompt workspace/data
-sudo zfs mount workspace/data
+sudo zfs load-key -L prompt workspace-1/data
+sudo zfs mount workspace-1/data
 cat /mnt/workspace/check.txt
-sudo zpool status -gP workspace
+sudo zpool status -gP workspace-1
 cd /
-sudo zpool export workspace
+sudo zpool export workspace-1
 ```
 
 If active-host protection refuses an import, investigate first; only use -f after establishing exclusive ownership and authoritative history.
@@ -99,9 +99,9 @@ ls -l /etc/systemd/system-generators/zfs-mount-generator
 ip -br link
 ip -br addr
 sudo zpool list
-sudo /usr/local/sbin/workspace-mount
-sudo zfs get mountpoint,canmount,mounted,encryption,keyformat,keystatus,org.openzfs.systemd:ignore workspace/data
-sudo zpool status -gP workspace
+sudo /usr/local/sbin/workspace-mount 1
+sudo zfs get mountpoint,canmount,mounted,encryption,keyformat,keystatus,org.openzfs.systemd:ignore workspace-1/data
+sudo zpool status -gP workspace-1
 ```
 
 To test USB presentation, replace each `-drive if=virtio,...` in the README command with:
@@ -122,6 +122,6 @@ Repeat A-only, B-only, both-member and degraded/rejoin cases on the intended UEF
 
 Unexpected power-loss recovery should use a separate disposable image pair; it can require explicit force import because this image's hostid changes each boot. A successful boot alone does not prove the ZFS workspace is healthy.
 
-## Three-pair acceptance after rebuilding
+## N-pair and ordered-failover acceptance after rebuilding
 
-Follow [PAIRS.md](PAIRS.md) to provision unique primary/backup1/backup2 pairs. For each backup verify initial full receive, a later incremental, unlocking with the primary passphrase, UID/GID 2000 ownership, read-only recovery, both members ONLINE and a clean scrub. Rotate one offsite copy at a time. Test interrupted-transfer resumption only on disposable images, then test `workspace-sync --restore` into a fresh receive-only primary. Confirm the new primary is writable, the recovery source is intact and older backup bindings refuse its new identity until deliberately reseeded. Record completed snapshot dates and pool/physical-device identities outside the pools.
+Follow [PAIRS.md](PAIRS.md) to provision unique numbered pairs. Exercise at least four IDs, including 2 and 10, to verify numeric order. Verify shared-checkpoint full and incremental receives, passphrase unlock, UID/GID 2000 ownership, read-only replica use, both members ONLINE and clean scrubs. Rotate one offsite copy at a time. On disposable images, interrupt and resume full/incremental transfers, fence/export the active pair, activate the next numeric ID in place, make UID 2000 writes, and rebind the remaining replicas using their common checkpoint. Repeat failover and verify names/identities stay stable. Confirm incomplete receives, an observably active former owner, absent fencing acknowledgement, divergent writes/snapshots and source changes without --rebind all fail safely. Record completed checkpoints, IDs and physical-device locations outside the pools.

@@ -62,7 +62,7 @@ esac''')
         p.chmod(0o755)
 
     def run_initialize(self, *args):
-        return subprocess.run(['bash', str(self.script), str(self.out), *args], env=self.env, capture_output=True, text=True)
+        return subprocess.run(['bash', str(self.script), str(self.out), *(args or ('1', '--active'))], env=self.env, capture_output=True, text=True)
 
     def calls(self):
         return self.log.read_text() if self.log.exists() else ''
@@ -75,7 +75,7 @@ esac''')
         self.assertIn('-o encryption=aes-256-gcm -o keyformat=passphrase -o keylocation=prompt', self.calls())
         self.assertIn('chown 2000:2000', self.calls())
         self.assertIn('-o canmount=noauto', self.calls())
-        self.assertEqual(self.calls().count('zpool export workspace'), 1)
+        self.assertEqual(self.calls().count('zpool export workspace-1'), 1)
         self.assertEqual(self.calls().count('losetup -d'), 2)
         self.assertTrue((self.out/'READY').exists())
         self.assertFalse((self.out/'INITIALIZING').exists())
@@ -118,15 +118,15 @@ esac''')
         self.assertNotEqual(self.run_initialize().returncode, 0)
         self.assertEqual(self.calls(), '')
 
-    def test_backups_are_distinct_empty_receive_targets(self):
-        r = self.run_initialize('backup1')
+    def test_arbitrary_numbered_pairs_are_empty_receive_targets(self):
+        r = self.run_initialize('27')
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn('org.level1vault:pair=backup1 workspace-backup1 mirror', self.calls())
+        self.assertIn('org.level1vault:pair=27 -O org.level1vault:state=replica workspace-27 mirror', self.calls())
         self.assertNotIn('zfs create', self.calls())
-        self.assertNotIn('zpool export workspace\n', self.calls())
+        self.assertNotIn('zpool export workspace-1\n', self.calls())
 
-    def test_receive_only_primary_has_no_independently_encrypted_data(self):
-        r = self.run_initialize('primary', '--receive-only')
+    def test_default_pair_has_no_independently_encrypted_data(self):
+        r = self.run_initialize('2')
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertNotIn('zfs create', self.calls())
 
