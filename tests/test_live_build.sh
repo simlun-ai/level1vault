@@ -2,7 +2,7 @@
 set -euo pipefail
 # Run in the builder container against a completed build, mounted at /build.
 # Extract SquashFS and inspect actual target artifacts; do not load its modules.
-[[ $# -eq 1 ]] || { echo "Usage: $0 BUILD_DIRECTORY" >&2; exit 2; }
+[[ $# -ge 1 && $# -le 2 && ${2:---iso-only} == --iso-only ]] || { echo "Usage: $0 BUILD_DIRECTORY [--iso-only]" >&2; exit 2; }
 BUILD_DIR=$(realpath -- "$1")
 TASK_TMP=$(mktemp -d)
 trap 'rm -rf -- "$TASK_TMP"' EXIT
@@ -36,7 +36,9 @@ INITRD="$TASK_TMP/live/initrd.img-$KERNEL"
 [[ -f $INITRD ]] || INITRD="$TASK_TMP/live/initrd.img"
 lsinitramfs "$INITRD" > "$TASK_TMP/initramfs-files"
 grep -q 'scripts/live' "$TASK_TMP/initramfs-files"
-test -f "$BUILD_DIR/out/IMAGES-PREPARED"
-test ! -e "$BUILD_DIR/out/READY"
-(cd "$BUILD_DIR/out" && sha256sum -c PREPARED-SHA256SUMS)
+if [[ ${2:-} != --iso-only ]]; then
+  test -f "$BUILD_DIR/out/IMAGES-PREPARED"
+  test ! -e "$BUILD_DIR/out/READY"
+  (cd "$BUILD_DIR/out" && sha256sum -c PREPARED-SHA256SUMS)
+fi
 printf 'Full Debian Live build inspected successfully: kernel=%s\n' "$KERNEL"

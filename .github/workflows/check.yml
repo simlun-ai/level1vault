@@ -14,8 +14,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      # Assembly and account tests run without privileged containers.
-      - run: make test-container
+      - uses: docker/setup-buildx-action@v3
+        with:
+          name: level1vault
+          buildkitd-flags: --allow-insecure-entitlement security.insecure
+      # No insecure RUN entitlement is requested for these test stages.
+      - run: make test-container SUDO=
   zfs-integration:
     runs-on: ubuntu-22.04
     timeout-minutes: 15

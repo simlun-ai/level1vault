@@ -4,7 +4,7 @@ A stateless Debian 13 Live system on pairs of bootable USB drives. Each pair hol
 
 ## Build
 
-Use an **Linux amd64 workstation with working ZFS**, local rootful Docker, and at least 40 GiB free. Debian build tools run inside Docker. [Setup and build details →](docs/BUILD.md)
+Use an **Linux amd64 workstation with working ZFS**, local rootful Docker with Buildx, and at least 80 GiB free. Debian build tools run inside Docker. [Setup and build details →](docs/BUILD.md)
 
 ```bash
 git clone https://github.com/simlun-ai/level1vault.git
@@ -62,7 +62,8 @@ If export fails, resolve the busy filesystem and retry before removing drives. K
 make help                       # command overview
 make test                       # local lint and behavior tests
 make test-container             # assembly and login tests in Debian containers
-make clean                      # remove build work; retain ISO, images and records
+make clean                      # clean legacy build work; retain artifacts
+make cache-clean                # prune unused BuildKit cache
 ```
 
 Builds use a fresh directory. To rebuild while retaining existing images: `make build BUILD_DIR=build-next`. Install test dependencies and see the full lifecycle in [development](docs/DEVELOPMENT.md).

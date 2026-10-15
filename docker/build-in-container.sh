@@ -1,10 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
-[[ $EUID -eq 0 ]] || { echo 'live-build needs root inside the container' >&2; exit 1; }
-[[ ! -e /build/config && ! -e /build/chroot && ! -e /build/out ]] || {
-  echo 'Use a fresh build directory; inspect/clean failed chroot mounts before retrying' >&2; exit 1;
-}
+[[ $EUID -eq 0 ]] || { echo 'live-build needs root inside BuildKit' >&2; exit 1; }
 cd /build
-/src/01-configure-live.sh "$@"
-lb build 2>&1 | tee build.log
-/src/02-assemble-images.sh /build/live-image-amd64.hybrid.iso /build/out
+mkdir /artifacts
+# JSON preserves argument boundaries without shell evaluation.
+python3 - <<'PY'
+import json, os, subprocess
+args = json.loads(os.environ.get('LB_CONFIG_JSON', '[]'))
+assert isinstance(args, list) and all(isinstance(x, str) for x in args)
+subprocess.run(['/src/01-configure-live.sh', *args], check=True)
+PY
+lb build 2>&1 | tee /artifacts/live-build.log
+cp /build/live-image-amd64.hybrid.iso /artifacts/
+lb clean --purge
+# Never recursively delete a chroot while a filesystem is mounted beneath it.
+python3 - <<'PY'
+from pathlib import Path
+for line in Path('/proc/self/mountinfo').read_text().splitlines():
+    target = line.split()[4]
+    if target == '/build' or target.startswith('/build/'):
+        raise SystemExit('Refusing chroot cleanup with remaining mount: ' + target)
+PY
+cd /
+rm -rf -- /build
+mkdir /build

@@ -13,13 +13,14 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 | `make verify` | Require `READY` and verify final image/manifest checksums |
 | `make assemble OUT=build/pair-2` | Reuse the existing ISO to assemble a new pair with unique identities |
 | `make initialize PAIR=2 OUT=build/pair-2` | Initialize an empty replica; its first receive creates the encrypted data filesystem |
-| `make builder` | Build only the Docker toolchain image |
+| `make builder` | Create/bootstrap the dedicated BuildKit builder |
 | `make test` | ShellCheck, shell syntax checks and Python unit/behavior tests |
 | `make test-unit` | Only Python unit/behavior tests |
-| `make test-container` | Build the toolchain and test real disk assembly and account/login configuration in separate unprivileged containers |
+| `make test-container` | Build the toolchain and test real disk assembly and account/login configuration in separate sandboxed BuildKit stages |
 | `make check-build` | Inspect an existing full build's SquashFS, module, initramfs and prepared artifacts |
 | `make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1` | Real ZFS integration, **only on a disposable VM** |
-| `make clean` | Remove expendable live-build directories from the selected build |
+| `make clean` | Remove legacy build work while preserving artifacts |
+| `make cache-clean` | Prune unused cache on the dedicated BuildKit builder |
 
 `BUILD_DIR` defaults to `build`; `OUT` defaults to `$(BUILD_DIR)/out`. Relative paths are relative to the repository root. Override them consistently:
 
@@ -31,7 +32,7 @@ make verify OUT=build-next/out
 
 Only set `ACTIVE=1` when provisioning the initial writable pair for a deployment. Additional pairs default to replicas. Do not provision a second independent active pair as a failover shortcut; follow [pair operations](PAIRS.md).
 
-Assembly requires an existing builder image and ISO. `OUT` must be a new directory beneath `BUILD_DIR`. Use a local rootful Docker Engine throughout, as for the full build. `BUILDER_IMAGE` and `DEBIAN_IMAGE` can override the toolchain tag and base image. For advanced live-build arguments, use `build-container.sh BUILD_DIR ...` directly; see [build reference](BUILD.md#reproducibility).
+Assembly requires an existing ISO; BuildKit builds or reuses its toolchain stage. `OUT` must be a new directory beneath `BUILD_DIR`. Use a local rootful Docker Engine throughout, as for the full build. `BUILDX_BUILDER` and `DEBIAN_IMAGE` select the dedicated BuildKit instance and Debian base image. See the [BuildKit reference](BUILDKIT.md). For advanced live-build arguments, use `build-container.sh BUILD_DIR ...` directly; see [build reference](BUILD.md#reproducibility).
 
 ## Local tests on Linux
 
@@ -49,7 +50,7 @@ These behavior tests use temporary files and mock system commands. They need no 
 make test-container
 ```
 
-This builds the same Debian toolchain used by CI. The test containers have a read-only source checkout and no privileged mode, host ZFS or loop devices. Login tests modify accounts only inside their disposable container.
+This builds the same Debian toolchain used by CI. Test stages use copied allowlisted source and no insecure RUN entitlement, host ZFS or loop devices. Login tests modify accounts only inside their disposable build stage. Two actual local exports verify fresh disk identities even with a cached ISO.
 
 The real ZFS suite needs root, loop devices, the native ZFS module/tools, `gdisk`, Python and udev. It creates test pools named `workspace-1`, `workspace-2`, `workspace-3` and `workspace-10` and exercises failure recovery. **Run it in a disposable Linux amd64 VM with working ZFS, not your ZFS workstation. Ubuntu 22.04 is the tested CI environment.** It refuses conflicting imported test pools, but that is not a substitute for isolation.
 
@@ -77,13 +78,13 @@ make clean                       # default build directory
 make clean BUILD_DIR=build-next  # a selected build directory
 ```
 
-Cleanup removes only `chroot/`, `cache/`, `config/` and `binary/` inside a recognized build directory. It retains the ISO, every image pair (including initialized workspaces), manifests, logs, checksums and state markers. It never exports pools, detaches loops or deletes Docker images. Docker must be available for checks when there is build work to remove. Cleanup refuses active container binds, mounted filesystems and loop-backed files under that build, as well as unexpected paths or symlinks.
+Current builds export artifacts only; their working state is in BuildKit. Use `make cache-clean` to prune its unused cache. For legacy builds, cleanup removes only `chroot/`, `cache/`, `config/` and `binary/` inside a recognized build directory. It retains the ISO, every image pair (including initialized workspaces), manifests, logs, checksums and state markers. It never exports pools, detaches loops or deletes Docker images. Docker must be available for checks when there is build work to remove. Cleanup refuses active container binds, mounted filesystems and loop-backed files under that build, as well as unexpected paths or symlinks.
 
 The retained build is an archive of artifacts, not a reusable live-build working directory. The builder still refuses an existing directory, so rebuild with a fresh name:
 
 ```bash
 make clean
-make build BUILD_DIR=build-next
+make build BUILD_DIR=build-next FRESH=1
 ```
 
 There is intentionally no target that deletes initialized image pairs. They can contain the only copy of files written during VM tests. If you later discard an entire archived build, check its data and attachments yourself first. Cleanup also preserves an incomplete `INITIALIZING` marker: resolve any leftover pool/loop state using [build troubleshooting](BUILD.md#initialize-a-pair).

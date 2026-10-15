@@ -8,12 +8,13 @@ BUILD_DIR ?= build
 OUT ?= $(BUILD_DIR)/out
 PAIR ?=
 ACTIVE ?= 0
-BUILDER_IMAGE ?= level1vault-builder:trixie
+BUILDX_BUILDER ?= level1vault
 DEBIAN_IMAGE ?= debian:trixie
+FRESH ?= 0
 SUDO ?= sudo
-export BUILD_DIR OUT PAIR ACTIVE BUILDER_IMAGE DEBIAN_IMAGE
+export BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH
 
-.PHONY: help build builder assemble initialize verify lint test-unit test test-container test-zfs check-build clean
+.PHONY: help build builder assemble initialize verify lint test-unit test test-container test-zfs check-build clean cache-clean
 help:
 	@printf '%s\n' \
 	  'make build                       Build live ISO and first uninitialized image pair' \
@@ -25,17 +26,18 @@ help:
 	  'make test-container              Test real assembly and login in Trixie' \
 	  'make test-zfs                     Real ZFS tests; disposable VM only (see docs)' \
 	  'make check-build                 Inspect an already-built live system' \
-	  'make clean                       Remove build work; preserve images/ISO/records' \
+	  'make clean                       Remove legacy build work; preserve artifacts' \
+	  'make cache-clean                 Prune unused cache on the dedicated builder' \
 	  'Options: BUILD_DIR=build-next, OUT=..., SUDO= (when already root)'
 
 build:
-	$(SUDO) env BUILDER_IMAGE="$$BUILDER_IMAGE" DEBIAN_IMAGE="$$DEBIAN_IMAGE" ./build-container.sh "$$BUILD_DIR"
+	$(SUDO) env BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" FRESH="$$FRESH" ./build-container.sh "$$BUILD_DIR"
 
 builder:
-	$(SUDO) docker build --platform linux/amd64 --build-arg "DEBIAN_IMAGE=$$DEBIAN_IMAGE" -t "$$BUILDER_IMAGE" -f docker/Dockerfile docker
+	$(SUDO) env BUILDX_BUILDER="$$BUILDX_BUILDER" bash scripts/buildkit.sh builder
 
 assemble:
-	$(SUDO) env BUILDER_IMAGE="$$BUILDER_IMAGE" bash scripts/container-task.sh assemble "$$BUILD_DIR" "$$OUT"
+	$(SUDO) env BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" bash scripts/buildkit.sh assemble "$$BUILD_DIR" "$$OUT"
 
 initialize:
 	@[[ "$$PAIR" =~ ^[1-9][0-9]*$$ ]] || { echo 'Set PAIR to a positive integer, e.g. PAIR=1' >&2; exit 1; }
@@ -57,8 +59,8 @@ test-unit:
 
 test: lint test-unit
 
-test-container: builder
-	$(SUDO) env BUILDER_IMAGE="$$BUILDER_IMAGE" bash scripts/container-task.sh test
+test-container:
+	$(SUDO) env BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" bash scripts/buildkit.sh test
 
 # Deliberately excluded from `make test`: do not opt a workstation into this.
 test-zfs:
@@ -66,7 +68,10 @@ test-zfs:
 	$(SUDO) env LEVEL1VAULT_DISPOSABLE_TEST_VM=1 python3 tests/integration_zfs.py
 
 check-build:
-	$(SUDO) env BUILDER_IMAGE="$$BUILDER_IMAGE" bash scripts/container-task.sh check "$$BUILD_DIR"
+	$(SUDO) env BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" bash scripts/buildkit.sh check "$$BUILD_DIR"
 
 clean:
 	$(SUDO) python3 scripts/clean.py "$$BUILD_DIR"
+
+cache-clean:
+	$(SUDO) env BUILDX_BUILDER="$$BUILDX_BUILDER" bash scripts/buildkit.sh cache-clean

@@ -4,13 +4,13 @@
 
 ## Workstation requirements
 
-Use a Linux amd64 workstation with working ZFS and local, rootful Docker Engine. Ubuntu 22.04 is the tested host example; it is not a distribution requirement. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. The first full CI build took about 17 minutes on its runner; workstation time varies. Have at least 40 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
+Use a Linux amd64 workstation with working ZFS and local, rootful Docker Engine with the Buildx plugin. Ubuntu 22.04 is the tested host example; it is not a distribution requirement. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. The previous container workflow took about 17 minutes in CI; BuildKit timings and storage use need validation. Have at least 80 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
 
-Install Docker and the host utilities using your distribution’s packages. For example, on Ubuntu 22.04:
+Install [Docker Engine with Buildx](https://docs.docker.com/engine/install/) and verify `sudo docker buildx version`. Install the remaining host utilities using your distribution’s packages. For example, on Ubuntu 22.04:
 
 ```bash
 sudo apt update
-sudo apt install -y docker.io git make gdisk parted util-linux udev kmod python3 \
+sudo apt install -y git make gdisk parted util-linux udev kmod python3 \
     qemu-system-x86 ovmf
 sudo systemctl enable --now docker
 # Your existing ZFS installation should already provide zpool/zfs/modprobe.
@@ -18,11 +18,12 @@ sudo modprobe zfs
 zpool --version
 sudo zpool list
 sudo docker info
+sudo docker buildx version
 ```
 
 Keep your host distribution's own ZFS packages and kernel. Do not replace them with Debian packages. If the workstation already has an imported pool named `workspace-1`, initialization refuses to proceed; use another host or resolve that name conflict deliberately. Other existing host pools are left alone.
 
-The live-build container runs with `--privileged` because its chroot build needs mounts and device access. This grants host-root-equivalent privileges: use trusted source and build configuration. The wrapper mounts the checkout read-only and one build directory read-write, with private mount propagation. It does not bind the host `/dev`, `/run/udev`, `/lib/modules`, or Docker socket; privileged Docker can still expose host devices. No physical-device operations or ZFS pool commands are part of the container build scripts.
+The [BuildKit pipeline](BUILDKIT.md) confines the required privileged RUN to live-build. It exports artifacts from scratch stages; ZFS initialization stays on the host. Use trusted source: the live-build entitlement grants privileges equivalent to the previous privileged container.
 
 ## Build the live system and boot images
 
@@ -32,13 +33,15 @@ cd level1vault
 make build
 ```
 
-The wrapper builds `level1vault-builder:trixie`, then runs live-build and file-only disk assembly. It refuses an existing build directory, preventing accidental reuse of stale chroots/configuration. A later build can use `"$PWD/build-next"` instead.
+The wrapper creates a dedicated BuildKit builder, builds the ISO and file-only image stages, then exports their artifacts. It refuses an existing output directory. A later build can use `make build BUILD_DIR=build-next`; add `FRESH=1` to refresh packages rather than reuse the cached ISO.
 
 Successful output:
 
 ```text
 build/
-  builder-image.json                # Docker toolchain identity
+  builder-info.txt                  # dedicated BuildKit instance
+  build-metadata.json               # successful solve metadata
+  live-build.log                    # successful live-build stage log
   build.log
   live-image-amd64.hybrid.iso        # intermediate ISO
   out/
@@ -50,13 +53,13 @@ build/
     IMAGES-PREPARED
 ```
 
-`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts may be root-owned; readable files can be inspected normally. To report a build failure, include the final 100 lines of `build/build.log` and the complete error printed by the wrapper. Do not recursively chown or remove a failed chroot until its mounts have been checked.
+`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts may be root-owned; readable files can be inspected normally. To report a build failure, include the final 100 lines of `build/build.log` and the complete error printed by the wrapper. The chroot stays inside BuildKit; failed-stage output is available in the streamed host build.log.
 
 For configuration customization, pass extra `lb config` options after the build directory. Do not override kernel flavour, architecture or boot layout without updating the associated checks. For frozen package inputs and base image digest selection, see [reproducibility](#reproducibility).
 
 ## Initialize a pair
 
-Exit any build container; run this in the host workstation shell:
+Run this in the host workstation shell:
 
 ```bash
 make initialize PAIR=1 ACTIVE=1
@@ -76,9 +79,9 @@ If initialization fails, `INITIALIZING` remains and reruns are refused. Check `s
 
 ## Reproducibility
 
-Default Debian mirrors and the `debian:trixie` tag move over time. The wrapper records the builder image identity in `build/builder-image.json`; the chroot records package/kernel versions, and the host records its ZFS versions and pool GUID in `WORKSPACE-INFO.txt`.
+Default Debian mirrors and the `debian:trixie` tag move over time. The wrapper records builder details and successful solve metadata in `builder-info.txt` and `build-metadata.json`; the chroot records package/kernel versions, and the host records its ZFS versions and pool GUID in `WORKSPACE-INFO.txt`.
 
-For repeatable package inputs, select a verified Debian base image digest and Debian archive snapshot timestamp. Pin both the Dockerfile's toolchain package sources and live-build's bootstrap/chroot/security mirrors; pinning only the Docker image tag or only live-build mirrors is insufficient. The Dockerfile accepts `DEBIAN_IMAGE`; changing its APT sources to a historical snapshot is an explicit release configuration task.
+For repeatable package inputs, select verified Dockerfile frontend, BuildKit and Debian base image digests plus a Debian archive snapshot timestamp. Pin both the Dockerfile's toolchain package sources and live-build's bootstrap/chroot/security mirrors; pinning only the Docker image tag or only live-build mirrors is insufficient. The Dockerfile accepts `DEBIAN_IMAGE`; changing its APT sources to a historical snapshot is an explicit release configuration task.
 
 Example live-build arguments (replace the timestamp and digest with verified values):
 

@@ -50,8 +50,8 @@ def clean(build):
     if not build.exists():
         print(f'Nothing to clean: {build}')
         return
-    if not (build/'builder-image.json').is_file():
-        raise ValueError('Missing builder-image.json; not a recognized build directory')
+    if not any((build/name).is_file() for name in ('builder-image.json', 'builder-info.txt')):
+        raise ValueError('Missing builder identity; not a recognized build directory')
     targets = [build/name for name in TRANSIENT if (build/name).exists() or (build/name).is_symlink()]
     if not targets:
         print('No transient build directories remain. Images and records retained.')
