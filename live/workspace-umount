@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
+
+# Validate the requested export scope and root access.
 [ "$#" -le 1 ] || { echo 'Usage: sudo workspace-umount [PAIR_ID|all]' >&2; exit 2; }
 PAIR=${1:-all}
 case "$PAIR" in
@@ -7,8 +9,12 @@ case "$PAIR" in
     ''|0*|*[!0-9]*) echo 'Expected a positive PAIR_ID or all' >&2; exit 2;;
 esac
 [ "$(id -u)" -eq 0 ] || { echo 'Run: sudo workspace-umount' >&2; exit 1; }
+
+# Reserve exclusive access to workspace operations.
 exec 9>/run/lock/level1vault-workspace.lock
 flock -x 9
+
+# Select the imported workspace pools to export.
 cd /
 modprobe zfs
 pools=$(zpool list -H -o name)
@@ -18,6 +24,8 @@ if [ "$PAIR" = all ]; then
 else
     POOLS=workspace-$PAIR
 fi
+
+# Validate, sync, and export each selected pool.
 for POOL in $POOLS; do
     if ! printf '%s\n' "$pools" | grep -Fxq "$POOL"; then
         continue
@@ -32,4 +40,6 @@ for POOL in $POOLS; do
         exit 1
     fi
 done
+
+# Report that the selected pairs can be disconnected.
 echo 'Selected workspace pools synced and exported; safe to disconnect those pairs.'

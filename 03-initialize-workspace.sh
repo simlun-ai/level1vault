@@ -10,6 +10,8 @@ ACTIVE=${3:-}
 [[ -z $ACTIVE || $ACTIVE == --active ]] || { echo 'Expected --active or no flag' >&2; exit 2; }
 PAIR_STATE=replica
 [[ $ACTIVE != --active ]] || PAIR_STATE=active
+
+# Check host tools and prepared image markers.
 for cmd in zpool zfs modprobe losetup udevadm blkid wipefs sha256sum python3 flock realpath mktemp chown chmod; do
   command -v "$cmd" >/dev/null || { echo "Missing host command: $cmd" >&2; exit 1; }
 done
@@ -17,6 +19,8 @@ OUT_DIR=$(realpath -- "$1")
 [[ -f $OUT_DIR/IMAGES-PREPARED && ! -e $OUT_DIR/READY && ! -e $OUT_DIR/INITIALIZING ]] || {
   echo 'Expected fresh prepared images (no READY or INITIALIZING marker)' >&2; exit 1;
 }
+
+# Reserve initialization and verify the prepared artifacts.
 exec 9>/run/lock/level1vault-initialize.lock
 flock -n 9 || { echo 'Another initialization is in progress' >&2; exit 1; }
 # Recheck after locking in case another invocation finished while we started.
@@ -30,6 +34,8 @@ assert m['images']['a']['file'] == 'usb-a.img'
 assert m['images']['b']['file'] == 'usb-b.img'
 assert m['images']['a']['zfs_partuuid'] != m['images']['b']['zfs_partuuid']
 PY
+
+# Check host ZFS access and reject images already in use.
 modprobe zfs
 # This exercises the installed userland against the loaded host module. Ubuntu's
 # module and package version strings need not exactly equal Debian's (or each other).
@@ -41,6 +47,8 @@ for img in "$OUT_DIR/usb-a.img" "$OUT_DIR/usb-b.img"; do
   [[ -f $img && ! -L $img ]] || { echo "Invalid image: $img" >&2; exit 1; }
   [[ -z $(losetup -j "$img") ]] || { echo "Image already attached: $img" >&2; exit 1; }
 done
+
+# Preserve attached devices if initialization cannot finish safely.
 A='' B='' POOL_CREATED=0 MOUNT_ROOT=''
 cleanup() {
   local rc=$? safe=1
@@ -73,6 +81,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+# Attach and validate the empty workspace partitions.
 # Retained on failure: do not rerun over a partially initialized mirror.
 touch "$OUT_DIR/INITIALIZING"
 A=$(losetup --find --show --partscan "$OUT_DIR/usb-a.img")
@@ -101,12 +111,16 @@ zpool create -d -R "$MOUNT_ROOT" -o feature@lz4_compress=enabled \
   -o ashift=12 -o cachefile=none -O mountpoint=none -O canmount=off \
   -O org.level1vault:pair="$PAIR" -O org.level1vault:state="$PAIR_STATE" "$POOL" mirror "${A}p2" "${B}p2"
 POOL_CREATED=1
+
+# Create the encrypted workspace for an active pair.
 if [[ $ACTIVE == --active ]]; then
   # ZFS reads stdin itself (hidden prompt/confirmation on a terminal). No key
   # file, shell variable, argument or log ever contains the passphrase.
   zfs create -u -o encryption=aes-256-gcm -o keyformat=passphrase -o keylocation=prompt \
     -o mountpoint=/mnt/workspace -o canmount=noauto -o compression=lz4 \
     -o atime=off -o org.openzfs.systemd:ignore=on "$POOL/data"
+
+  # Set workspace ownership and permissions.
   # Mount beneath a private altroot, never over the host's /mnt/workspace.
   zfs mount "$POOL/data"
   chown 2000:2000 "$MOUNT_ROOT/mnt/workspace"
@@ -115,6 +129,8 @@ if [[ $ACTIVE == --active ]]; then
 else
   echo 'Empty receive target: data will be created by workspace-sync.'
 fi
+
+# Record the initialized pool and its feature policy.
 {
   date -u +initialized_at=%FT%TZ
   zpool --version
@@ -124,6 +140,8 @@ fi
   zpool status -gP "$POOL"
   zpool get all "$POOL"
 } > "$OUT_DIR/WORKSPACE-INFO.txt"
+
+# Export the pool and release the image devices.
 zpool export "$POOL"
 POOL_CREATED=0
 losetup -d "$A"
@@ -131,6 +149,8 @@ A=''
 losetup -d "$B"
 B=''
 udevadm settle --timeout=30
+
+# Publish the initialized checksums and readiness marker.
 (cd "$OUT_DIR" && sha256sum usb-a.img usb-b.img images.json > SHA256SUMS)
 rm -- "$OUT_DIR/INITIALIZING"
 touch "$OUT_DIR/READY"

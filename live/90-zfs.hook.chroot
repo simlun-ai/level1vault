@@ -5,6 +5,8 @@ if dpkg-query -W -f='${Status}' zfs-initramfs 2>/dev/null | grep -q 'install ok 
     echo 'ERROR: zfs-initramfs is unexpected in this data-only live image' >&2
     exit 1
 fi
+
+# Build and verify ZFS support for the single target kernel.
 count=0
 for mods in /lib/modules/*; do
     [ -d "$mods" ] || continue
@@ -29,8 +31,11 @@ rm -f /etc/hostid /etc/zfs/zpool.cache
 if [ -d /etc/zfs/zfs-list.cache ]; then
     find /etc/zfs/zfs-list.cache -type f -delete
 fi
-# Rebuild only after module verification and removal of build-host identity/caches.
+
+# Refresh the initramfs for the verified target system.
 update-initramfs -u -k all
+
+# Record kernel and package versions for later inspection.
 mkdir -p /usr/local/share/level1vault
 dpkg-query -W -f='${binary:Package}\t${Version}\n' | sort > /usr/local/share/level1vault/packages.tsv
 dpkg-query -W -f='${Version}\n' zfsutils-linux > /usr/local/share/level1vault/zfsutils-version

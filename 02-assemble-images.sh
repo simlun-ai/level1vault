@@ -6,6 +6,8 @@ for cmd in xorriso unsquashfs sgdisk mkfs.vfat mcopy grub-mkstandalone \
   blkid python3 realpath truncate sha256sum stat cp dd mktemp; do
   command -v "$cmd" >/dev/null || { echo "Missing command: $cmd" >&2; exit 1; }
 done
+
+# Validate the input ISO and output image sizes.
 ISO=$(realpath -- "$1")
 OUT_DIR=$(realpath -m -- "$2")
 [[ -f $ISO && ! -e $OUT_DIR ]] || { echo 'ISO missing or output already exists' >&2; exit 1; }
@@ -13,6 +15,8 @@ IMAGE_MIB=${IMAGE_MIB:-12288}
 ESP_MIB=${ESP_MIB:-4096}
 [[ $IMAGE_MIB =~ ^[1-9][0-9]*$ && $ESP_MIB =~ ^[1-9][0-9]*$ ]] || exit 2
 (( ESP_MIB >= 64 && IMAGE_MIB >= ESP_MIB + 128 )) || { echo 'Image/ESP too small' >&2; exit 2; }
+
+# Prepare temporary assembly files and failure cleanup.
 mkdir -- "$OUT_DIR"
 TMP=$(mktemp -d "$OUT_DIR/.assembly.XXXXXXXX")
 cleanup() {
@@ -28,6 +32,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+# Select the live filesystem, kernel, and initramfs.
 xorriso -osirrox on -indev "$ISO" -extract / "$TMP/iso"
 SQUASH="$TMP/iso/live/filesystem.squashfs"
 [[ -f $SQUASH ]] || { echo 'Missing filesystem.squashfs' >&2; exit 1; }
@@ -45,12 +51,16 @@ done
 # Leave space for FAT tables, standalone GRUB and metadata. mcopy also checks capacity.
 REQUIRED=$(( $(stat -Lc %s "$SQUASH") + $(stat -Lc %s "$VMLINUX") + $(stat -Lc %s "$INITRD") + 32*1024*1024 ))
 (( REQUIRED < ESP_MIB*1024*1024 )) || { echo 'Payload does not fit ESP' >&2; exit 1; }
+
+# Prepare the boot payload shared by both drives.
 mkdir -p "$TMP/payload/live" "$TMP/payload/boot/grub" "$TMP/payload/EFI/BOOT"
 cp -L -- "$VMLINUX" "$TMP/payload/live/vmlinuz"
 cp -L -- "$INITRD" "$TMP/payload/live/initrd.img"
 cp -- "$SQUASH" "$TMP/payload/live/filesystem.squashfs"
 unsquashfs -cat "$SQUASH" usr/local/share/level1vault/packages.tsv > "$TMP/payload/live/packages.tsv"
 if [[ -d $TMP/iso/.disk ]]; then cp -rL -- "$TMP/iso/.disk" "$TMP/payload/"; fi
+
+# Create two independently bootable disk images.
 for name in a b; do
   img="$OUT_DIR/usb-$name.img"
   truncate -s "${IMAGE_MIB}M" "$img"
@@ -59,6 +69,8 @@ for name in a b; do
   partuuid=$(LC_ALL=C sgdisk -i 2 "$img" | awk '/Partition unique GUID:/ {print tolower($4)}')
   [[ $partuuid =~ ^[0-9a-f-]{36}$ ]] || { echo 'Missing partition UUID' >&2; exit 1; }
   printf '%s\n' "$partuuid" > "$TMP/partuuid-$name"
+
+  # Create a distinct EFI filesystem for this drive.
   esp="$TMP/esp-$name.img"
   truncate -s "${ESP_MIB}M" "$esp"
   # Explicit random volume IDs also avoid collisions in builds within one second.
@@ -66,6 +78,8 @@ for name in a b; do
   mkfs.vfat -F 32 -i "$volid" -n "LIVE_${name^^}" "$esp"
   uuid=$(blkid -p -s UUID -o value "$esp")
   printf '%s\n' "$uuid" > "$TMP/uuid-$name"
+
+  # Configure this drive to boot its own live system.
   cat > "$TMP/payload/boot/grub/grub.cfg" <<CFG
 set default=0
 set timeout=3
@@ -80,6 +94,8 @@ search --no-floppy --fs-uuid --set=root $uuid
 set prefix=(\$root)/boot/grub
 configfile /boot/grub/grub.cfg
 CFG
+
+  # Install the EFI loader and live payload.
   grub-mkstandalone --format=x86_64-efi \
     --modules='part_gpt fat search search_fs_uuid normal configfile linux' \
     --locales='' --fonts='' --output="$TMP/payload/EFI/BOOT/BOOTX64.EFI" \
@@ -89,6 +105,8 @@ CFG
   dd if="$esp" of="$img" bs=1M seek=1 conv=notrunc,sparse status=none
   sgdisk -v "$img"
 done
+
+# Record and verify the identities of both images.
 python3 - "$OUT_DIR" "$TMP" "$IMAGE_MIB" "$ESP_MIB" "$KERNEL" "$TARGET_ZFS" <<'PY'
 import json, pathlib, sys
 out, tmp = map(pathlib.Path, sys.argv[1:3])
@@ -100,6 +118,8 @@ assert images['a']['zfs_partuuid'] != images['b']['zfs_partuuid'], 'Duplicate pa
     'esp_mib': int(sys.argv[4]), 'kernel': sys.argv[5], 'target_zfs_package': sys.argv[6],
     'images': images}, indent=2)+'\n')
 PY
+
+# Publish checksums and mark the images ready for initialization.
 (cd "$OUT_DIR" && sha256sum usb-a.img usb-b.img images.json > PREPARED-SHA256SUMS)
 { date -u +build_time=%FT%TZ; sha256sum "$ISO"; dpkg-query -W live-build grub-common grub-efi-amd64-bin; } > "$OUT_DIR/BUILD-INFO.txt"
 touch "$OUT_DIR/IMAGES-PREPARED"

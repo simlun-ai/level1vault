@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Read the requested action and build settings.
 SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 BUILDX_BUILDER=${BUILDX_BUILDER:-level1vault}
 DEBIAN_IMAGE=${DEBIAN_IMAGE:-debian:trixie}
@@ -10,6 +12,8 @@ shift
 [[ $BUILDX_BUILDER =~ ^level1vault([a-zA-Z0-9_.-]*)$ ]] || {
   echo 'Use a dedicated builder name beginning with level1vault' >&2; exit 1;
 }
+
+# Check the local Docker and Buildx prerequisites.
 docker buildx version >/dev/null
 ENDPOINT=${DOCKER_HOST:-$(docker context inspect --format '{{(index .Endpoints "docker").Host}}')}
 if [[ -n ${DOCKER_CONTEXT:-} ]]; then
@@ -24,6 +28,8 @@ if info.get('OSType') != 'linux' or info.get('Architecture') not in ('x86_64', '
 if any('rootless' in x for x in info.get('SecurityOptions', [])):
     sys.exit('Use rootful Docker Engine')
 PY
+
+# Prepare the dedicated project builder.
 if ! docker buildx inspect "$BUILDX_BUILDER" >/dev/null 2>&1; then
   docker buildx create --name "$BUILDX_BUILDER" --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' >/dev/null
@@ -31,17 +37,27 @@ fi
 DRIVER=$(LC_ALL=C docker buildx inspect "$BUILDX_BUILDER" | awk '$1 == "Driver:" {print $2}')
 [[ $DRIVER == docker-container ]] || { echo 'Dedicated builder must use docker-container driver' >&2; exit 1; }
 docker buildx inspect "$BUILDX_BUILDER" --bootstrap >/dev/null
+
+# Define the shared artifact build settings.
 base=(docker buildx build --builder "$BUILDX_BUILDER" --platform linux/amd64 \
   --progress plain --build-arg "DEBIAN_IMAGE=$DEBIAN_IMAGE" -f "$SOURCE_DIR/docker/Dockerfile")
+
+# Remove temporary task files when the command finishes.
 TASK_TMP=
 cleanup() { if [[ -n $TASK_TMP ]]; then rm -rf -- "$TASK_TMP"; fi; }
 trap cleanup EXIT
+
+# Reject existing or unsupported output destinations.
 new_destination() {
   DEST=$(realpath -m -- "$1")
   [[ $DEST != *,* && ! -e $DEST ]] || { echo "Use a new output directory without commas: $DEST" >&2; exit 1; }
 }
+
+# Run the selected build lifecycle action.
 case $ACTION in
   builder) ;;
+
+  # Build and export a live ISO and a fresh image pair.
   build)
     new_destination "${1:?Build directory required}"
     shift
@@ -58,6 +74,8 @@ case $ACTION in
       --metadata-file "$DEST/build-metadata.json" \
       --output "type=local,dest=$DEST,platform-split=false" "$SOURCE_DIR" 2>&1 | tee "$DEST/build.log"
     ;;
+
+  # Export another image pair from an existing ISO.
   assemble)
     BUILD_DIR=$(realpath -e -- "${1:?Build directory required}")
     new_destination "${2:?Output directory required}"
@@ -69,6 +87,8 @@ case $ACTION in
       --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
       --output "type=local,dest=$DEST,platform-split=false" "$SOURCE_DIR"
     ;;
+
+  # Verify container behavior and distinct exported image identities.
   test)
     TASK_TMP=$(mktemp -d)
     "${base[@]}" --target test-results --no-cache-filter test-assembly,test-account \
@@ -98,6 +118,8 @@ for pair in (1, 2):
             seen.add(disk[prop])
 PYIDENTITY
     ;;
+
+  # Inspect the exported live system and prepared images.
   check)
     BUILD_DIR=$(realpath -e -- "${1:?Build directory required}")
     [[ -f $BUILD_DIR/out/IMAGES-PREPARED && ! -e $BUILD_DIR/out/READY && ! -e $BUILD_DIR/out/INITIALIZING ]] || {
@@ -111,6 +133,8 @@ PYIDENTITY
       --no-cache-filter inspection --output "type=local,dest=$TASK_TMP/result,platform-split=false" "$SOURCE_DIR"
     test -f "$TASK_TMP/result/inspection-passed"
     ;;
+
+  # Prune unused cache belonging to the project builder.
   cache-clean)
     # Prune only unused cache on this dedicated builder; never host output files.
     docker buildx prune --builder "$BUILDX_BUILDER" --force

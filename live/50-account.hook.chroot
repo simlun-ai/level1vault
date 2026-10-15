@@ -7,9 +7,13 @@ if getent passwd simlun >/dev/null || getent passwd 2000 >/dev/null || \
     echo 'ERROR: account name or numeric ID 2000 is already allocated' >&2
     exit 1
 fi
+
+# Create the live user with the expected identity and password.
 groupadd --gid 2000 simlun
 useradd --uid 2000 --gid 2000 --create-home --shell /bin/bash --groups sudo simlun
 printf 'simlun:password\n' | chpasswd
+
+# Enable passwordless sudo and the administrative command path.
 install -d -m 0755 /etc/sudoers.d /etc/profile.d /etc/live/config.conf.d
 cat > /etc/sudoers.d/99-level1vault <<'SUDOERS'
 Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -17,6 +21,8 @@ simlun ALL=(ALL:ALL) NOPASSWD: ALL
 SUDOERS
 chmod 0440 /etc/sudoers.d/99-level1vault
 visudo -cf /etc/sudoers
+
+# Include workspace commands in the login path.
 cat > /etc/profile.d/level1vault-path.sh <<'PROFILE'
 case ":$PATH:" in
     *:/usr/local/sbin:*) ;;
@@ -24,6 +30,8 @@ case ":$PATH:" in
 esac
 export PATH
 PROFILE
+
+# Preserve the configured account during live boot.
 cat > /etc/live/config.conf.d/level1vault.conf <<'CONFIG'
 LIVE_USERNAME=simlun
 LIVE_CONFIG_NOCOMPONENTS=user-setup,sudo

@@ -5,6 +5,8 @@ SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 [[ ! -e config ]] || { echo 'Refusing to overwrite config/' >&2; exit 1; }
 command -v lb >/dev/null || { echo 'Install Debian 13 live-build first' >&2; exit 1; }
 
+
+# Configure the stateless Debian live system.
 lb config \
   --ignore-system-defaults \
   --mode debian \
@@ -24,6 +26,8 @@ lb config \
   --bootappend-live 'boot=live components nopersistence noeject hostname=level1vault username=simlun live-config.nocomponents=user-setup,sudo' \
   "$@"
 
+
+# Install the workspace helpers and image customization hooks.
 mkdir -p config/package-lists config/includes.chroot/usr/local/sbin config/hooks/live
 cp "$SOURCE_DIR/live/packages.list.chroot" config/package-lists/appliance.list.chroot
 install -m 0755 "$SOURCE_DIR/live/workspace-mount" config/includes.chroot/usr/local/sbin/workspace-mount

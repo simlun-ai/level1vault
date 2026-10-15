@@ -4,6 +4,8 @@ set -euo pipefail
 SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 TASK_TMP=$(mktemp -d)
 trap 'rm -rf -- "$TASK_TMP"' EXIT
+
+# Create a small synthetic live ISO.
 mkdir -p "$TASK_TMP/root/usr/local/share/level1vault" "$TASK_TMP/iso/live" "$TASK_TMP/iso/.disk"
 printf '6.12.0-test-amd64\n' > "$TASK_TMP/root/usr/local/share/level1vault/kernel-version"
 printf '2.3-test\n' > "$TASK_TMP/root/usr/local/share/level1vault/zfsutils-version"
@@ -13,10 +15,15 @@ printf 'synthetic-kernel\n' > "$TASK_TMP/iso/live/vmlinuz-6.12.0-test-amd64"
 printf 'synthetic-initrd\n' > "$TASK_TMP/iso/live/initrd.img-6.12.0-test-amd64"
 printf 'test-marker\n' > "$TASK_TMP/iso/.disk/live-uuid-test"
 xorriso -as mkisofs -R -o "$TASK_TMP/input.iso" "$TASK_TMP/iso" >/dev/null 2>&1
+
+# Assemble and verify an uninitialized image pair.
+
 IMAGE_MIB=512 ESP_MIB=64 "$SOURCE_DIR/02-assemble-images.sh" "$TASK_TMP/input.iso" "$TASK_TMP/out"
 test -f "$TASK_TMP/out/IMAGES-PREPARED"
 test ! -e "$TASK_TMP/out/READY"
 (cd "$TASK_TMP/out" && sha256sum -c PREPARED-SHA256SUMS)
+
+# Verify the boot payload on both drives.
 for name in a b; do
   img="$TASK_TMP/out/usb-$name.img"
   # mtools opens the FAT partition directly at its 1 MiB byte offset.
@@ -28,6 +35,8 @@ for name in a b; do
   cmp "$TASK_TMP/marker-$name" "$TASK_TMP/iso/.disk/live-uuid-test"
   mcopy -i "$img@@1048576" ::/boot/grub/grub.cfg "$TASK_TMP/grub-$name.cfg"
 done
+
+# Verify distinct identities and empty data partitions.
 python3 - "$TASK_TMP" <<'PY'
 import json, pathlib, sys
 p = pathlib.Path(sys.argv[1])
@@ -48,4 +57,6 @@ if IMAGE_MIB=512 ESP_MIB=64 "$SOURCE_DIR/02-assemble-images.sh" "$TASK_TMP/input
 fi
 (cd "$TASK_TMP/out" && sha256sum -c PREPARED-SHA256SUMS)
 
+
+# Retain the synthetic ISO when requested by export tests.
 if [[ -n ${TEST_ISO_OUTPUT:-} ]]; then cp "$TASK_TMP/input.iso" "$TEST_ISO_OUTPUT"; fi

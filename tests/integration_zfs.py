@@ -66,6 +66,7 @@ def prepare(base, pair, active=False):
 
 
 def interrupted_transfer(send, destination, readonly):
+
     # Produce a genuine resumable receive by closing its input mid-stream.
     sender = subprocess.Popen(send, stdout=subprocess.PIPE)
     receiver = subprocess.Popen(['zfs', 'receive', '-u', '-s', '-o', 'readonly=' + readonly,
@@ -88,10 +89,14 @@ def main():
     command('modprobe', 'zfs')
     assert not set(run('zpool', 'list', '-H', '-o', 'name').splitlines()).intersection(POOLS)
     assert not os.path.ismount('/mnt/workspace')
+
+    # Load replication helpers for interrupted-transfer tests.
     loader = importlib.machinery.SourceFileLoader('workspace_sync', str(ROOT/'live/workspace-sync'))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     sync = importlib.util.module_from_spec(spec)
     loader.exec_module(sync)
+
+    # Track test-owned resources for cleanup.
     loops = []
     owned = []
     with tempfile.TemporaryDirectory(prefix='level1vault-zfs-') as tmp:
@@ -104,6 +109,8 @@ def main():
                     loops.append(run('losetup', '--find', '--show', '--partscan', str(out/f'usb-{side}.img')))
                 command('udevadm', 'settle')
                 command('zpool', 'import', '-N', '-d', '/dev', '-o', 'cachefile=none', pool)
+
+            # Verify passphrase unlock and workspace ownership.
             helper('workspace-mount', '1', input='incorrect-passphrase\n', ok=False)
             assert not os.path.ismount('/mnt/workspace')
             helper('workspace-mount', '1', input=KEY + '\n')
@@ -113,6 +120,8 @@ def main():
                     'sh', '-c', 'printf first > /mnt/workspace/user-file')
             command('zfs', 'unmount', 'workspace-1/data')
             command('zfs', 'unload-key', 'workspace-1/data')
+
+            # Verify full and incremental encrypted replication.
             helper('workspace-sync', '1', '2', '10')  # shared full checkpoint, source key unloaded
             assert get('workspace-2/data', 'readonly') == 'on'
             assert get('workspace-2/data', 'keystatus') == 'unavailable'
@@ -122,6 +131,7 @@ def main():
             with open('/mnt/workspace/random', 'wb') as f:
                 f.write(os.urandom(32 * 1024 * 1024))
             real_transfer = sync.transfer
+
             # A new pair's full raw receive is interrupted and resumed.
             sync.transfer = interrupted_transfer
             try:
@@ -133,6 +143,7 @@ def main():
                 sync.transfer = real_transfer
             helper('workspace-sync', '1', '3')
             assert get('workspace-3/data', 'receive_resume_token') == '-'
+
             # A later incremental receive resumes independently.
             sync.transfer = interrupted_transfer
             try:
@@ -143,6 +154,8 @@ def main():
             finally:
                 sync.transfer = real_transfer
             helper('workspace-sync', '1', '2')
+
+            # Reject child datasets and verify a shared checkpoint across replicas.
             command('zfs', 'create', '-u', '-o', 'canmount=off', '-o', 'mountpoint=none', 'workspace-1/data/child')
             helper('workspace-sync', '1', '2', ok=False)
             command('zfs', 'destroy', 'workspace-1/data/child')
@@ -155,6 +168,7 @@ def main():
             held = run('zfs', 'holds', '-H', '-r', *[name for name, _ in sync.snapshots('workspace-1/data')])
             for pool in POOLS[1:]:
                 assert 'level1vault-' + run('zpool', 'get', '-H', '-o', 'value', 'guid', pool) in held
+
             # Reusing an explicit checkpoint when rotating pairs separately.
             helper('workspace-sync', '--snapshot', checkpoint[0].split('@')[1], '1', '10')
             helper('workspace-sync', '2', '3', ok=False)  # inactive source
@@ -166,6 +180,7 @@ def main():
             assert Path('/mnt/workspace/user-file').read_text() == 'third'
             assert subprocess.run(['touch', '/mnt/workspace/should-fail']).returncode != 0
             command('zfs', 'unmount', 'workspace-2/data')
+
             # Fence the former active owner. Names/identities are never changed.
             command('zpool', 'export', 'workspace-1')
             helper('workspace-activate', '--next', '1', '--fenced')
@@ -175,6 +190,7 @@ def main():
             helper('workspace-mount', '2', input=KEY + '\n')
             command('setpriv', '--reuid=2000', '--regid=2000', '--clear-groups',
                     'sh', '-c', 'printf fourth > /mnt/workspace/user-file')
+
             # Binding changes are explicit; verified common history allows
             # incrementals from the newly active pair without destroying replicas.
             helper('workspace-sync', '2', '3', ok=False)
@@ -184,6 +200,7 @@ def main():
             assert get('workspace-3', 'org.level1vault:source-pool-guid') == run('zpool', 'get', '-H', '-o', 'value', 'guid', 'workspace-2')
             command('zfs', 'unmount', 'workspace-2/data')
             command('zpool', 'export', 'workspace-2')
+
             # A second ordered failover selects 3 rather than lexicographic 10.
             helper('workspace-activate', '--next', '2', '--fenced')
             assert get('workspace-3', 'org.level1vault:state') == 'active'
@@ -192,6 +209,7 @@ def main():
             assert os.stat('/mnt/workspace').st_uid == 2000
             Path('/mnt/workspace/user-file').write_text('fifth')
             helper('workspace-sync', '--rebind', '3', '10')
+
             # A mounted destination or divergent local snapshot is never forced.
             command('zfs', 'unmount', 'workspace-3/data')
             helper('workspace-mount', '10', input=KEY + '\n')
@@ -201,6 +219,7 @@ def main():
             helper('workspace-sync', '3', '10', ok=False)
             command('zfs', 'destroy', 'workspace-10/data@unexpected-local')
             helper('workspace-sync', '3', '10')
+
             # A returning former owner can contain newer unsnapshotted writes.
             # Even after manual demotion those must never be overwritten.
             command('zpool', 'import', '-N', '-d', '/dev', '-o', 'cachefile=none', 'workspace-1')
@@ -213,10 +232,13 @@ def main():
             helper('workspace-mount', '1', input=KEY + '\n')
             assert Path('/mnt/workspace/user-file').read_text() == 'third'
             assert Path('/mnt/workspace/former-only').read_text() == 'preserve on fenced owner'
+
+            # Verify all workspace pairs export cleanly.
             helper('workspace-umount')
             assert not set(run('zpool', 'list', '-H', '-o', 'name').splitlines()).intersection(POOLS)
             print('Real encrypted n-pair sync, resume, shared checkpoints and ordered in-place failovers passed.')
         finally:
+
             # This VM is disposable; destroy only pools this test created. If
             # export fails, keep files/loops and fail rather than force detaching.
             for pool in owned:

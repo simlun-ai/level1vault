@@ -29,11 +29,15 @@ def check_idle(build, mountinfo, containers, loops):
         target = Path(re.sub(r'\\([0-7]{3})', lambda m: chr(int(m[1], 8)), line.split()[4]))
         if inside(target, build):
             raise ValueError(f'Mounted filesystem under build directory: {target}')
+
+    # Reject running containers that use the build directory.
     for container in containers:
         for mount in container.get('Mounts', []):
             source = Path(mount.get('Source', '/')).resolve()
             if inside(source, build) or inside(build, source):
                 raise ValueError(f'Running container uses build directory: {container.get("Id", "unknown")}')
+
+    # Reject attached images from the build directory.
     for device in loops.get('loopdevices', []):
         backing = Path(device['back-file'].removesuffix(' (deleted)')).resolve()
         if inside(backing, build):
@@ -41,6 +45,7 @@ def check_idle(build, mountinfo, containers, loops):
 
 
 def clean(build):
+
     # Refuse root, the checkout, its ancestors, and symlink aliases.
     if build.is_symlink() or build.absolute() != build.resolve():
         raise ValueError('Use the real build directory path, without symlinks or ..')
@@ -50,6 +55,8 @@ def clean(build):
     if not build.exists():
         print(f'Nothing to clean: {build}')
         return
+
+    # Identify the expendable directories in a recognized build.
     if not any((build/name).is_file() for name in ('builder-image.json', 'builder-info.txt')):
         raise ValueError('Missing builder identity; not a recognized build directory')
     targets = [build/name for name in TRANSIENT if (build/name).exists() or (build/name).is_symlink()]
@@ -58,12 +65,15 @@ def clean(build):
         return
     if any(path.is_symlink() or not path.is_dir() for path in targets):
         raise ValueError('Unexpected file/symlink in transient directories; inspect manually')
+
     # Docker access is required: mounts in a running builder namespace may be
     # invisible in this process's mountinfo. A failed query must stop cleanup.
     ids = output('docker', 'ps', '-q').split()
     containers = json.loads(output('docker', 'inspect', *ids)) if ids else []
     loops = json.loads(output('losetup', '--json', '--list', '--output', 'NAME,BACK-FILE'))
     check_idle(build, mountinfo(), containers, loops)
+
+    # Remove only the verified temporary directories.
     for path in targets:
         print(f'Removing {path}')
         shutil.rmtree(path)
