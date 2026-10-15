@@ -1,6 +1,6 @@
 # Architecture
 
-Any number of numbered pairs of independently bootable, stateless Debian 13 Live USBs: one active workspace mirror and encrypted replicas for offsite rotation. Build on an **amd64 Ubuntu 22.04 workstation with working ZFS**, using Debian Trixie tools inside Docker. The target boots through x86-64 UEFI with Secure Boot disabled.
+Any number of numbered pairs of independently bootable, stateless Debian 13 Live USBs: one active workspace mirror and encrypted replicas for offsite rotation. Build on an **Linux amd64 workstation with working ZFS**, using Debian Trixie tools inside Docker. The target boots through x86-64 UEFI with Secure Boot disabled.
 
 Each default 12 GiB image has a GPT, a 4 GiB FAT32 ESP holding GRUB and the live payload, and an approximately 8 GiB data partition. SquashFS provides the read-only base; a nonpersistent RAM overlay holds OS changes. The `workspace-1/data` dataset mounts at `/mnt/workspace` only after `sudo workspace-mount 1` and passphrase entry. New workspaces use native AES-256-GCM encryption and belong to simlun (`2000:2000`, mode `0750`). Pairs have neutral numeric identities (`workspace-1`, `workspace-2`, …). After fencing a failed active pair, activate the next surviving ID in place. See the [N-pair runbook](PAIRS.md) for provisioning, shared-checkpoint send/receive, rotation and ordered failover. This workflow provisions fresh encrypted pairs.
 
@@ -9,8 +9,8 @@ Each default 12 GiB image has a GPT, a 4 GiB FAT32 ESP holding GRUB and the live
 | Install build tools | Trixie Docker image | `docker/Dockerfile` |
 | Build Debian kernel, initramfs, SquashFS and target ZFS DKMS module | Privileged Trixie build container | `build-container.sh`, `01-configure-live.sh` |
 | Construct GPT images, FAT filesystems, per-drive UEFI loaders | Trixie container; file operations only | `02-assemble-images.sh` |
-| Initialize one ZFS mirror across both image data partitions | Ubuntu host, using its existing ZFS stack and loop devices | `03-initialize-workspace.sh` |
-| QEMU tests and physical USB writing | Ubuntu host | Commands below |
+| Initialize one ZFS mirror across both image data partitions | Linux host, using its existing ZFS stack and loop devices | `03-initialize-workspace.sh` |
+| QEMU tests and physical USB writing | Linux host | [QEMU](QEMU.md) and [USB writing](USB.md) |
 
 Docker shares the running host kernel. The container compiles ZFS **for Debian's target kernel**, with the Debian headers in the live-build chroot; it does not need to load that module. The host creates the pool using its own installed `zpool`/`zfs` and loaded module. Neither host kernel headers nor `/lib/modules` are bind-mounted into the container.
 
@@ -33,7 +33,7 @@ Assembly uses `xorriso` to extract the ISO, `sgdisk` to partition regular files,
 | automatic mounts | Masking zfs-mount.service alone does not cover mount-generator units. `canmount=on` allows broad mounts. | Mask generator, clear caches, mask import services; create data with noauto and generator-ignore property. |
 | FAT32 assembly | `cp -a` copies Unix ownership/modes and can attempt symlinks; FAT does not support them. | Copy selected kernel/initrd with dereferencing and no Unix metadata. Enforce per-file limit and a size budget; mtools rejects an overflowing ESP. |
 | ISO payload | Assumes stable kernel aliases and omits optional medium UUID markers. | Prefer manifest-selected versioned files, accept aliases, retain `.disk` markers. Single kernel is a build invariant. |
-| Container boundary | Docker shares the host kernel; Debian zpool in a container would talk to Ubuntu's loaded module. | Compile target DKMS with Debian headers in the chroot; create the pool with host tools. Container assembly uses only regular files, sgdisk and mtools. |
+| Container boundary | Docker shares the host kernel; Debian zpool in a container would talk to the host's loaded module. | Compile target DKMS with Debian headers in the chroot; create the pool with host tools. Container assembly uses only regular files, sgdisk and mtools. |
 | EFI loader | grub-install is reasonable on normal systems, but introduces host filesystem/disk probing when assembling loop images. | Standalone EFI image with an embedded search for that ESP UUID; load external menu. No NVRAM writes. Firmware validation remains required. |
 | live-media | Parameter is a preferred device, not strict fencing to it. | Document fallback semantics; boot each image alone to prove independence. |
 | pool format | Pool is created using the host OpenZFS version; default feature set may be newer than live userland. | Host creates with -d and enables lz4_compress plus encryption and its required dependencies, a shared baseline for Ubuntu 22.04 OpenZFS 2.1 and Debian 13. Package version equality is not required. Do not upgrade features. |

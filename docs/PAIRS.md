@@ -38,7 +38,7 @@ Follow [Writing USB drives](USB.md) for each pair, choosing its output directory
 
 ## Initial replication and periodic rotation
 
-Connect the active pair and the intended destination pairs to one exclusive pool owner. The live OS installs the helpers in `/usr/local/sbin`; on Ubuntu you can use `sudo ./live/workspace-sync ...` directly from the checkout with native ZFS and Python 3.
+Connect the active pair and the intended destination pairs to one exclusive pool owner. The live OS installs the helpers in `/usr/local/sbin`; on a Linux host you can use `sudo ./live/workspace-sync ...` directly from the checkout with native ZFS and Python 3.
 
 Sources and destinations are explicit. One command can update any number of destinations:
 
@@ -153,6 +153,6 @@ Export validates the pair identity, never imports pools and never forces a busy 
 
 Encryption is native ZFS AES-256-GCM on each data filesystem, not whole-device encryption: boot files, pool/snapshot names and some ZFS metadata remain visible. ZFS reads creation/unlock passphrases from stdin; no key file is saved. A terminal hides entry and confirms a new passphrase; redirected stdin supplies one line. The live login password `password` is independent of the workspace passphrase.
 
-Pools enable LZ4, encryption and encryption's required dependencies under `zpool create -d`, all supported by OpenZFS 2.1 on Ubuntu 22.04. Do not enable all newer Debian features if Ubuntu interoperability is required. Raw replicas retain the encryption keys; avoid independent replica passphrase changes. After a deliberate active-pair passphrase change, sync and unlock-test every offsite copy, retaining old passphrases until those copies are updated.
+Pools enable LZ4, encryption and encryption's required dependencies under `zpool create -d`, all supported by OpenZFS 2.1 on Ubuntu 22.04. Do not enable all newer Debian features if interoperability with OpenZFS 2.1 hosts is required. Raw replicas retain the encryption keys; avoid independent replica passphrase changes. After a deliberate active-pair passphrase change, sync and unlock-test every offsite copy, retaining old passphrases until those copies are updated.
 
 Upstream references: [send](https://openzfs.github.io/openzfs-docs/man/v2.1/8/zfs-send.8.html), [receive](https://openzfs.github.io/openzfs-docs/man/v2.1/8/zfs-receive.8.html), [key handling](https://openzfs.github.io/openzfs-docs/man/v2.1/8/zfs-load-key.8.html).

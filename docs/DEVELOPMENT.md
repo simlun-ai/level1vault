@@ -33,9 +33,9 @@ Only set `ACTIVE=1` when provisioning the initial writable pair for a deployment
 
 Assembly requires an existing builder image and ISO. `OUT` must be a new directory beneath `BUILD_DIR`. Use a local rootful Docker Engine throughout, as for the full build. `BUILDER_IMAGE` and `DEBIAN_IMAGE` can override the toolchain tag and base image. For advanced live-build arguments, use `build-container.sh BUILD_DIR ...` directly; see [build reference](BUILD.md#reproducibility).
 
-## Local tests on Ubuntu
+## Local tests on Linux
 
-Install the small test dependencies:
+Install Make, Python 3 and ShellCheck using your distribution’s package manager. For example, on Ubuntu:
 
 ```bash
 sudo apt update
@@ -51,10 +51,10 @@ make test-container
 
 This builds the same Debian toolchain used by CI. The test containers have a read-only source checkout and no privileged mode, host ZFS or loop devices. Login tests modify accounts only inside their disposable container.
 
-The real ZFS suite needs root, loop devices, the native ZFS module/tools, `gdisk`, Python and udev. It creates test pools named `workspace-1`, `workspace-2`, `workspace-3` and `workspace-10` and exercises failure recovery. **Run it in a disposable Ubuntu 22.04 VM, not your ZFS workstation.** It refuses conflicting imported test pools, but that is not a substitute for isolation.
+The real ZFS suite needs root, loop devices, the native ZFS module/tools, `gdisk`, Python and udev. It creates test pools named `workspace-1`, `workspace-2`, `workspace-3` and `workspace-10` and exercises failure recovery. **Run it in a disposable Linux amd64 VM with working ZFS, not your ZFS workstation. Ubuntu 22.04 is the tested CI environment.** It refuses conflicting imported test pools, but that is not a substitute for isolation.
 
 ```bash
-# Inside the disposable VM:
+# Example setup inside a disposable Ubuntu VM:
 sudo apt update
 sudo apt install -y make python3 zfsutils-linux gdisk udev
 make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1

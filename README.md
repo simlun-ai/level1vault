@@ -4,7 +4,7 @@ A stateless Debian 13 Live system on pairs of bootable USB drives. Each pair hol
 
 ## Build
 
-Use an **amd64 Ubuntu 22.04 workstation with working ZFS**, local rootful Docker, and at least 40 GiB free. Debian build tools run inside Docker. [Setup and build details →](docs/BUILD.md)
+Use an **Linux amd64 workstation with working ZFS**, local rootful Docker, and at least 40 GiB free. Debian build tools run inside Docker. [Setup and build details →](docs/BUILD.md)
 
 ```bash
 git clone https://github.com/simlun-ai/level1vault.git

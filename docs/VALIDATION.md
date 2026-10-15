@@ -25,10 +25,10 @@ The workflow keeps diagnostic logs/manifests as an Actions artifact. It can also
 
 The operator verified the [QEMU procedure](QEMU.md), including the normal guest boot/mount/reboot sequence, on 2026-10-15. QEMU required desktop-user execution and writable image/OVMF files; no kvm group change was needed. Host-owned checksum files require `sudo tee`. The operator subsequently confirmed each physical USB boots independently on a laptop after disabling Secure Boot, and the ZFS mirror works with both sticks connected. This confirms basic physical boot and both-member mirror operation. Physical degraded-write/rejoin and the new numbered-pair failover workflow remain unconfirmed. Continue with the checks below; a successful module presence/vermagic check does not prove it loads on the target machine.
 
-## Required Ubuntu + Docker build checks
+## Required Linux host + Docker build checks
 
-1. On Ubuntu 22.04, the existing zpool/zfs tools communicate with its running module. Existing host pools remain unaffected throughout the workflow.
-2. `make build` completes a real live-build inside Trixie. Capture build.log and builder-image.json. The hook verifies one Debian target kernel and matching ZFS DKMS module even though container uname reports Ubuntu's kernel.
+1. On the Linux host, the existing zpool/zfs tools communicate with its running module. Existing host pools remain unaffected throughout the workflow.
+2. `make build` completes a real live-build inside Trixie. Capture build.log and builder-image.json. The hook verifies one Debian target kernel and matching ZFS DKMS module even though container uname reports the host's kernel.
 3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable workspace-mount, no zfs-initramfs package.
 4. Inspect initramfs with lsinitramfs: live-boot and required USB/FAT drivers present. ZFS is data only, not a root-boot dependency.
 5. File assembly leaves IMAGES-PREPARED and PREPARED-SHA256SUMS, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.

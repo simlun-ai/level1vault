@@ -4,9 +4,9 @@
 
 ## Workstation requirements
 
-Use local, rootful Docker Engine on amd64 Linux. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. The first full CI build took about 17 minutes on its runner; workstation time varies. Have at least 40 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
+Use a Linux amd64 workstation with working ZFS and local, rootful Docker Engine. Ubuntu 22.04 is the tested host example; it is not a distribution requirement. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. The first full CI build took about 17 minutes on its runner; workstation time varies. Have at least 40 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
 
-If Docker is not installed, Ubuntu's package is sufficient for this workflow:
+Install Docker and the host utilities using your distribution’s packages. For example, on Ubuntu 22.04:
 
 ```bash
 sudo apt update
@@ -20,7 +20,7 @@ sudo zpool list
 sudo docker info
 ```
 
-Keep Ubuntu's own ZFS packages and kernel. Do not replace them with Debian packages. If the workstation already has an imported pool named `workspace-1`, initialization refuses to proceed; use another host or resolve that name conflict deliberately. Other existing host pools are left alone.
+Keep your host distribution's own ZFS packages and kernel. Do not replace them with Debian packages. If the workstation already has an imported pool named `workspace-1`, initialization refuses to proceed; use another host or resolve that name conflict deliberately. Other existing host pools are left alone.
 
 The live-build container runs with `--privileged` because its chroot build needs mounts and device access. This grants host-root-equivalent privileges: use trusted source and build configuration. The wrapper mounts the checkout read-only and one build directory read-write, with private mount propagation. It does not bind the host `/dev`, `/run/udev`, `/lib/modules`, or Docker socket; privileged Docker can still expose host devices. No physical-device operations or ZFS pool commands are part of the container build scripts.
 
@@ -56,7 +56,7 @@ For configuration customization, pass extra `lb config` options after the build 
 
 ## Initialize a pair
 
-Exit any build container; run this in the Ubuntu workstation shell:
+Exit any build container; run this in the host workstation shell:
 
 ```bash
 make initialize PAIR=1 ACTIVE=1
@@ -70,7 +70,7 @@ This verifies the prepared checksums, refuses attached/previously initialized im
 
 The pool has `ashift=12`, `cachefile=none`, an unmountable root dataset, and an AES-256-GCM encrypted `workspace-1/data` with `keyformat=passphrase`, `keylocation=prompt`, `canmount=noauto`, LZ4 compression and the expected mountpoint. It briefly mounts the new dataset beneath a private temporary altroot to set the filesystem root to `2000:2000`, mode `0750`, without covering a host mountpoint. The passphrase is read directly by ZFS from stdin and is never saved in the image or manifest. The script exports the pool and detaches loops before writing `READY` and final image checksums. It never imports/exports unrelated host pools.
 
-To support Ubuntu 22.04's OpenZFS 2.1 and Debian 13's newer ZFS, creation uses `zpool create -d` and enables **`lz4_compress`, `encryption` and encryption's required dependencies** (including `extensible_dataset` for resumable receives). These features are supported by OpenZFS 2.1. This omits newer optional pool features. `zpool status` may report that supported features are disabled; that message is expected. **Do not run `zpool upgrade`** if you need continued Ubuntu 22.04 access. Exact Ubuntu/Debian package equality is no longer required.
+To support Ubuntu 22.04's OpenZFS 2.1 and Debian 13's newer ZFS, creation uses `zpool create -d` and enables **`lz4_compress`, `encryption` and encryption's required dependencies** (including `extensible_dataset` for resumable receives). These features are supported by OpenZFS 2.1. This omits newer optional pool features. `zpool status` may report that supported features are disabled; that message is expected. **Do not run `zpool upgrade`** if you need continued access from hosts using OpenZFS 2.1. Exact host/live-system package equality is not required.
 
 If initialization fails, `INITIALIZING` remains and reruns are refused. Check `sudo zpool status workspace-1` and `sudo losetup -j /absolute/path/to/usb-a.img` (and B). Failed export retains loops rather than detaching an active pool. Resolve/export the pool and detach only this build's loops before removing incomplete artifacts. For an unused, failed initial build, reassemble from the ISO into a **new** output directory. Never discard images containing data you need.
 
