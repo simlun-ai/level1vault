@@ -24,15 +24,15 @@ Identify both **whole disks** by model and serial:
 lsblk -o NAME,PATH,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINTS
 ```
 
-**The following overwrites both selected disks.** Replace `/dev/sdb` and `/dev/sdc` with your verified USB devices. Unmount their partitions and export their pools first. Stop QEMU and detach any image loops; do not connect other copies of this same pair.
+**The following overwrites both selected disks.** Replace `/dev/sda` and `/dev/sdb` with your verified USB devices. Unmount their partitions and export their pools first. Stop QEMU and detach any image loops; do not connect other copies of this same pair.
 
 ```bash
 make verify
-sudo dd if=build/out/usb-a.img of=/dev/sdb bs=4M conv=fsync status=progress
-sudo dd if=build/out/usb-b.img of=/dev/sdc bs=4M conv=fsync status=progress
+sudo dd if=build/out/usb-a.img of=/dev/sda bs=4M conv=fsync status=progress
+sudo dd if=build/out/usb-b.img of=/dev/sdb bs=4M conv=fsync status=progress
+sudo sgdisk -e /dev/sda
 sudo sgdisk -e /dev/sdb
-sudo sgdisk -e /dev/sdc
-sudo partprobe /dev/sdb /dev/sdc
+sudo partprobe /dev/sda /dev/sdb
 ```
 
 Label the sticks **1-A** and **1-B**. [Writing details and other output directories →](docs/USB.md)
