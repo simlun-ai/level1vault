@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+# Install the full offline repository for the live user.
+python3 /usr/local/lib/level1vault/build/repository.py install \
+    /usr/local/lib/level1vault/build/repository /home/simlun/level1vault
+mkdir -p /usr/local/share/level1vault
+cp /usr/local/lib/level1vault/build/repository/commit /usr/local/share/level1vault/source-commit
+chown -R 2000:2000 /home/simlun/level1vault

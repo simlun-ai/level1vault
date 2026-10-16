@@ -7,6 +7,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: make test
   container-assembly:

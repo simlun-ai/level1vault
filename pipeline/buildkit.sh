@@ -67,10 +67,13 @@ case $ACTION in
     fresh=()
     [[ ${FRESH:-0} == 0 || ${FRESH:-0} == 1 ]] || { echo 'FRESH must be 0 or 1' >&2; exit 1; }
     if [[ ${FRESH:-0} == 1 ]]; then fresh=(--no-cache --pull); fi
+    TASK_TMP=$(mktemp -d)
+    python3 "$SOURCE_DIR/stages/01-build-live/repository.py" bundle "$SOURCE_DIR" "$TASK_TMP/repository"
     mkdir -p -- "$DEST"
     docker buildx inspect "$BUILDX_BUILDER" > "$DEST/builder-info.txt"
     # No initialized images enter the context, and identities never come from cache.
     "${base[@]}" "${fresh[@]}" --target artifacts --allow security.insecure \
+      --build-context "repository-input=$TASK_TMP/repository" \
       --build-arg "LB_CONFIG_JSON=$LB_CONFIG_JSON" --build-arg "PAIR_ID=$PAIR_ID" \
       --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
       --metadata-file "$DEST/build-metadata.json" \

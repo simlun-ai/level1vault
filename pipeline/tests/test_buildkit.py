@@ -30,7 +30,8 @@ if args[:2] == ['buildx', 'build']:
     if os.environ.get('FAIL_EXPORT'): sys.exit(42)
     if '--build-context' in args:
         context = args[args.index('--build-context')+1].split('=',1)[1]
-        assert sorted(x.name for x in pathlib.Path(context).iterdir()) == ['live-image-amd64.hybrid.iso']
+        expected = ['commit', 'source.bundle'] if args[args.index('--build-context')+1].startswith('repository-input=') else ['live-image-amd64.hybrid.iso']
+        assert sorted(x.name for x in pathlib.Path(context).iterdir()) == expected
     dest = args[args.index('--output')+1].split('dest=',1)[1].split(',')[0]
     pathlib.Path(dest).mkdir(parents=True, exist_ok=True)
 ''')

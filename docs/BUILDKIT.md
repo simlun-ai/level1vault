@@ -18,7 +18,7 @@ The Dockerfile produces files through `FROM scratch` targets and BuildKit's loca
 
 Live-build requires mounts inside its chroot, so moving it into a Dockerfile does not remove its privilege requirement. The wrapper creates a dedicated `docker-container` builder named `level1vault`, with the `security.insecure` daemon entitlement. Only full builds request `--allow security.insecure`; only the `live` RUN uses it. This is equivalent to the previous privileged container and requires trusted source. Pool creation, passphrases, loop devices and physical USB writing remain host operations.
 
-No host `/dev`, `/lib/modules`, Docker socket or checkout/build bind mounts are supplied to Dockerfile steps. The `.dockerignore` allowlist prevents generated artifacts and initialized images entering the normal context. Additional-pair assembly receives a named context containing only the ISO. Inspection refuses initialized/in-progress images and checks their prepared hashes on the host; only the ISO enters its named context.
+No host `/dev`, `/lib/modules`, Docker socket or checkout/build bind mounts are supplied to Dockerfile steps. The `.dockerignore` allowlist prevents generated artifacts and initialized images entering the normal context. Full builds additionally receive a named `repository-input` context containing only a Git bundle and the build commit ID. This installs the full offline checkout without copying local Git configuration or untracked files. Additional-pair assembly receives a named context containing only the ISO. Inspection refuses initialized/in-progress images and checks their prepared hashes on the host; only the ISO enters its named context.
 
 ## Requirements and commands
 

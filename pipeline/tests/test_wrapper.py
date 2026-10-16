@@ -16,7 +16,7 @@ class ScriptTests(unittest.TestCase):
         self.bin = self.base / 'bin'
         self.bin.mkdir()
         self.log = self.base / 'calls'
-        self.env = dict(os.environ, PATH=f'{self.bin}:{os.environ["PATH"]}', LOG=str(self.log))
+        self.env = dict(os.environ, PATH=f'{self.bin}:{os.environ["PATH"]}', LOG=str(self.log), TMPDIR=str(self.base))
 
 
     def tool(self, name, body):

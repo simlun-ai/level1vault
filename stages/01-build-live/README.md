@@ -1,8 +1,12 @@
 # Stage 1: build the live system
 
-Input: `packages.list`, `hooks/`, the shipped commands in `../../runtime/`, and optional live-build configuration arguments. Output: `BUILD_DIR/live/live-image-amd64.hybrid.iso` and `live-build.log`, plus build records at the run root.
+Input: the build checkout with full Git history, `packages.list`, `hooks/`, the shipped commands in `../../runtime/`, and optional live-build configuration arguments. Output: `BUILD_DIR/live/live-image-amd64.hybrid.iso` and `live-build.log`, plus build records at the run root.
 
 `configure.sh` prepares Debian Trixie live-build configuration. `build.sh` builds the ISO inside the privileged BuildKit stage. `inspect.sh` checks the packaged kernel, ZFS module, account, services, and initramfs without booting a VM.
+
+Every USB includes an independent Git checkout at `/home/simlun/level1vault`, owned by `simlun` (2000:2000). It contains full committed history, branches and tags available in the build checkout, with HEAD detached at the build's committed revision. `origin` points to `https://github.com/simlun-ai/level1vault.git`; no network is needed to read files or history. Uncommitted changes, ignored artifacts and the builder's local Git configuration/credentials are not included. This directory is part of the stateless OS: edits reset on reboot unless copied to the persistent workspace.
+
+The wrapper uses `repository.py bundle` to prepare an isolated Git bundle as a named BuildKit context. Shallow checkouts are refused; run `git fetch --unshallow --tags` first (CI uses `fetch-depth: 0`). The configure step requires `LEVEL1VAULT_REPOSITORY` to point at that prepared directory. The repository hook installs and verifies the checkout before the ZFS hook removes temporary build inputs. Its revision is recorded in `/usr/local/share/level1vault/source-commit`; `make check-build` verifies ownership, history integrity and a clean checkout.
 
 Boot support is UEFI-only (`grub-efi`); Syslinux/ISOLINUX, legacy memtest, and the Windows loader are disabled. The intermediate ISO retains the existing `live-image-amd64.hybrid.iso` artifact name and is consumed by stage 2, which creates independent GPT/FAT/EFI USB images. Image inspection requires an EFI El Torito entry and rejects BIOS entries.
 

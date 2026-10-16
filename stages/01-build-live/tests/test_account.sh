@@ -8,6 +8,19 @@ SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)
 install -m 0755 "$SOURCE_DIR/runtime/workspace-mount" /usr/local/sbin/workspace-mount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-umount" /usr/local/sbin/workspace-umount
 
+# Install a complete offline repository through the real image hook.
+fixture=$(mktemp -d)
+trap 'rm -rf -- "$fixture"' EXIT
+git init --quiet -b main "$fixture/source"
+git -C "$fixture/source" -c user.name=Fixture -c user.email=fixture@example.invalid \
+    commit --quiet --allow-empty -m 'Offline repository fixture'
+mkdir -p /usr/local/lib/level1vault/build
+python3 "$SOURCE_DIR/stages/01-build-live/repository.py" bundle "$fixture/source" /usr/local/lib/level1vault/build/repository
+cp "$SOURCE_DIR/stages/01-build-live/repository.py" /usr/local/lib/level1vault/build/
+"$SOURCE_DIR/stages/01-build-live/hooks/60-repository.hook.chroot"
+[[ $(stat -c '%u:%g' /home/simlun/level1vault/.git) == 2000:2000 ]]
+su - simlun -c 'git -C /home/simlun/level1vault fsck --full'
+
 # Verify account identity and sudo configuration.
 [[ $(id -u simlun) == 2000 && $(id -g simlun) == 2000 ]]
 visudo -cf /etc/sudoers

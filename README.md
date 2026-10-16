@@ -46,6 +46,8 @@ sudo workspace-mount 1           # enter the workspace passphrase
 cd /mnt/workspace               # your persistent files; owned by simlun
 ```
 
+The full repository and Git history are available offline at `/home/simlun/level1vault`. Edits there reset on reboot; keep lasting changes in `/mnt/workspace`.
+
 Before poweroff or moving the sticks, close files and leave the workspace in every shell:
 
 ```bash

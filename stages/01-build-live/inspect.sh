@@ -56,6 +56,15 @@ chroot "$ROOT" visudo -cf /etc/sudoers
 chroot "$ROOT" su - simlun -c 'sudo -n id -u' | grep -qx 0
 chroot "$ROOT" su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspace-umount"'
 
+# Verify the live user owns a complete, clean checkout of the build revision.
+CHECKOUT="$ROOT/home/simlun/level1vault"
+[[ -d $CHECKOUT/.git ]]
+[[ -z $(find "$CHECKOUT" \( ! -uid 2000 -o ! -gid 2000 \) -print -quit) ]]
+chroot "$ROOT" su - simlun -c 'cd /home/simlun/level1vault && git fsck --full'
+[[ $(chroot "$ROOT" su - simlun -c 'git -C /home/simlun/level1vault rev-parse --is-shallow-repository') == false ]]
+[[ $(chroot "$ROOT" su - simlun -c 'git -C /home/simlun/level1vault rev-parse HEAD') == "$(cat "$ROOT/usr/local/share/level1vault/source-commit")" ]]
+[[ -z $(chroot "$ROOT" su - simlun -c 'git -C /home/simlun/level1vault status --porcelain') ]]
+
 # Verify automatic ZFS imports and mounts are disabled.
 test ! -e "$ROOT/etc/hostid"
 test ! -e "$ROOT/etc/zfs/zpool.cache"

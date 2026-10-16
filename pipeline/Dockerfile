@@ -6,7 +6,7 @@ FROM ${DEBIAN_IMAGE} AS toolchain
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     live-build debootstrap xorriso squashfs-tools dosfstools mtools \
     grub-efi-amd64-bin grub-common grub2-common \
-    gdisk util-linux ca-certificates python3 file cpio rsync kmod apt-utils initramfs-tools-core sudo passwd \
+    gdisk util-linux ca-certificates git python3 file cpio rsync kmod apt-utils initramfs-tools-core sudo passwd \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 
@@ -16,10 +16,14 @@ COPY stages/01-build-live/ /src/stages/01-build-live/
 COPY stages/02-assemble-pair/ /src/stages/02-assemble-pair/
 COPY runtime/ /src/runtime/
 
+# Accept the full committed source history without local Git configuration.
+FROM scratch AS repository-input
+
 # Build the live ISO with the privileges needed by live-build mounts.
 FROM source AS live
+COPY --from=repository-input / /repository/
 ARG LB_CONFIG_JSON=[]
-RUN --security=insecure bash /src/stages/01-build-live/build.sh
+RUN --security=insecure LEVEL1VAULT_REPOSITORY=/repository bash /src/stages/01-build-live/build.sh
 
 # Assemble a fresh pair from the live ISO.
 FROM source AS assembly

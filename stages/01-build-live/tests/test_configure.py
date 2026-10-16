@@ -15,8 +15,13 @@ class ScriptTests(unittest.TestCase):
         self.base = Path(self.tmp.name)
         self.bin = self.base / 'bin'
         self.bin.mkdir()
+        repository = self.base / 'repository'
+        repository.mkdir()
+        (repository / 'source.bundle').write_text('fixture')
+        (repository / 'commit').write_text('fixture')
         self.log = self.base / 'calls'
-        self.env = dict(os.environ, PATH=f'{self.bin}:{os.environ["PATH"]}', LOG=str(self.log))
+        self.env = dict(os.environ, PATH=f'{self.bin}:{os.environ["PATH"]}', LOG=str(self.log),
+                             LEVEL1VAULT_REPOSITORY=str(repository))
 
 
     def tool(self, name, body):
@@ -37,6 +42,9 @@ class ScriptTests(unittest.TestCase):
         target = self.base / 'config/includes.chroot/usr/local/sbin/workspace-mount'
         self.assertEqual(target.read_bytes(), (ROOT / 'runtime/workspace-mount').read_bytes())
         self.assertEqual(target.stat().st_mode & 0o777, 0o755)
+        installed = self.base / 'config/includes.chroot/usr/local/lib/level1vault/build/repository'
+        self.assertEqual((installed / 'source.bundle').read_text(), 'fixture')
+        self.assertTrue((self.base / 'config/hooks/live/60-repository.hook.chroot').is_file())
         self.assertIn('linux-image', self.calls())
         self.assertNotIn('linux-headers', self.calls())
         self.assertIn('--bootloaders\ngrub-efi\n', self.calls())
