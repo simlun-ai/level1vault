@@ -226,6 +226,20 @@ def run_suite(args, expect, out, results, checksums, firmware, passphrase):
         (results / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
 
 
+def prepare_results(results):
+    # Reserve private test storage before checking images or requesting secrets.
+    try:
+        results.mkdir(parents=True, mode=0o700)
+    except PermissionError:
+        raise RuntimeError(
+            f'Cannot create results directory: {results}. '
+            'Run as your desktop user and choose a writable directory with '
+            'QEMU_ARGS="--results $HOME/level1vault-qemu-RUN" '
+            '(replace RUN with a unique name).') from None
+    except FileExistsError:
+        raise RuntimeError('Use a new results directory') from None
+
+
 def main():
     # Read host test options without accepting secrets in command-line arguments.
     parser = argparse.ArgumentParser(description=__doc__)
@@ -256,6 +270,7 @@ def main():
     results = Path(args.results or str(out.parent.parent / 'validation' / f'{stamp}-{uuid.uuid4().hex[:8]}')).resolve()
     require(not results.exists(), 'Use a new results directory')
     require(all(',' not in str(path) for path in (results, *firmware)), 'QEMU paths must not contain commas')
+    prepare_results(results)
     print('Checking source images; stop all VMs and detach their host loop mappings.', flush=True)
     checksums = verify_inputs(out, args.pair)
     if args.passphrase_stdin:
@@ -267,7 +282,6 @@ def main():
 
     # Protect test logs and run the acceptance suite on private copies.
     os.umask(0o077)
-    results.mkdir(parents=True)
     print(f'Results: {results}', flush=True)
     try:
         run_suite(args, pexpect, out, results, checksums, firmware, passphrase)

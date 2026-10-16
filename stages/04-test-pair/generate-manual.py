@@ -12,7 +12,7 @@ def render():
     # Explain how to run the shared checks in a manually operated guest.
     parts = ['''# Stage 4: test a pair
 
-Input: an initialized active pair, pair ID, passphrase, and OVMF firmware. Output: private logs and `result.json` under the build run’s `validation/` directory. Run `make test-qemu PAIR=1` on the workstation. This optional stage tests disposable copies; originals remain unchanged. On failure inspect the report and logs, then rerun with a new results directory. Tests: `make test` checks the runner and this generated manual; actual boots are workstation-only.
+Input: an initialized active pair, pair ID, passphrase, and OVMF firmware. Output: private logs and `result.json` under the build run’s `validation/` directory. Run `make test-qemu PAIR=1` as your desktop user on the workstation; if the build directory is root-owned, choose a writable directory with `QEMU_ARGS="--results /path/to/new-run"` (see [QEMU setup](../../docs/QEMU.md)). This optional stage tests disposable copies; originals remain unchanged. On failure inspect the report and logs, then rerun with a new results directory. Tests: `make test` checks the runner and this generated manual; actual boots are workstation-only.
 
 ## Shared manual acceptance checks
 

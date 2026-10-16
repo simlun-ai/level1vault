@@ -69,6 +69,31 @@ class QemuTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Unexpected'):
             self.verify()
 
+    def test_results_are_private_and_existing_runs_are_preserved(self):
+        results = self.base / 'validation' / 'run'
+        runner.prepare_results(results)
+        self.assertEqual(results.stat().st_mode & 0o777, 0o700)
+        marker = results / 'keep'
+        marker.write_text('previous run')
+        with self.assertRaisesRegex(RuntimeError, 'new results directory'):
+            runner.prepare_results(results)
+        self.assertEqual(marker.read_text(), 'previous run')
+
+    def test_results_permission_failure_precedes_image_checks_and_passphrase(self):
+        argv = ['run.py', '--pair', '1', '--accel', 'tcg',
+                '--results', str(self.base / 'validation' / 'run')]
+        with patch.object(sys, 'argv', argv), \
+                patch.dict(sys.modules, {'pexpect': Mock()}), \
+                patch.object(runner.shutil, 'which', return_value='/tool'), \
+                patch.object(runner, 'firmware_pair', return_value=(Path('/code'), Path('/vars'))), \
+                patch.object(Path, 'mkdir', side_effect=PermissionError), \
+                patch.object(runner, 'verify_inputs') as verify, \
+                patch.object(runner.getpass, 'getpass') as prompt:
+            with self.assertRaisesRegex(RuntimeError, 'QEMU_ARGS=.*--results'):
+                runner.main()
+        verify.assert_not_called()
+        prompt.assert_not_called()
+
     def test_serial_patch_preserves_boot_arguments_and_refuses_ambiguity(self):
         original = 'menuentry test {\n    linux /live/vmlinuz boot=live nopersistence\n}\n'
         modified = runner.serial_config(original)

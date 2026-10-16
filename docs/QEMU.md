@@ -17,11 +17,19 @@ make test-qemu PAIR=1
 
 Run as your normal user with read access to the initialized images and access to `/dev/kvm`. Enter the workspace passphrase at the hidden prompt. It stays in the runner's memory during the suite and is sent to the guest's unlock prompt; it is not passed in command arguments or saved in logs. The complete unlock exchange is omitted from the serial log. For unattended test-only provisioning, `QEMU_ARGS=--passphrase-stdin` accepts one line on stdin; do not put a real passphrase in shell history or environment variables.
 
+If the build directory is root-owned, select a new results directory owned by your desktop user; do not run QEMU with sudo:
+
+```bash
+make test-qemu PAIR=1 QEMU_ARGS="--results $HOME/level1vault-qemu-$(date +%Y%m%d-%H%M%S)"
+```
+
+This directory holds disposable disks as well as logs, so choose a filesystem with enough free space. The runner checks that it can create a private results directory before checking image hashes or asking for the passphrase. `--results` must name a directory that does not already exist.
+
 The suite boots both drives, checks manual-only import, account settings, encryption, ownership, persistence and RAM-overlay reset across reboot. It then boots A alone, writes while degraded, rejoins and scrubs; repeats for B alone; and verifies both writes survived. Every boot starts without an imported pool. Each VM shuts down after a successful export. These are the same [shared acceptance checks](../stages/04-test-pair/README.md) used by the manual procedure.
 
 The test copies retain the real UEFI loaders and live system. Only their external GRUB configuration is changed to add a serial console; the originals and build configuration are untouched. Each scenario uses fresh OVMF variables, no network, and no host directory sharing. These are virtio-disk tests, not USB transport tests.
 
-Allow space for another full pair (up to 24 GiB with default images, usually less due to sparse copying), plus 4 GiB guest RAM. Copies are deleted on completion, failure, or a handled interrupt; private logs and `result.json` remain under `BUILD_DIR/validation/<test-run>/`. An uncatchable kill or host crash can leave a `disks-*` directory there: stop its QEMU process before manually removing it. Logs can include pool and system metadata. Original image checksums do **not** need refreshing after this automated suite.
+Allow space for another full pair (up to 24 GiB with default images, usually less due to sparse copying), plus 4 GiB guest RAM. Copies are deleted on completion, failure, or a handled interrupt; private logs and `result.json` remain under `BUILD_DIR/validation/<test-run>/` by default, or your `--results` directory. An uncatchable kill or host crash can leave a `disks-*` directory there: stop its QEMU process before manually removing it. Logs can include pool and system metadata. Original image checksums do **not** need refreshing after this automated suite.
 
 Matching standard OVMF `_4M` or unsuffixed files are detected automatically. Override both together if your distribution stores them elsewhere. KVM is the default; TCG is slower but works without KVM:
 
