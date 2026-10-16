@@ -14,8 +14,12 @@ import sys
 import tempfile
 import uuid
 
+# Host helpers must not leave root-owned bytecode in the checkout.
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'common'))
+from artifact_owner import publish
 from live_payload import digest
 from usb_devices import describe_disk, imported_devices, require, validate_idle
 
@@ -204,6 +208,7 @@ def apply_release(release, pair, disk_a, disk_b, expected=None):
     # Record partial completion so a failed update can be retried without guessing.
     reports = release / 'reports'
     reports.mkdir(exist_ok=True)
+    publish(reports)
     report_path = reports / ('pair-' + pair + '-' + uuid.uuid4().hex[:12] + '.json')
     report = {'release_id': manifest['release_id'], 'source_commit': manifest['source_commit'],
               'pair': pair, 'status': 'running', 'disks': disks, 'boot_files': boots, 'completed': []}
@@ -211,6 +216,7 @@ def apply_release(release, pair, disk_a, disk_b, expected=None):
     try:
         for side, disk, boot in zip(('a', 'b'), disks, boots):
             report_path.write_text(json.dumps(report, indent=2) + '\n')
+            publish(report_path)
             require(inspect_disk(Path(disk['disk']), imported_devices(output)) == disk, 'Disk identity or usage changed')
             print(f"Upgrading {side.upper()}: {disk['disk']} ({disk['model']}, {disk['serial']})", flush=True)
             update_esp(disk['esp'], disk['esp_uuid'], release, manifest, boot)
@@ -221,6 +227,7 @@ def apply_release(release, pair, disk_a, disk_b, expected=None):
         if report['status'] != 'passed':
             report['status'] = 'failed'
         report_path.write_text(json.dumps(report, indent=2) + '\n')
+        publish(report_path)
     print('Both OS partitions upgraded and verified; workspace partitions were not opened for writing.')
     return report_path
 

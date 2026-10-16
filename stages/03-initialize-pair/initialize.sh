@@ -76,6 +76,8 @@ cleanup() {
     rm -f "$OUT_DIR/READY"
     echo 'Initialization incomplete. Inspect INITIALIZING and any remaining pool/loops before recovery.' >&2
   fi
+  python3 "$(dirname -- "${BASH_SOURCE[0]}")/../../common/artifact_owner.py" \
+    "$OUT_DIR/INITIALIZING" "$OUT_DIR/WORKSPACE-INFO.txt" "$OUT_DIR/SHA256SUMS" "$OUT_DIR/READY" || rc=1
   exit "$rc"
 }
 trap cleanup EXIT

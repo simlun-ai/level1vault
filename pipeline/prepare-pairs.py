@@ -9,7 +9,12 @@ import shutil
 import subprocess
 import sys
 
+# Host helpers must not leave root-owned bytecode in the checkout.
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'common'))
+from artifact_owner import publish
 
 
 def command(*args, **kwargs):
@@ -31,6 +36,7 @@ def preflight(build, count):
     shallow = subprocess.check_output(['git', '-c', 'safe.directory=' + str(ROOT), 'rev-parse', '--is-shallow-repository'], cwd=ROOT, text=True).strip()
     if shallow != 'false':
         raise ValueError('Fetch full history first: git fetch --unshallow --tags')
+    command(sys.executable, ROOT / 'pipeline/lifecycle.py', 'user', 'docker', 'info', stdout=subprocess.DEVNULL)
     command('modprobe', 'zfs')
     pools = subprocess.check_output(['zpool', 'list', '-H', '-o', 'name'], text=True).splitlines()
     if any(f'workspace-{pair}' in pools for pair in range(1, int(count) + 1)):
@@ -57,6 +63,7 @@ def prepare(build, count, passphrase):
     command('bash', wrapper, 'build', build, env=env, stdin=subprocess.DEVNULL)
     marker = build / 'PREPARING-PAIRS'
     marker.touch()
+    publish(marker)
     command('bash', wrapper, 'check', build, build / 'pairs/1', env=env, stdin=subprocess.DEVNULL)
     for pair in range(2, count + 1):
         command('bash', wrapper, 'assemble', build, build / 'pairs' / str(pair), env=env, stdin=subprocess.DEVNULL)

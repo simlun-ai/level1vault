@@ -31,6 +31,7 @@ class ScriptTests(unittest.TestCase):
 
     def test_cleanup_retains_loops_when_export_fails(self):
         text = (ROOT / 'stages/03-initialize-pair/initialize.sh').read_text()
+        text = text.replace('$(dirname -- "${BASH_SOURCE[0]}")/../../common/artifact_owner.py', str(ROOT / 'common/artifact_owner.py'))
         cleanup = text.split('cleanup() {', 1)[1].split('\ntrap cleanup EXIT', 1)[0]
         for export_rc in (0, 1):
             with self.subTest(export_rc=export_rc):

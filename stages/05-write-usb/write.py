@@ -12,6 +12,9 @@ import subprocess
 import sys
 
 
+# Host helpers must not leave root-owned bytecode in the checkout.
+sys.dont_write_bytecode = True
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'common'))
 from usb_devices import describe_disk, imported_devices, validate_idle
 

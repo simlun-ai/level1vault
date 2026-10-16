@@ -80,6 +80,15 @@ def clean(build):
     print('Retained ISO, image pairs, manifests and logs. Use a fresh BUILD_DIR for the next build.')
 
 
+def check_checkout_idle(build):
+    ids = output('docker', 'ps', '-q').split()
+    containers = json.loads(output('docker', 'inspect', *ids)) if ids else []
+    loops = json.loads(output('losetup', '--json', '--list', '--output', 'NAME,BACK-FILE'))
+    mounts = mountinfo()
+    check_idle(ROOT, mounts, containers, loops)
+    check_idle(build.resolve(), mounts, containers, loops)
+
+
 def clean_selected(build):
     # Reject aliases before selecting any legacy cleanup destinations.
     if build.is_symlink() or build.absolute() != build.resolve():
@@ -95,6 +104,7 @@ def clean_selected(build):
 
 if __name__ == '__main__':
     try:
+        check_checkout_idle(Path(sys.argv[1]))
         clean_selected(Path(sys.argv[1]))
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         sys.exit(f'Cleanup refused: {error}')

@@ -8,7 +8,12 @@ import subprocess
 import sys
 import tempfile
 
+# Host helpers must not leave root-owned bytecode in the checkout.
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'common'))
+from artifact_owner import publish
 
 
 def output(*args):
@@ -92,9 +97,12 @@ def seed(build, count):
 
     # Publish checksums only after every pool is exported and its loops are detached.
     for out in pairs:
-        with (out / 'SHA256SUMS').open('w') as stream:
-            subprocess.run(['sha256sum', 'usb-a.img', 'usb-b.img', 'images.json'], cwd=out, stdout=stream, check=True)
-        (out / 'READY').touch()
+        try:
+            with (out / 'SHA256SUMS').open('w') as stream:
+                subprocess.run(['sha256sum', 'usb-a.img', 'usb-b.img', 'images.json'], cwd=out, stdout=stream, check=True)
+            (out / 'READY').touch()
+        finally:
+            publish(out / 'SHA256SUMS', out / 'READY')
         command('bash', ROOT / 'stages/03-initialize-pair/verify.sh', out)
 
 

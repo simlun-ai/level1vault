@@ -11,13 +11,16 @@ import subprocess
 import sys
 import uuid
 
+# Host helpers must not leave root-owned bytecode in the checkout.
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'stages/06-upgrade-os'))
 import upgrade
 
 
 def git(*args):
-    return subprocess.check_output(['git', '-c', 'safe.directory=' + str(ROOT), *args], cwd=ROOT, text=True).strip()
+    return subprocess.check_output(['git', '--no-optional-locks', '-c', 'safe.directory=' + str(ROOT), *args], cwd=ROOT, text=True).strip()
 
 
 def release_directory(explicit):

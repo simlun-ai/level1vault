@@ -22,7 +22,7 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 | `make test-qemu PAIR=1` | Boot disposable copies of an initialized active pair and verify reboot, degraded writes, and rejoin; see [QEMU](QEMU.md) |
 | `make check-build` | Inspect an existing full build's SquashFS, module, initramfs and prepared artifacts |
 | `make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1` | Real ZFS integration, **only on a disposable VM** |
-| `make clean` | Remove legacy build work while preserving artifacts |
+| `make clean` | Remove temporary work and checkout BuildKit state while preserving artifacts |
 | `make cache-clean` | Prune unused cache on the dedicated BuildKit builder |
 
 `BUILD_DIR` defaults to `build/default`; `PAIR` defaults to `1`, and `OUT` defaults to `$(BUILD_DIR)/pairs/$(PAIR)`. Relative paths are relative to the repository root. Override them consistently:
@@ -85,7 +85,7 @@ make clean                       # default build directory
 make clean BUILD_DIR=build-next  # a selected build directory
 ```
 
-Current builds export artifacts only; their working state is in BuildKit. Use `make cache-clean` to prune its unused cache. The default `make clean` also checks recognized legacy work directly under `build/`, including `build/binary/`. Selecting another `BUILD_DIR` cleans only that directory. For legacy builds, cleanup removes only `chroot/`, `cache/`, `config/` and `binary/` inside a recognized build directory. It retains the ISO, every image pair (including initialized workspaces), manifests, logs, checksums and state markers. It never exports pools, detaches loops or deletes Docker images. Docker must be available for checks when there is build work to remove. Cleanup refuses active container binds, mounted filesystems and loop-backed files under that build, as well as unexpected paths or symlinks.
+Current builds export artifacts only; their working state is in BuildKit. Use `make cache-clean` to prune its unused cache. The default `make clean` also checks recognized legacy work directly under `build/`, including `build/binary/`. Selecting another `BUILD_DIR` selects its local transient work; Docker cleanup still removes all builders recorded for this checkout. `make clean` removes those builders and their state/cache volumes; a subsequent build recreates them. For legacy builds, cleanup removes only `chroot/`, `cache/`, `config/` and `binary/` inside a recognized build directory. It retains the ISO, every image pair (including initialized workspaces), manifests, logs, checksums and state markers. It never exports pools, detaches loops or deletes Docker images. Docker must be available for cleanup checks. A checkout-wide lifecycle lock rejects cleanup during supported operations, even if no legacy transient directories exist. Cleanup refuses active container binds, mounted filesystems and loop-backed files under the checkout or selected build, as well as unexpected paths or symlinks.
 
 The retained build is an archive of artifacts, not a reusable live-build working directory. The builder still refuses an existing directory, so rebuild with a fresh name:
 
