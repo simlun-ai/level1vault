@@ -39,7 +39,9 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(target.stat().st_mode & 0o777, 0o755)
         self.assertIn('linux-image', self.calls())
         self.assertNotIn('linux-headers', self.calls())
-        self.assertIn('syslinux grub-efi', self.calls())
+        self.assertIn('--bootloaders\ngrub-efi\n', self.calls())
+        self.assertNotIn('syslinux', self.calls())
+        self.assertIn('--memtest\nnone\n', self.calls())
         again = subprocess.run(['bash', str(ROOT / 'stages/01-build-live/configure.sh')], cwd=self.base,
                                env=self.env, capture_output=True, text=True)
         self.assertNotEqual(again.returncode, 0)

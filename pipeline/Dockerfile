@@ -5,7 +5,7 @@ ARG DEBIAN_IMAGE=debian:trixie
 FROM ${DEBIAN_IMAGE} AS toolchain
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     live-build debootstrap xorriso squashfs-tools dosfstools mtools \
-    isolinux syslinux-common grub-efi-amd64-bin grub-common grub2-common \
+    grub-efi-amd64-bin grub-common grub2-common \
     gdisk util-linux ca-certificates python3 file cpio rsync kmod apt-utils initramfs-tools-core sudo passwd \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build

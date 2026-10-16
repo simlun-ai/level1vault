@@ -13,7 +13,9 @@ lb config \
   --distribution trixie \
   --architecture amd64 \
   --binary-image iso-hybrid \
-  --bootloaders 'syslinux grub-efi' \
+  --bootloaders grub-efi \
+  --memtest none \
+  --win32-loader false \
   --uefi-secure-boot disable \
   --debian-installer none \
   --archive-areas 'main contrib non-free-firmware' \

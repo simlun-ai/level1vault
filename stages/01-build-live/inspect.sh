@@ -7,6 +7,13 @@ BUILD_DIR=$(realpath -- "$1")
 TASK_TMP=$(mktemp -d)
 trap 'rm -rf -- "$TASK_TMP"' EXIT
 
+# Require an EFI boot entry and reject legacy BIOS boot entries in the ISO.
+BOOT_REPORT=$(xorriso -indev "$BUILD_DIR/live-image-amd64.hybrid.iso" -report_el_torito plain 2>&1)
+grep -Eq '^El Torito boot img :.*UEFI' <<< "$BOOT_REPORT"
+if grep -Eq '^El Torito boot img :.*BIOS' <<< "$BOOT_REPORT"; then
+  echo 'Unexpected legacy BIOS boot entry in UEFI-only image' >&2; exit 1
+fi
+
 # Extract the built live system for inspection.
 xorriso -osirrox on -indev "$BUILD_DIR/live-image-amd64.hybrid.iso" \
   -extract /live "$TASK_TMP/live"
