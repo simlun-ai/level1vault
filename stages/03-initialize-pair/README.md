@@ -10,6 +10,8 @@ make verify PAIR=1
 make initialize PAIR=2            # empty replica prepared by stage 2
 ```
 
+`make prepare-pairs N=3` runs the complete initial pipeline with prompts up front. `seed.py` then attaches only the new image pairs, imports by recorded GUID through private device search paths, populates replicas using the runtime sync helper, exports its pools, detaches loops, and refreshes final checksums/READY. It never loads the encryption key for raw replication or changes unrelated host pools. A failed export retains its loops and leaves readiness unpublished. See [batch preparation](../../docs/BUILD.md#prepare-n-complete-pairs-in-one-command).
+
 `initialize.sh` intentionally modifies the images in place. It does not write physical disks. `verify.sh` checks completion markers and final image hashes. Runtime import/mount remains manual.
 
 On failure, `INITIALIZING` remains. Inspect the pool, loops, and logs before recovery; failed exports retain loop devices. Do not rerun over a partially initialized pair. See [build troubleshooting](../../docs/BUILD.md#initialize-a-pair).

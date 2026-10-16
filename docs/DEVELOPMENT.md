@@ -8,6 +8,7 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 
 | Command | Result |
 | --- | --- |
+| `make prepare-pairs N=3` | Build once and prepare N complete pairs with prompts up front |
 | `make build` | Build the Trixie toolchain, live ISO and first prepared image pair in a new `build/default/` |
 | `make initialize PAIR=1 ACTIVE=1` | Initialize the first writable encrypted mirror on the host; prompt for its passphrase |
 | `make verify` | Require `READY` and verify final image/manifest checksums |

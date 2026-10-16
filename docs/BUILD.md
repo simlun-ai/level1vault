@@ -25,6 +25,32 @@ Keep your host distribution's own ZFS packages and kernel. Do not replace them w
 
 The [BuildKit pipeline](BUILDKIT.md) confines the required privileged RUN to live-build. It exports artifacts from scratch stages; ZFS initialization stays on the host. Use trusted source: the live-build entitlement grants privileges equivalent to the previous privileged container.
 
+## Prepare N complete pairs in one command
+
+From a fresh full Git checkout on the prepared workstation:
+
+```bash
+make prepare-pairs N=3
+```
+
+`N` is mandatory and must be a positive integer. The target authenticates with sudo once, checks host prerequisites, and prompts for the new workspace encryption passphrase twice **before** building. It then runs as one privileged process, so sudo does not expire midway through the build. The passphrase stays in memory and is passed to the first initializer through stdin; it is never saved in arguments, environment, images, or logs. All later subprocesses have closed stdin and require no operator input.
+
+The command builds one ISO, inspects it, assembles unique pairs numbered 1 through N, initializes pair 1 as active and the others as replicas, and populates every replica from a shared raw encrypted checkpoint. Only the new images are attached on host loops. Imports use their recorded pool GUIDs and private device search directories. The command exports only its own pools, detaches their loops, recalculates final checksums, and verifies every pair before reporting success. Replicas inherit pair 1's workspace passphrase.
+
+On success, write each pair using [the USB target](../stages/05-write-usb/README.md):
+
+```bash
+lsblk -o NAME,PATH,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINTS
+make write-usb PAIR=1 DISK_A=/dev/sda DISK_B=/dev/sdb
+# Repeat with PAIR=2, PAIR=3, etc., identifying new destination disks each time.
+```
+
+No initial sync is needed after flashing. The batch starts with an empty workspace; it does not copy data from an existing deployment. Disconnect other copies of these pool identities and resolve any imported `workspace-1` through `workspace-N` before starting. For adding replicas to an existing deployment, use [additional pairs](../README.md#add-more-pairs) instead.
+
+The output defaults to `build/default/pairs/ID/`. Existing build directories are refused; use `BUILD_DIR=build-next` for a new batch and pass that same setting when writing. `FRESH=1`, `DEBIAN_IMAGE`, and `BUILDX_BUILDER` retain their usual meanings. Budget up to 24 GiB per pair plus build workspace. This command does not run QEMU or write physical disks.
+
+If any step fails, preparation stops, leaves partial artifacts for inspection, and retains `PREPARING-PAIRS` once the ISO build has finished. Do not flash incomplete batches. Failed exports retain the associated loops; inspect pool GUIDs and loop backing files before recovery. Never blindly delete partial outputs or rerun initialization over them. Start a replacement batch in a new directory only after resolving leftover resources. Removing a marker does not repair a failed run.
+
 ## Build the live system and boot images
 
 ```bash

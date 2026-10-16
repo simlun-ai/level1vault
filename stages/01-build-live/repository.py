@@ -8,7 +8,8 @@ ORIGIN = 'https://github.com/simlun-ai/level1vault.git'
 
 
 def git(*args, cwd=None):
-    return subprocess.check_output(['git', *map(str, args)], cwd=cwd, text=True).strip()
+    options = ['-c', 'safe.directory=' + str(Path(cwd).resolve())] if cwd else []
+    return subprocess.check_output(['git', *options, *map(str, args)], cwd=cwd, text=True).strip()
 
 
 def bundle(source, destination):

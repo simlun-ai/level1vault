@@ -13,15 +13,17 @@ BUILDX_BUILDER ?= level1vault
 DEBIAN_IMAGE ?= debian:trixie
 FRESH ?= 0
 SUDO ?= sudo
+N ?=
 DISK_A ?=
 DISK_B ?=
-export BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A DISK_B
+export BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A DISK_B N
 
 # Expose the supported project lifecycle commands.
-.PHONY: help build builder assemble initialize verify lint test-unit test test-container test-zfs test-qemu write-usb check-build clean cache-clean
+.PHONY: help prepare-pairs build builder assemble initialize verify lint test-unit test test-container test-zfs test-qemu write-usb check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
+	  'make prepare-pairs N=3           Prepare one active pair and N-1 populated replicas' \
 	  'make build                       Build live ISO and first uninitialized image pair' \
 	  'make initialize PAIR=1 ACTIVE=1   Create the first encrypted, writable workspace' \
 	  'make assemble PAIR=2              Prepare another pair from the existing ISO' \
@@ -36,6 +38,11 @@ help:
 	  'make clean                       Remove legacy build work; preserve artifacts' \
 	  'make cache-clean                 Prune unused cache on the dedicated builder' \
 	  'Options: BUILD_DIR=build-next, OUT=..., SUDO= (when already root)'
+
+# Prepare a complete initial set with all authentication and secret prompts upfront.
+prepare-pairs:
+	@[[ "$$N" =~ ^[1-9][0-9]*$$ ]] || { echo 'Set N to a positive pair count, e.g. N=3' >&2; exit 2; }
+	$(SUDO) env BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" FRESH="$$FRESH" python3 pipeline/prepare-pairs.py --build-dir "$$BUILD_DIR" --count "$$N"
 
 # Build and export the live system.
 build:

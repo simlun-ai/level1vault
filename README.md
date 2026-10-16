@@ -9,12 +9,12 @@ Use a **Linux amd64 workstation with working ZFS**, local rootful Docker with Bu
 ```bash
 git clone https://github.com/simlun-ai/level1vault.git
 cd level1vault
-make build
-make initialize PAIR=1 ACTIVE=1   # enter a new workspace passphrase
-make verify
+make prepare-pairs N=3           # choose the number of pairs
 ```
 
-The two ready-to-write images are `build/default/pairs/1/usb-a.img` and `usb-b.img`. Each needs a USB drive of at least 12 GiB (16 GiB recommended). Optional: [test in QEMU first](docs/QEMU.md).
+Sudo authentication and the new workspace passphrase/confirmation happen up front. The command builds and inspects the OS once, prepares pairs **1 through N**, initializes pair 1 as active, populates the others as encrypted replicas, and verifies final checksums. No further input is needed during preparation.
+
+Ready-to-write images are `build/default/pairs/1/usb-a.img` and `usb-b.img`, then the same filenames under `pairs/2/`, and so on. Only USB writing remains; no initial replication is needed after flashing. Use a new `BUILD_DIR` for another batch. The command never overwrites an existing run. Each needs a USB drive of at least 12 GiB (16 GiB recommended). Optional: [test in QEMU first](docs/QEMU.md).
 
 ## Write the USB drives
 

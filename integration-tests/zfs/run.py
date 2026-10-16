@@ -41,8 +41,8 @@ def helper(name, *args, input=None, ok=True):
 
 
 def prepare(base, pair, active=False):
-    out = base/pair
-    out.mkdir()
+    out = base/'pairs'/pair
+    out.mkdir(parents=True)
     images = {}
     for side in ['a', 'b']:
         image = out/f'usb-{side}.img'
@@ -103,8 +103,16 @@ def main():
         base = Path(tmp)
         try:
             for pair, pool in zip(PAIRS, POOLS):
-                out = prepare(base, pair, active=(pair == '1'))
+                prepare(base, pair, active=(pair == '1'))
                 owned.append(pool)
+
+            # Verify pre-flash replica seeding and finalized image checksums.
+            command('python3', str(ROOT/'stages/03-initialize-pair/seed.py'), str(base), '2')
+            assert not set(run('zpool', 'list', '-H', '-o', 'name').splitlines()).intersection(POOLS)
+            for pair in ['1', '2']:
+                command('bash', str(ROOT/'stages/03-initialize-pair/verify.sh'), str(base/'pairs'/pair))
+            for pair in PAIRS:
+                out = base/'pairs'/pair
                 for side in ['a', 'b']:
                     loops.append(run('losetup', '--find', '--show', '--partscan', str(out/f'usb-{side}.img')))
                 command('udevadm', 'settle')
