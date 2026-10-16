@@ -165,7 +165,7 @@ class Guest:
             if passphrase is not None:
                 self.child.expect(r'Enter passphrase for [^\r\n]+:', timeout=self.timeout)
                 self.child.sendline(passphrase)
-            self.child.expect(marker + r':([0-9]+)\r?\n', timeout=self.timeout)
+            self.child.expect(marker + r':([0-9]+)\r*\n', timeout=self.timeout)
             require(self.child.match.group(1) == '0', 'Guest acceptance check failed; see the scenario log')
         finally:
             # Never write the unlock exchange or an exception's console buffer to logs.

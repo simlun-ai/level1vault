@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -129,6 +130,29 @@ class QemuTests(unittest.TestCase):
             runner.prepare_copies(self.out, work, self.checksums)
         self.assertEqual(self.verify(), self.checksums)
         self.assertIn('console=ttyS0', (work / 'grub-b.cfg').read_text())
+
+    def test_command_status_accepts_serial_line_endings_and_rejects_failed_checks(self):
+        for newline in ('\n', '\r\n', '\r\r\n'):
+            for status in (0, 1):
+                with self.subTest(newline=repr(newline), status=status):
+                    child = Mock()
+                    guest = runner.Guest(child, Mock(), 10)
+
+                    def expect_status(pattern, **kwargs):
+                        sent = child.sendline.call_args.args[0]
+                        marker = re.search(r'L1V_[a-f0-9]{32}', sent).group()
+                        # Include echoed input before the actual guest result.
+                        transcript = sent + newline + marker + ':' + str(status) + newline
+                        child.match = re.search(pattern, transcript)
+                        self.assertIsNotNone(child.match, repr(transcript))
+                        self.assertEqual(child.match.group(0), marker + ':' + str(status) + newline)
+
+                    child.expect.side_effect = expect_status
+                    if status == 0:
+                        guest.run('test "$(id -un)" = simlun')
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, 'Guest acceptance check failed'):
+                            guest.run('false')
 
     def test_unlock_exchange_is_not_logged_even_on_failure(self):
         child = Mock()
