@@ -44,7 +44,9 @@ case $PHASE in
     [[ $(id -un) == simlun && $(id -u) == 2000 && $(id -g) == 2000 ]]
     [[ $(sudo -n id -u) == 0 ]]
     sudo -n sh -c 'command -v workspace-mount && command -v workspace-umount'
-    grep -qx 'Hello, world' /etc/motd
+    for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
+      grep -Fq "sudo $command" /etc/motd
+    done
     grep -qw nopersistence /proc/cmdline
     [[ $(findmnt -n -o FSTYPE /) == overlay ]]
     findmnt -rn -t squashfs -o OPTIONS | grep -Eq '(^|,)ro(,|$)'

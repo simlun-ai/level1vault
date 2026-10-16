@@ -30,7 +30,10 @@ su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspac
 grep -qx LIVE_USERNAME=simlun /etc/live/config.conf.d/level1vault.conf
 grep -qx LIVE_CONFIG_NOCOMPONENTS=user-setup,sudo /etc/live/config.conf.d/level1vault.conf
 
-grep -qx 'Hello, world' /etc/motd
+# Verify the guide covers every installed workspace command.
+for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
+    grep -Fq "sudo $command" /etc/motd
+done
 
 # Verify the message appears during an actual login.
 python3 - <<'PYLOGIN'
@@ -38,6 +41,8 @@ import errno, os, pty, select, signal, time
 pid, fd = pty.fork()
 if pid == 0:
     os.execvp('login', ['login', '-f', 'simlun'])
+with open('/etc/motd', 'rb') as motd:
+    expected = motd.read()
 output = b''
 try:
     deadline = time.monotonic() + 15
@@ -52,9 +57,9 @@ try:
             if not chunk:
                 break
             output += chunk
-            if b'Hello, world' in output:
+            if expected in output.replace(b'\r', b''):
                 break
-    assert b'Hello, world' in output, output.decode(errors='replace')
+    assert expected in output.replace(b'\r', b''), output.decode(errors='replace')
 finally:
     os.kill(pid, signal.SIGKILL)
     os.waitpid(pid, 0)

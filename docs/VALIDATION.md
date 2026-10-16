@@ -42,7 +42,7 @@ The operator verified the [QEMU procedure](QEMU.md), including the normal guest 
 id simlun                         # uid=2000, primary gid=2000
 sudo -n id -u                      # 0, without prompting
 command -v workspace-mount workspace-umount workspace-sync
-cat /etc/motd                     # Hello, world
+cat /etc/motd                     # workspace command quick guide
 sudo workspace-mount 1             # enter the encryption passphrase
 stat -c '%u:%g %a' /mnt/workspace # 2000:2000 750
 printf 'owned by simlun\n' > /mnt/workspace/simlun-write-test

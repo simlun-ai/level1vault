@@ -39,5 +39,23 @@ CONFIG
 [ "$(id -u simlun)" -eq 2000 ]
 [ "$(id -g simlun)" -eq 2000 ]
 
-# PAM login (including the live console) displays this static message.
-printf 'Hello, world\n' > /etc/motd
+# Show the workspace quick guide at console login.
+cat > /etc/motd <<'MOTD'
+level1vault workspace quick guide
+
+Pair IDs below are examples; use the IDs printed on your USB pairs.
+  sudo workspace-mount 1         Unlock pair 1 at /mnt/workspace.
+                                 Active: writable. Replica: read-only.
+  sudo workspace-sync 1 2        Copy active pair 1 to unmounted replica pair 2.
+                                 Add more replica IDs to update them too; rerun to resume.
+  sudo workspace-activate --next 1 --fenced
+                                 Promote the next connected pair after pair 1.
+                                 Fence/disconnect the old active pair FIRST.
+                                 Then mount the promoted pair using its own ID.
+  cd /; sudo workspace-umount    Sync and export all imported workspace pairs.
+                                 Close files; leave the workspace in every shell first.
+
+Export successfully before removing workspace drives; keep the boot USB
+connected until shutdown. OS changes reset on reboot; workspace data persists.
+More options: workspace-sync --help or workspace-activate --help
+MOTD

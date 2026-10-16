@@ -48,7 +48,9 @@ test -x "$ROOT/usr/local/sbin/workspace-sync"
 test -x "$ROOT/usr/local/sbin/workspace-activate"
 chroot "$ROOT" /usr/local/sbin/workspace-activate --help >/dev/null
 chroot "$ROOT" python3 /usr/local/sbin/workspace-sync --help >/dev/null
-grep -qx 'Hello, world' "$ROOT/etc/motd"
+for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
+  grep -Fq "sudo $command" "$ROOT/etc/motd"
+done
 [[ $(chroot "$ROOT" id -u simlun) == 2000 && $(chroot "$ROOT" id -g simlun) == 2000 ]]
 chroot "$ROOT" visudo -cf /etc/sudoers
 chroot "$ROOT" su - simlun -c 'sudo -n id -u' | grep -qx 0
