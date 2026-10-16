@@ -45,7 +45,6 @@ def execute(pair, disk_a, disk_b, explicit=None):
             subprocess.run(['bash', str(ROOT / 'pipeline/buildkit.sh'), 'build-upgrade', str(release)],
                            check=True, env=env, stdin=subprocess.DEVNULL)
             upgrade.load_release(release)
-            (release / 'UPGRADE-READY').touch()
         upgrade.require((release / 'UPGRADE-READY').is_file(),
                         'Incomplete upgrade release; preserve diagnostics and use FRESH=1 to build a new release')
         print(f'OS release: {release}', flush=True)
