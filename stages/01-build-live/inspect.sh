@@ -33,7 +33,7 @@ CANONICAL=$(chroot "$ROOT" readlink -f "$MODULE")
 chroot "$ROOT" dpkg-query -S "$CANONICAL" | grep -q '^level1vault-zfs-modules:'
 chroot "$ROOT" modprobe --show-depends --set-version "$KERNEL" zfs
 for tool in cc gcc g++ c++ clang make dkms; do
-  if chroot "$ROOT" sh -c 'command -v "$1"' sh "$tool"; then
+  if chroot "$ROOT" sh -c "command -v \"\$1\"" sh "$tool"; then
     echo "Unexpected build tool: $tool" >&2; exit 1
   fi
 done

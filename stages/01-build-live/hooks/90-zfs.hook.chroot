@@ -23,7 +23,7 @@ work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 export DEBIAN_FRONTEND=noninteractive
 dpkg-query -W -f='${binary:Package}\t${db:Status-Status}\n' | awk '$2 == "installed" {print $1}' | sort > "$work/runtime-packages"
-apt-mark showauto > "$work/runtime-auto"
+apt-mark showauto | sort > "$work/runtime-auto"
 xargs -r apt-mark manual < "$work/runtime-packages"
 sed "s/@KERNEL@/$kernel_version/g" "$build/build-packages.list" > "$work/build-packages"
 apt-get update
@@ -45,10 +45,14 @@ apt-mark manual level1vault-zfs-modules
 dpkg-query -W -f='${binary:Package}\t${db:Status-Status}\n' | awk '$2 == "installed" {print $1}' | sort > "$work/after-build"
 comm -13 "$work/runtime-packages" "$work/after-build" | awk '$0 != "level1vault-zfs-modules"' > "$work/temporary-packages"
 xargs -r apt-mark auto < "$work/temporary-packages"
-xargs -r apt-get purge -y < "$work/build-packages"
+# Restore automatic dependencies before autoremove, including pre-existing tools.
+comm -12 "$work/runtime-auto" "$work/after-build" | xargs -r apt-mark auto
+dpkg-query -W -f='${binary:Package}\t${db:Status-Status}\n' > "$work/installed-packages"
+python3 "$build/prune-build-packages.py" "$work/installed-packages" > "$work/purge-packages"
+xargs -r apt-get purge -y < "$work/purge-packages"
 apt-get autoremove -y --purge
-xargs -r apt-mark auto < "$work/runtime-auto"
 apt-get clean
+rm -rf -- /var/lib/dkms
 rm -rf -- /usr/local/lib/level1vault/build
 
 # Verify the standalone modules and reject leftover compilers, headers, or DKMS.

@@ -8,6 +8,8 @@ Boot support is UEFI-only (`grub-efi`); Syslinux/ISOLINUX, legacy memtest, and t
 
 `packages.list` describes the shipped userland. `build-packages.list` contains temporary ZFS compilation dependencies; `@KERNEL@` selects the one installed Debian kernel. The ZFS hook builds those modules, packages them independently with `package-zfs.py`, and removes the toolchain before SquashFS generation. The standalone package owns all ZFS modules in `extra/level1vault`, so purging DKMS cannot remove them. Its dependencies pin the kernel and ZFS userland. The image records both build-time and final package manifests; kernel or ZFS changes require a new image build.
 
+`prune-build-packages.py` selects compilers and development packages from the entire installed image, including packages live-build installed before the hook. Cleanup restores automatic dependency flags before autoremove; runtime GCC libraries and their version-metadata packages remain installed when required.
+
 Run `make build` to execute stages 1 and 2, then `make check-build` to inspect the prepared artifacts. The default run directory is `build/default`; use a new `BUILD_DIR` for each new build. Configure advanced live-build arguments through `sudo bash pipeline/buildkit.sh build NEW_BUILD_DIR ...`.
 
 A failed build leaves diagnostic logs. Inspect those and retry with a fresh run directory; do not reuse a partially completed directory. BuildKit may reuse valid cached stages.
