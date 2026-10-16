@@ -71,8 +71,8 @@ case $ACTION in
     python3 "$SOURCE_DIR/stages/01-build-live/repository.py" bundle "$SOURCE_DIR" "$TASK_TMP/repository"
     mkdir -p -- "$DEST"
     docker buildx inspect "$BUILDX_BUILDER" > "$DEST/builder-info.txt"
-    target=artifacts
-    if [[ $ACTION == build-upgrade ]]; then target=upgrade-artifacts; fi
+    target='artifacts'
+    if [[ $ACTION == build-upgrade ]]; then target='upgrade-artifacts'; fi
     # No initialized images enter the context, and identities never come from cache.
     "${base[@]}" "${fresh[@]}" --target "$target" --allow security.insecure \
       --build-context "repository-input=$TASK_TMP/repository" \
@@ -90,8 +90,8 @@ case $ACTION in
     TASK_TMP=$(mktemp -d)
     # Send only the ISO, never the directory containing initialized ZFS images.
     cp --reflink=auto --sparse=always "$BUILD_DIR/live/live-image-amd64.hybrid.iso" "$TASK_TMP/"
-    target=pair-artifacts
-    if [[ $ACTION == release ]]; then target=upgrade-from-iso-artifacts; fi
+    target='pair-artifacts'
+    if [[ $ACTION == release ]]; then target='upgrade-from-iso-artifacts'; fi
     "${base[@]}" --target "$target" --build-context "iso-input=$TASK_TMP" \
       --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
       --output "type=local,dest=$DEST,platform-split=false" "$SOURCE_DIR"
