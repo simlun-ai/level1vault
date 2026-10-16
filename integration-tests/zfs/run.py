@@ -112,6 +112,7 @@ def main():
             for pair in ['1', '2']:
                 command('bash', str(ROOT/'stages/03-initialize-pair/verify.sh'), str(base/'pairs'/pair))
             for pair in PAIRS:
+                pool = 'workspace-' + pair
                 out = base/'pairs'/pair
                 for side in ['a', 'b']:
                     loops.append(run('losetup', '--find', '--show', '--partscan', str(out/f'usb-{side}.img')))
