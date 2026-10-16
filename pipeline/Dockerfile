@@ -72,3 +72,10 @@ FROM live AS upgrade-release
 RUN bash /src/stages/06-upgrade-os/build-release.sh
 FROM scratch AS upgrade-artifacts
 COPY --from=upgrade-release /release/ /
+
+# Package a previously built ISO using the same inspected release exporter.
+FROM source AS upgrade-from-iso
+COPY --from=iso-input /live-image-amd64.hybrid.iso /artifacts/live-image-amd64.hybrid.iso
+RUN bash /src/stages/06-upgrade-os/build-release.sh
+FROM scratch AS upgrade-from-iso-artifacts
+COPY --from=upgrade-from-iso /release/ /

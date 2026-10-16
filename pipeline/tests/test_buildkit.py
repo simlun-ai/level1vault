@@ -84,6 +84,17 @@ if args[:2] == ['buildx', 'build']:
         self.assertIn('security.insecure', args)
         self.assertIn('repository-input=', ' '.join(args))
 
+    def test_existing_iso_can_export_a_release_without_sending_workspace_images(self):
+        build = self.base/'build'
+        (build/'live').mkdir(parents=True)
+        (build/'live/live-image-amd64.hybrid.iso').write_text('synthetic')
+        (build/'private-workspace.img').write_text('never enter context')
+        result = self.run_task('release', build, build/'upgrade')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = self.builds()[0]
+        self.assertEqual(args[args.index('--target') + 1], 'upgrade-from-iso-artifacts')
+        self.assertNotIn('--allow', args)
+
     def test_initialized_images_are_rejected_before_inspection_build(self):
         build = self.base/'build'
         (build/'pairs/1').mkdir(parents=True)

@@ -83,14 +83,16 @@ case $ACTION in
     ;;
 
   # Export another image pair from an existing ISO.
-  assemble)
+  assemble|release)
     BUILD_DIR=$(realpath -e -- "${1:?Build directory required}")
     new_destination "${2:?Output directory required}"
     [[ $DEST == "$BUILD_DIR/"* ]] || { echo 'OUT must be beneath BUILD_DIR' >&2; exit 1; }
     TASK_TMP=$(mktemp -d)
     # Send only the ISO, never the directory containing initialized ZFS images.
     cp --reflink=auto --sparse=always "$BUILD_DIR/live/live-image-amd64.hybrid.iso" "$TASK_TMP/"
-    "${base[@]}" --target pair-artifacts --build-context "iso-input=$TASK_TMP" \
+    target=pair-artifacts
+    if [[ $ACTION == release ]]; then target=upgrade-from-iso-artifacts; fi
+    "${base[@]}" --target "$target" --build-context "iso-input=$TASK_TMP" \
       --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
       --output "type=local,dest=$DEST,platform-split=false" "$SOURCE_DIR"
     ;;
@@ -135,5 +137,5 @@ case $ACTION in
     # Prune only unused cache on this dedicated builder; never host output files.
     docker buildx prune --builder "$BUILDX_BUILDER" --force
     ;;
-  *) echo 'Usage: buildkit.sh builder|build DIR [LB_ARGS...]|build-upgrade DIR|assemble DIR OUT|test|check DIR|cache-clean' >&2; exit 2 ;;
+  *) echo 'Usage: buildkit.sh builder|build DIR [LB_ARGS...]|build-upgrade DIR|assemble DIR OUT|release DIR OUT|test|check DIR|cache-clean' >&2; exit 2 ;;
 esac

@@ -28,6 +28,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y zfsutils-linux gdisk dosfstools fdisk
+      - run: sudo apt-get update && sudo apt-get install -y zfsutils-linux gdisk dosfstools fdisk mtools
       - name: Exercise encryption and replication on disposable file-backed mirrors
         run: make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1

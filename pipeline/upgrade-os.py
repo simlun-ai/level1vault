@@ -29,7 +29,7 @@ def release_directory(explicit):
     config = {'debian_image': os.environ.get('DEBIAN_IMAGE', 'debian:trixie'), 'payload_format': 1}
     fingerprint = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
     suffix = '-' + uuid.uuid4().hex[:8] if os.environ.get('FRESH', '0') == '1' else ''
-    return ROOT / 'build/upgrades' / (commit + '-' + fingerprint + suffix)
+    return (ROOT / 'build/upgrades' / (commit + '-' + fingerprint + suffix)).resolve()
 
 
 def execute(pair, disk_a, disk_b, explicit=None):
