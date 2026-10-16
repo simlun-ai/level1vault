@@ -7,6 +7,10 @@
 !stages/01-build-live/**
 !stages/02-assemble-pair/
 !stages/02-assemble-pair/**
+!common/
+!common/**
+!stages/06-upgrade-os/
+!stages/06-upgrade-os/**
 !runtime/
 !runtime/workspace-*
 **/__pycache__

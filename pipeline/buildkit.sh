@@ -60,7 +60,7 @@ case $ACTION in
   builder) ;;
 
   # Build and export a live ISO and a fresh image pair.
-  build)
+  build|build-upgrade)
     new_destination "${1:?Build directory required}"
     shift
     LB_CONFIG_JSON=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:]))' "$@")
@@ -71,8 +71,10 @@ case $ACTION in
     python3 "$SOURCE_DIR/stages/01-build-live/repository.py" bundle "$SOURCE_DIR" "$TASK_TMP/repository"
     mkdir -p -- "$DEST"
     docker buildx inspect "$BUILDX_BUILDER" > "$DEST/builder-info.txt"
+    target=artifacts
+    if [[ $ACTION == build-upgrade ]]; then target=upgrade-artifacts; fi
     # No initialized images enter the context, and identities never come from cache.
-    "${base[@]}" "${fresh[@]}" --target artifacts --allow security.insecure \
+    "${base[@]}" "${fresh[@]}" --target "$target" --allow security.insecure \
       --build-context "repository-input=$TASK_TMP/repository" \
       --build-arg "LB_CONFIG_JSON=$LB_CONFIG_JSON" --build-arg "PAIR_ID=$PAIR_ID" \
       --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
@@ -133,5 +135,5 @@ case $ACTION in
     # Prune only unused cache on this dedicated builder; never host output files.
     docker buildx prune --builder "$BUILDX_BUILDER" --force
     ;;
-  *) echo 'Usage: buildkit.sh builder|build DIR [LB_ARGS...]|assemble DIR OUT|test|check DIR|cache-clean' >&2; exit 2 ;;
+  *) echo 'Usage: buildkit.sh builder|build DIR [LB_ARGS...]|build-upgrade DIR|assemble DIR OUT|test|check DIR|cache-clean' >&2; exit 2 ;;
 esac

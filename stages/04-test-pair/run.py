@@ -87,13 +87,18 @@ def serial_config(config):
     return ''.join(lines)
 
 
-def prepare_copies(out, work, checksums):
+def prepare_copies(out, work, checksums, upgrade_release=None):
     # Copy the raw disks while QEMU's normal source locking is in effect.
     for side in ('a', 'b'):
         source = out / f'usb-{side}.img'
         target = work / source.name
         command('qemu-img', 'convert', '-f', 'raw', '-O', 'raw', str(source), str(target))
         require(digest(target) == checksums[source.name], 'Source changed during copying; stop all writers')
+
+        # Apply optional OS upgrades only after the disposable copy is verified.
+        if upgrade_release is not None:
+            subprocess.run([sys.executable, str(ROOT / 'stages/06-upgrade-os/copy_test.py'),
+                            str(target), str(upgrade_release)], check=True)
 
         # Enable serial login only in the disposable EFI filesystem.
         config = work / f'grub-{side}.cfg'
@@ -129,10 +134,11 @@ def qemu_args(work, sides, code, variables, accel):
 
 
 class Guest:
-    def __init__(self, child, expect, timeout):
+    def __init__(self, child, expect, timeout, expected_revision=None):
         self.child = child
         self.expect = expect
         self.timeout = timeout
+        self.expected_revision = expected_revision
 
     def login(self):
         # Accept either live autologin or the ordinary serial login prompt.
@@ -144,6 +150,8 @@ class Guest:
             self.child.sendline('password')
             self.child.expect(prompt, timeout=self.timeout)
         self.run('test "$(id -un)" = simlun')
+        if self.expected_revision is not None:
+            self.run('test "$(cat /usr/local/share/level1vault/source-commit)" = ' + shlex.quote(self.expected_revision))
 
         # Restore the shared checks after every ephemeral-root boot.
         encoded = base64.b64encode(GUEST.read_bytes()).decode()
@@ -189,12 +197,15 @@ def run_suite(args, expect, out, results, checksums, firmware, passphrase):
     # Keep copied workspace data temporary even when a test is interrupted.
     run_id = uuid.uuid4().hex[:16]
     completed = []
+    expected_revision = None
+    if args.upgrade_release is not None:
+        expected_revision = json.loads((args.upgrade_release / 'live/release.json').read_text())['source_commit']
     report = {'status': 'running', 'pair': args.pair, 'run': run_id,
               'source_checksums': checksums, 'completed': completed}
     try:
         with tempfile.TemporaryDirectory(prefix='disks-', dir=results) as temporary:
             work = Path(temporary)
-            prepare_copies(out, work, checksums)
+            prepare_copies(out, work, checksums, args.upgrade_release)
             for scenario in json.loads(SCENARIOS.read_text()):
                 print(f"QEMU: {scenario['name']} — {scenario['purpose']}", flush=True)
                 variables = work / 'vars.fd'
@@ -205,7 +216,7 @@ def run_suite(args, expect, out, results, checksums, firmware, passphrase):
                                          encoding='utf-8', codec_errors='replace', timeout=args.timeout)
                     child.logfile_read = log
                     try:
-                        guest = Guest(child, expect, args.timeout)
+                        guest = Guest(child, expect, args.timeout, expected_revision)
                         guest.login()
                         for phase, *value in scenario['steps']:
                             if phase == 'reboot':
@@ -254,6 +265,7 @@ def main():
     parser.add_argument('--accel', choices=('kvm', 'tcg'), default='kvm')
     parser.add_argument('--timeout', type=int, default=600, help='seconds per guest operation')
     parser.add_argument('--results', help='new directory for logs and result.json; otherwise choose writable storage automatically')
+    parser.add_argument('--upgrade-release', type=Path, help='test an OS release on disposable copies before booting')
     parser.add_argument('--passphrase-stdin', action='store_true', help='read one passphrase line from stdin')
     args = parser.parse_args()
     require(re.fullmatch(r'[1-9][0-9]*', args.pair) is not None, 'PAIR must be a positive integer')
@@ -277,6 +289,10 @@ def main():
     require(all(',' not in str(path) for path in firmware), 'QEMU paths must not contain commas')
     results = prepare_results(results, fallback)
     print(f'Results: {results}', flush=True)
+    if args.upgrade_release is not None:
+        require((args.upgrade_release / 'live/release.json').is_file(), 'OS upgrade release is missing')
+        for tool in ('mdir', 'mdeltree'):
+            require(shutil.which(tool) is not None, f'Missing host tool: {tool}')
     print('Checking source images; stop all VMs and detach their host loop mappings.', flush=True)
     checksums = verify_inputs(out, args.pair)
     if args.passphrase_stdin:

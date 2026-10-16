@@ -10,7 +10,7 @@ Install [Docker Engine with Buildx](https://docs.docker.com/engine/install/) and
 
 ```bash
 sudo apt update
-sudo apt install -y git make gdisk parted util-linux udev kmod python3 \
+sudo apt install -y git make gdisk parted fdisk dosfstools util-linux udev kmod python3 \
     qemu-system-x86 ovmf
 sudo systemctl enable --now docker
 # Your existing ZFS installation should already provide zpool/zfs/modprobe.

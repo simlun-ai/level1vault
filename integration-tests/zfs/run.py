@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import sys
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 KEY = 'integration-test-passphrase'
@@ -47,7 +49,7 @@ def prepare(base, pair, active=False):
     for side in ['a', 'b']:
         image = out/f'usb-{side}.img'
         command('truncate', '-s', '512M', str(image))
-        command('sgdisk', '--clear', '-n', '1:2048:+8M', '-t', '1:ef00',
+        command('sgdisk', '--clear', '-n', '1:2048:+64M', '-t', '1:ef00',
                 '-n', '2:0:0', '-t', '2:bf01', str(image), stdout=subprocess.DEVNULL)
         part_uuid = next(line.split(': ', 1)[1].strip().lower() for line in
                          run('sgdisk', '-i', '2', str(image)).splitlines() if line.startswith('Partition unique GUID:'))
@@ -63,6 +65,78 @@ def prepare(base, pair, active=False):
     command(*cmd, input=KEY + '\n', text=True)
     assert (out/'READY').exists()
     return out
+
+
+def verify_os_upgrade(out, base):
+    # Update real disposable FAT partitions and verify ZFS bytes remain unchanged.
+    sys.path.insert(0, str(ROOT/'stages/06-upgrade-os'))
+    sys.path.insert(0, str(ROOT/'stages/06-upgrade-os/tests'))
+    import upgrade
+    from upgrade_fixtures import make_boot, make_release
+    release = base/'upgrade-release'
+    manifest = make_release(release)
+    (release/'UPGRADE-READY').touch()
+    devices = []
+    try:
+        for side in ('a', 'b'):
+            loop = run('losetup', '--find', '--show', '--partscan', str(out/f'usb-{side}.img'))
+            devices.append(loop)
+            command('udevadm', 'settle')
+            command('mkfs.vfat', '-F', '32', '-i', os.urandom(4).hex(), loop+'p1')
+            esp_uuid = run('blkid', '-p', '-s', 'UUID', '-o', 'value', loop+'p1')
+            with upgrade.mounted(loop+'p1', readonly=False) as root:
+                make_boot(root, esp_uuid)
+        def edge_hash(loop):
+            image = Path(run('losetup', '--list', '--noheadings', '--output', 'BACK-FILE', loop))
+            with image.open('rb') as stream:
+                first = stream.read(1024 * 1024)
+                stream.seek(-1024 * 1024, os.SEEK_END)
+                return hashlib.sha256(first + stream.read()).hexdigest()
+
+        edges_before = [edge_hash(loop) for loop in devices]
+        data_before = [upgrade.digest(Path(loop+'p2')) for loop in devices]
+        table = json.loads(run('sfdisk', '--json', devices[0]))['partitiontable']
+        data_partition = table['partitions'][1]
+        sector_size = table.get('sectorsize', 512)
+        data_offset = data_partition['start'] * sector_size
+        data_size = data_partition['size'] * sector_size
+        tables_before = [run('sfdisk', '--dump', loop) for loop in devices]
+        describe = upgrade.describe_disk
+
+        def describe_test_loop(path, query):
+            # Exercise real layout and label checks on this test's loop devices.
+            assert str(path) in devices
+            info = describe(path, query)
+            assert info['type'] == 'loop'
+            info.update(type='disk', tran='usb')
+            return info
+
+        with patch.object(upgrade, 'describe_disk', side_effect=describe_test_loop):
+            upgrade.apply_release(release, '1', *map(Path, devices))
+            upgrade.apply_release(release, '1', *map(Path, devices))  # repeat the same release
+        assert [edge_hash(loop) for loop in devices] == edges_before
+        assert [upgrade.digest(Path(loop+'p2')) for loop in devices] == data_before
+        assert [run('sfdisk', '--dump', loop) for loop in devices] == tables_before
+        for loop in devices:
+            with upgrade.mounted(loop+'p1', readonly=True) as root:
+                upgrade.verify_payload(root, manifest)
+    finally:
+        for loop in reversed(devices):
+            command('losetup', '-d', loop)
+    # Exercise the unprivileged QEMU-copy updater on this disposable image too.
+    command('python3', str(ROOT/'stages/06-upgrade-os/copy_test.py'), str(out/'usb-a.img'), str(release))
+    value = hashlib.sha256()
+    with (out/'usb-a.img').open('rb') as stream:
+        stream.seek(data_offset)
+        remaining = data_size
+        while remaining:
+            block = stream.read(min(4*1024*1024, remaining))
+            assert block
+            value.update(block)
+            remaining -= len(block)
+    assert value.hexdigest() == data_before[0]
+    with (out/'SHA256SUMS').open('w') as stream:
+        command('sha256sum', 'usb-a.img', 'usb-b.img', 'images.json', cwd=out, stdout=stream)
 
 
 def interrupted_transfer(send, destination, readonly):
@@ -105,6 +179,8 @@ def main():
             for pair, pool in zip(PAIRS, POOLS):
                 prepare(base, pair, active=(pair == '1'))
                 owned.append(pool)
+
+            verify_os_upgrade(base/'pairs/1', base)
 
             # Verify pre-flash replica seeding and finalized image checksums.
             command('python3', str(ROOT/'stages/03-initialize-pair/seed.py'), str(base), '2')

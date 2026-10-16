@@ -69,7 +69,7 @@ When only inspecting a potentially stale original member, first fence every othe
 
 ## OS updates and limitations
 
-**Do not reflash complete images to update an existing pair with valuable data.** Whole-image writes overwrite the workspace with an old pool member. Rebuild the ISO in Docker, then on the host replace only each ESP's live payload, preserving that ESP's FAT UUID, GRUB configuration, partition table and data partition. Copy kernel/initrd as regular files with `cp -L`; use FAT-compatible copying (`rsync -rt`, not `-a`), retaining any `.disk` UUID markers from the new ISO. Back up the old payload and update/test one USB before the other. Such copies are not atomic.
+**Use `make upgrade-os PAIR=N DISK_A=... DISK_B=...` for existing pairs.** It rebuilds/inspects the OS and replaces only the FAT live payload and live-media markers, preserving disk-specific boot files, filesystem/partition identities, and the ZFS partitions. It updates A then B in place, without retaining an old OS copy. An interrupted copy can be repaired by rerunning the same verified release. See [OS upgrades](UPGRADES.md) for requirements, reports, release reuse and recovery. Whole-image `write-usb` remains for new pairs and overwrites workspace data.
 
 - The running root resets; FAT/SquashFS stored on USB are not physically write-protected or cryptographically verified.
 - Live changes and the ZFS ARC consume RAM; test the minimum hardware configuration.

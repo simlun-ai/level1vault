@@ -8,9 +8,12 @@ import os
 from pathlib import Path
 import re
 import shutil
-import stat
 import subprocess
 import sys
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'common'))
+from usb_devices import describe_disk, imported_devices, validate_idle
 
 
 def output(*args):
@@ -46,34 +49,12 @@ def verify_images(out, pair):
 
 
 def disk_info(path):
-    # Resolve device aliases and identify the whole disk and its descendants.
-    path = path.resolve(strict=True)
-    require(stat.S_ISBLK(path.stat().st_mode), f'Not a block device: {path}')
-    devices = json.loads(output('lsblk', '--json', '--bytes', '--paths', '--output',
-                               'NAME,TYPE,SIZE,TRAN,RO,MOUNTPOINTS,MODEL,SERIAL', str(path)))['blockdevices']
-    require(len(devices) == 1, f'Expected one whole disk: {path}')
-    info = devices[0]
-    info['device_id'] = path.stat().st_rdev
-    require(Path(info['name']).resolve() == path, 'Disk identity changed during inspection')
-    return info
-
-
-def descendants(info):
-    yield info
-    for child in info.get('children', []):
-        yield from descendants(child)
+    return describe_disk(path, output)
 
 
 def validate_disk(info, image_size, imported):
-    # Reject non-USB disks, undersized media, and devices still in use.
-    require(info['type'] == 'disk' and info.get('tran') == 'usb', f"Select a whole USB disk: {info['name']}")
+    validate_idle(info, imported)
     require(int(info['size']) >= image_size, f"Disk is too small: {info['name']}")
-    for device in descendants(info):
-        name = device['name']
-        require(device['type'] in ('disk', 'part'), f'Device has active holders: {name}')
-        require(not device.get('ro'), f'Read-only device: {name}')
-        require(not any(device.get('mountpoints') or []), f'Mounted filesystem or swap on {name}; unmount it first')
-        require(Path(name).resolve() not in imported, f'Imported ZFS pool uses {name}; export it first')
 
 
 def write_pair(out, pair, disk_a, disk_b):
@@ -87,12 +68,7 @@ def write_pair(out, pair, disk_a, disk_b):
                 'Source images have host loop mappings; detach them first')
 
     # Identify imported pool members without importing or modifying any pool.
-    imported = set()
-    for pool in output('zpool', 'list', '-H', '-o', 'name').splitlines():
-        for line in output('zpool', 'status', '-LP', pool).splitlines():
-            fields = line.split()
-            if fields and fields[0].startswith('/'):
-                imported.add(Path(fields[0]).resolve())
+    imported = imported_devices(output)
 
     # Validate both destinations before the first destructive operation.
     disks = [disk_info(disk_a), disk_info(disk_b)]

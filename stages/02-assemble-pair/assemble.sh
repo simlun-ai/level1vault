@@ -33,32 +33,14 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# Select the live filesystem, kernel, and initramfs.
-xorriso -osirrox on -indev "$ISO" -extract / "$TMP/iso"
-SQUASH="$TMP/iso/live/filesystem.squashfs"
-[[ -f $SQUASH ]] || { echo 'Missing filesystem.squashfs' >&2; exit 1; }
-KERNEL=$(unsquashfs -cat "$SQUASH" usr/local/share/level1vault/kernel-version)
-TARGET_ZFS=$(unsquashfs -cat "$SQUASH" usr/local/share/level1vault/zfsutils-version)
-[[ $KERNEL =~ ^[0-9][a-zA-Z0-9.+_-]*$ ]] || { echo 'Invalid kernel metadata' >&2; exit 1; }
-VMLINUX="$TMP/iso/live/vmlinuz-$KERNEL"
-INITRD="$TMP/iso/live/initrd.img-$KERNEL"
-[[ -f $VMLINUX ]] || VMLINUX="$TMP/iso/live/vmlinuz"
-[[ -f $INITRD ]] || INITRD="$TMP/iso/live/initrd.img"
-[[ -f $VMLINUX && -f $INITRD ]] || { echo 'Missing selected kernel/initrd' >&2; exit 1; }
-for file in "$SQUASH" "$VMLINUX" "$INITRD"; do
-  [[ $(stat -Lc %s "$file") -lt 4294967296 ]] || { echo "FAT32 file too large: $file" >&2; exit 1; }
-done
-# Leave space for FAT tables, standalone GRUB and metadata. mcopy also checks capacity.
-REQUIRED=$(( $(stat -Lc %s "$SQUASH") + $(stat -Lc %s "$VMLINUX") + $(stat -Lc %s "$INITRD") + 32*1024*1024 ))
-(( REQUIRED < ESP_MIB*1024*1024 )) || { echo 'Payload does not fit ESP' >&2; exit 1; }
-
-# Prepare the boot payload shared by both drives.
-mkdir -p "$TMP/payload/live" "$TMP/payload/boot/grub" "$TMP/payload/EFI/BOOT"
-cp -L -- "$VMLINUX" "$TMP/payload/live/vmlinuz"
-cp -L -- "$INITRD" "$TMP/payload/live/initrd.img"
-cp -- "$SQUASH" "$TMP/payload/live/filesystem.squashfs"
-unsquashfs -cat "$SQUASH" usr/local/share/level1vault/packages.tsv > "$TMP/payload/live/packages.tsv"
-if [[ -d $TMP/iso/.disk ]]; then cp -rL -- "$TMP/iso/.disk" "$TMP/payload/"; fi
+# Prepare the OS payload shared with in-place upgrades.
+SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+python3 "$SOURCE_DIR/common/live_payload.py" "$ISO" "$TMP/payload"
+KERNEL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["kernel"])' "$TMP/payload/live/release.json")
+TARGET_ZFS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["zfs_package"])' "$TMP/payload/live/release.json")
+REQUIRED=$(du -sb "$TMP/payload" | cut -f1)
+(( REQUIRED + 32*1024*1024 < ESP_MIB*1024*1024 )) || { echo 'Payload does not fit ESP' >&2; exit 1; }
+mkdir -p "$TMP/payload/boot/grub" "$TMP/payload/EFI/BOOT"
 
 # Create two independently bootable disk images.
 for name in a b; do

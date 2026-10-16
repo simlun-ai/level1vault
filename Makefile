@@ -14,12 +14,13 @@ DEBIAN_IMAGE ?= debian:trixie
 FRESH ?= 0
 SUDO ?= sudo
 N ?=
+UPGRADE_DIR ?=
 DISK_A ?=
 DISK_B ?=
-export BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A DISK_B N
+export BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A DISK_B N UPGRADE_DIR
 
 # Expose the supported project lifecycle commands.
-.PHONY: help prepare-pairs build builder assemble initialize verify lint test-unit test test-container test-zfs test-qemu write-usb check-build clean cache-clean
+.PHONY: help prepare-pairs build builder assemble initialize verify lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
@@ -29,6 +30,7 @@ help:
 	  'make assemble PAIR=2              Prepare another pair from the existing ISO' \
 	  'make initialize PAIR=2            Initialize an empty replica' \
 	  'make write-usb DISK_A=/dev/sda DISK_B=/dev/sdb  Write the selected USB pair (destructive)' \
+	  'make upgrade-os PAIR=2 DISK_A=/dev/sda DISK_B=/dev/sdb  Replace the existing OS only' \
 	  'make verify [OUT=...]             Check READY and final image checksums' \
 	  'make test                        Run local lint and unit/behavior tests' \
 	  'make test-container              Test real assembly and login in Trixie' \
@@ -71,6 +73,12 @@ verify:
 write-usb:
 	@[[ -n "$$DISK_A" && -n "$$DISK_B" ]] || { echo 'Set both DISK_A and DISK_B; identify disks with lsblk first' >&2; exit 2; }
 	$(SUDO) python3 stages/05-write-usb/write.py --out "$$OUT" --pair "$$PAIR" --disk-a "$$DISK_A" --disk-b "$$DISK_B"
+
+# Rebuild the OS and upgrade one explicitly identified existing pair in place.
+upgrade-os:
+	@[[ '$(origin PAIR)' == 'command line' || '$(origin PAIR)' == environment ]] || { echo 'Set PAIR explicitly for an OS upgrade' >&2; exit 2; }
+	@[[ "$$PAIR" =~ ^[1-9][0-9]*$$ && -n "$$DISK_A" && -n "$$DISK_B" ]] || { echo 'Set PAIR, DISK_A and DISK_B; identify disks with lsblk first' >&2; exit 2; }
+	$(SUDO) env BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" FRESH="$$FRESH" python3 pipeline/upgrade-os.py --pair "$$PAIR" --disk-a "$$DISK_A" --disk-b "$$DISK_B" --release "$$UPGRADE_DIR"
 
 # Check shell scripts for syntax and lint errors.
 lint:

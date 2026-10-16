@@ -148,8 +148,15 @@ class QemuTests(unittest.TestCase):
                 self.assertIn(str(work), args[args.index('-i') + 1])
             return ''
 
-        with patch.object(runner, 'command', side_effect=fake_command):
-            runner.prepare_copies(self.out, work, self.checksums)
+        with patch.object(runner, 'command', side_effect=fake_command), \
+                patch.object(runner.subprocess, 'run') as upgrade_copy:
+            runner.prepare_copies(self.out, work, self.checksums, self.base / 'release')
+        self.assertEqual(upgrade_copy.call_count, 2)
+        for call, side in zip(upgrade_copy.call_args_list, ('a', 'b')):
+            args = call.args[0]
+            self.assertTrue(args[1].endswith('stages/06-upgrade-os/copy_test.py'))
+            self.assertEqual(Path(args[2]), work / f'usb-{side}.img')
+            self.assertNotIn(str(self.out / f'usb-{side}.img'), args)
         self.assertEqual(self.verify(), self.checksums)
         self.assertIn('console=ttyS0', (work / 'grub-b.cfg').read_text())
 

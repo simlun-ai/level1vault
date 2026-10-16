@@ -14,6 +14,8 @@ def render():
 
 Input: an initialized active pair, pair ID, passphrase, and OVMF firmware. Output: private logs and `result.json` under the build run’s `validation/` directory, falling back to `~/level1vault-qemu/<test-run>/` if permissions prevent that. Run `make test-qemu` as your desktop user on the workstation for pair 1; no extra arguments are required (see [QEMU setup](../../docs/QEMU.md)). This optional stage tests disposable copies; originals remain unchanged. On failure inspect the report and logs, then rerun with a new results directory. Tests: `make test` checks the runner and this generated manual; actual boots are workstation-only.
 
+For OS-upgrade testing, `QEMU_ARGS="--upgrade-release /path/to/release"` replaces the OS payload only in disposable copies before these same checks. See [OS upgrade acceptance](../../docs/UPGRADES.md#workstation-qemu-acceptance).
+
 ## Shared manual acceptance checks
 
 [QEMU setup and automated runner](../../docs/QEMU.md) · [Documentation index](../../docs/README.md)

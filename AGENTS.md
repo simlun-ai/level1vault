@@ -30,6 +30,7 @@
 - Keep workspace import and mounting explicit through `workspace-mount`; use `workspace-umount` to sync and export before disconnecting.
 - Support arbitrary numerically ordered pairs named `workspace-N`; active/replica is state, not a permanent part of the name.
 - Preserve passphrase encryption, UID/GID 2000 ownership, explicit fencing, and refusal to overwrite divergent history.
+- Existing-pair OS upgrades replace only FAT live payload/markers in place; preserve EFI/GRUB files, UUIDs, GPT, and ZFS partitions. Do not add retained OS copies or rollback menus without a new requirement.
 - Cleanup must preserve initialized images and workspace data and refuse resources still in use.
 
 ## Validation and delivery

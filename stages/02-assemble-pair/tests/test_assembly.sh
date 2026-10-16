@@ -8,6 +8,7 @@ trap 'rm -rf -- "$TASK_TMP"' EXIT
 # Create a small synthetic live ISO.
 mkdir -p "$TASK_TMP/root/usr/local/share/level1vault" "$TASK_TMP/iso/live" "$TASK_TMP/iso/.disk"
 printf '6.12.0-test-amd64\n' > "$TASK_TMP/root/usr/local/share/level1vault/kernel-version"
+printf '%040d\n' 1 > "$TASK_TMP/root/usr/local/share/level1vault/source-commit"
 printf '2.3-test\n' > "$TASK_TMP/root/usr/local/share/level1vault/zfsutils-version"
 printf 'zfsutils-linux\t2.3-test\n' > "$TASK_TMP/root/usr/local/share/level1vault/packages.tsv"
 mksquashfs "$TASK_TMP/root" "$TASK_TMP/iso/live/filesystem.squashfs" -noappend -processors 1 >/dev/null

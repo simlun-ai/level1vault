@@ -8,6 +8,8 @@ on:
       - 'stages/01-build-live/**'
       - 'stages/02-assemble-pair/**'
       - 'runtime/**'
+      - 'common/**'
+      - 'stages/06-upgrade-os/**'
       - '.github/workflows/build-smoke.yml'
   workflow_dispatch:
   push:
@@ -19,6 +21,8 @@ on:
       - 'stages/01-build-live/**'
       - 'stages/02-assemble-pair/**'
       - 'runtime/**'
+      - 'common/**'
+      - 'stages/06-upgrade-os/**'
       - '.github/workflows/build-smoke.yml'
 permissions:
   contents: read

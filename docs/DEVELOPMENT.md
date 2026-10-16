@@ -8,6 +8,7 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 
 | Command | Result |
 | --- | --- |
+| `make upgrade-os PAIR=2 DISK_A=... DISK_B=...` | Rebuild/reuse an OS release and upgrade an existing pair in place |
 | `make prepare-pairs N=3` | Build once and prepare N complete pairs with prompts up front |
 | `make build` | Build the Trixie toolchain, live ISO and first prepared image pair in a new `build/default/` |
 | `make initialize PAIR=1 ACTIVE=1` | Initialize the first writable encrypted mirror on the host; prompt for its passphrase |
@@ -106,6 +107,8 @@ There is intentionally no target that deletes initialized image pairs. They can 
 | `stages/03-initialize-pair/` | Host ZFS initialization, verification and tests |
 | `stages/04-test-pair/` | Workstation QEMU runner, shared guest checks, generated manual and tests |
 | `stages/05-write-usb/` | Physical USB writer, safety checks, procedure and tests |
+| `stages/06-upgrade-os/` | In-place OS updater, release export and refusal/retry tests |
+| `common/` | Live payload extraction and USB inspection shared by multiple stages |
 | `runtime/` | Shipped workspace commands and behavior tests |
 | `integration-tests/zfs/` | Native cross-stage pool integration on explicitly disposable environments |
 | `docs/` | Cross-cutting operator and technical references |

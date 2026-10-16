@@ -76,6 +76,14 @@ if args[:2] == ['buildx', 'build']:
         self.assertNotEqual(self.run_task('build', self.base/'failed').returncode, 0)
         self.assertEqual(len(self.builds()), 1)
 
+    def test_upgrade_build_exports_only_the_release_target(self):
+        result = self.run_task('build-upgrade', self.base/'upgrade')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = self.builds()[0]
+        self.assertEqual(args[args.index('--target') + 1], 'upgrade-artifacts')
+        self.assertIn('security.insecure', args)
+        self.assertIn('repository-input=', ' '.join(args))
+
     def test_initialized_images_are_rejected_before_inspection_build(self):
         build = self.base/'build'
         (build/'pairs/1').mkdir(parents=True)

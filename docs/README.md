@@ -11,6 +11,7 @@ Start with the [quick start](../README.md) to build and use the first pair. Thes
 | [3. Initialize workspace](../stages/03-initialize-pair/README.md) | Prepared images + identity/passphrase → initialized pair | Host ZFS |
 | [4. Test a pair](../stages/04-test-pair/README.md) | Initialized active pair → acceptance logs/report | Workstation QEMU; optional |
 | [5. Write USB drives](../stages/05-write-usb/README.md) | Initialized images + identified disks → physical sticks | Host; `make write-usb` |
+| [6. Upgrade existing OS](../stages/06-upgrade-os/README.md) | Inspected payload + existing pair → updated OS, preserved ZFS | Host; `make upgrade-os` |
 
 [Pipeline orchestration](../pipeline/README.md) connects the stages. [Runtime](../runtime/README.md) contains the installed commands; [ZFS integration](../integration-tests/zfs/README.md) tests their interactions with provisioning.
 
@@ -20,6 +21,7 @@ Start with the [quick start](../README.md) to build and use the first pair. Thes
 | --- | --- |
 | [Build](BUILD.md) | Linux host prerequisites, Docker boundary, initialization, artifacts, failed builds and reproducibility |
 | [BuildKit](BUILDKIT.md) | Dockerfile stages, artifact export, privileges, cache, identities and storage |
+| [OS upgrades](UPGRADES.md) | In-place updates, release reuse, retries and testing |
 | [Writing USB drives](../stages/05-write-usb/README.md) | Device selection, checksums, flashing and GPT relocation |
 | [QEMU testing](QEMU.md) | Firmware setup, guest checks, persistent writes and checksum refresh |
 | [Shared QEMU checks](../stages/04-test-pair/README.md) | Generated manual commands matching the automated boot, reboot, degraded-write and rejoin scenarios |

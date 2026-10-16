@@ -78,6 +78,17 @@ sudo poweroff
 
 If export fails, resolve the busy filesystem and retry before removing drives. Keep the boot stick connected until shutdown. Never write independently to separated mirror members.
 
+## Upgrade the OS on existing pairs
+
+Commit your program/configuration changes, export and unmount the selected pair, then identify its two whole USB disks:
+
+```bash
+lsblk -o NAME,PATH,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINTS
+make upgrade-os PAIR=2 DISK_A=/dev/sda DISK_B=/dev/sdb
+```
+
+This rebuilds and verifies the OS once, then replaces the FAT OS files on A and B in place. ZFS partitions, disk identities and existing boot configuration are preserved. Repeat for other pairs to reuse the same release. An interrupted copy can be repaired by rerunning the same release. [Upgrade details, release reuse and recovery →](docs/UPGRADES.md)
+
 ## More commands
 
 ```bash

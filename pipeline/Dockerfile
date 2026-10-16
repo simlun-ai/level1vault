@@ -15,6 +15,8 @@ FROM toolchain AS source
 COPY stages/01-build-live/ /src/stages/01-build-live/
 COPY stages/02-assemble-pair/ /src/stages/02-assemble-pair/
 COPY runtime/ /src/runtime/
+COPY common/ /src/common/
+COPY stages/06-upgrade-os/ /src/stages/06-upgrade-os/
 
 # Accept the full committed source history without local Git configuration.
 FROM scratch AS repository-input
@@ -64,3 +66,9 @@ COPY --from=build-input / /inspect/
 RUN bash /src/stages/01-build-live/inspect.sh /inspect --iso-only && mkdir /results && touch /results/inspection-passed
 FROM scratch AS inspection-results
 COPY --from=inspection /results/ /
+
+# Export an inspected OS release without assembling or initializing disk images.
+FROM live AS upgrade-release
+RUN bash /src/stages/06-upgrade-os/build-release.sh
+FROM scratch AS upgrade-artifacts
+COPY --from=upgrade-release /release/ /
