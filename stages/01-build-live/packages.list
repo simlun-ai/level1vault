@@ -13,7 +13,7 @@ udev
 util-linux
 ca-certificates
 curl
-vim-tiny
+vim
 tmux
 jq
 iproute2
@@ -21,3 +21,11 @@ iputils-ping
 ifupdown
 isc-dhcp-client
 python3
+pass
+cryptsetup
+git
+gnupg
+pinentry-curses
+restic
+rsync
+yubikey-manager
