@@ -58,4 +58,6 @@ Pair IDs below are examples; use the IDs printed on your USB pairs.
 Export successfully before removing workspace drives; keep the boot USB
 connected until shutdown. OS changes reset on reboot; workspace data persists.
 More options: workspace-sync --help or workspace-activate --help
+
+Passphrase hint: Ho.
 MOTD
