@@ -80,8 +80,21 @@ def clean(build):
     print('Retained ISO, image pairs, manifests and logs. Use a fresh BUILD_DIR for the next build.')
 
 
+def clean_selected(build):
+    # Reject aliases before selecting any legacy cleanup destinations.
+    if build.is_symlink() or build.absolute() != build.resolve():
+        raise ValueError('Use the real build directory path, without symlinks or ..')
+
+    # Include recognized legacy work when cleaning the default build run.
+    if build.resolve() == ROOT / 'build/default':
+        legacy = ROOT / 'build'
+        if any((legacy / name).exists() or (legacy / name).is_symlink() for name in TRANSIENT):
+            clean(legacy)
+    clean(build)
+
+
 if __name__ == '__main__':
     try:
-        clean(Path(sys.argv[1]))
+        clean_selected(Path(sys.argv[1]))
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         sys.exit(f'Cleanup refused: {error}')

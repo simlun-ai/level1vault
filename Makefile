@@ -13,10 +13,12 @@ BUILDX_BUILDER ?= level1vault
 DEBIAN_IMAGE ?= debian:trixie
 FRESH ?= 0
 SUDO ?= sudo
-export BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH
+DISK_A ?=
+DISK_B ?=
+export BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A DISK_B
 
 # Expose the supported project lifecycle commands.
-.PHONY: help build builder assemble initialize verify lint test-unit test test-container test-zfs test-qemu check-build clean cache-clean
+.PHONY: help build builder assemble initialize verify lint test-unit test test-container test-zfs test-qemu write-usb check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
@@ -24,6 +26,7 @@ help:
 	  'make initialize PAIR=1 ACTIVE=1   Create the first encrypted, writable workspace' \
 	  'make assemble PAIR=2              Prepare another pair from the existing ISO' \
 	  'make initialize PAIR=2            Initialize an empty replica' \
+	  'make write-usb DISK_A=/dev/sda DISK_B=/dev/sdb  Write the selected USB pair (destructive)' \
 	  'make verify [OUT=...]             Check READY and final image checksums' \
 	  'make test                        Run local lint and unit/behavior tests' \
 	  'make test-container              Test real assembly and login in Trixie' \
@@ -56,6 +59,11 @@ initialize:
 verify:
 	@test -f "$$OUT/READY" || { echo "Not ready: $$OUT/READY is missing" >&2; exit 1; }
 	bash stages/03-initialize-pair/verify.sh "$$OUT"
+
+# Write an initialized pair to two explicitly identified whole USB disks.
+write-usb:
+	@[[ -n "$$DISK_A" && -n "$$DISK_B" ]] || { echo 'Set both DISK_A and DISK_B; identify disks with lsblk first' >&2; exit 2; }
+	$(SUDO) python3 stages/05-write-usb/write.py --out "$$OUT" --pair "$$PAIR" --disk-a "$$DISK_A" --disk-b "$$DISK_B"
 
 # Check shell scripts for syntax and lint errors.
 lint:

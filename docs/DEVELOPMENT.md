@@ -83,7 +83,7 @@ make clean                       # default build directory
 make clean BUILD_DIR=build-next  # a selected build directory
 ```
 
-Current builds export artifacts only; their working state is in BuildKit. Use `make cache-clean` to prune its unused cache. For legacy builds, cleanup removes only `chroot/`, `cache/`, `config/` and `binary/` inside a recognized build directory. It retains the ISO, every image pair (including initialized workspaces), manifests, logs, checksums and state markers. It never exports pools, detaches loops or deletes Docker images. Docker must be available for checks when there is build work to remove. Cleanup refuses active container binds, mounted filesystems and loop-backed files under that build, as well as unexpected paths or symlinks.
+Current builds export artifacts only; their working state is in BuildKit. Use `make cache-clean` to prune its unused cache. The default `make clean` also checks recognized legacy work directly under `build/`, including `build/binary/`. Selecting another `BUILD_DIR` cleans only that directory. For legacy builds, cleanup removes only `chroot/`, `cache/`, `config/` and `binary/` inside a recognized build directory. It retains the ISO, every image pair (including initialized workspaces), manifests, logs, checksums and state markers. It never exports pools, detaches loops or deletes Docker images. Docker must be available for checks when there is build work to remove. Cleanup refuses active container binds, mounted filesystems and loop-backed files under that build, as well as unexpected paths or symlinks.
 
 The retained build is an archive of artifacts, not a reusable live-build working directory. The builder still refuses an existing directory, so rebuild with a fresh name:
 
@@ -104,7 +104,7 @@ There is intentionally no target that deletes initialized image pairs. They can 
 | `stages/02-assemble-pair/` | File-only disk assembly and stage tests |
 | `stages/03-initialize-pair/` | Host ZFS initialization, verification and tests |
 | `stages/04-test-pair/` | Workstation QEMU runner, shared guest checks, generated manual and tests |
-| `stages/05-write-usb/` | Manual physical disk-writing procedure |
+| `stages/05-write-usb/` | Physical USB writer, safety checks, procedure and tests |
 | `runtime/` | Shipped workspace commands and behavior tests |
 | `integration-tests/zfs/` | Native cross-stage pool integration on explicitly disposable environments |
 | `docs/` | Cross-cutting operator and technical references |

@@ -27,15 +27,35 @@ lsblk -o NAME,PATH,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINTS
 **The following overwrites both selected disks.** Replace `/dev/sda` and `/dev/sdb` with your verified USB devices. Unmount their partitions and export their pools first. Stop QEMU and detach any image loops; do not connect other copies of this same pair.
 
 ```bash
-make verify
-sudo dd if=build/default/pairs/1/usb-a.img of=/dev/sda bs=4M conv=fsync status=progress
-sudo dd if=build/default/pairs/1/usb-b.img of=/dev/sdb bs=4M conv=fsync status=progress
-sudo sgdisk -e /dev/sda
-sudo sgdisk -e /dev/sdb
-sudo partprobe /dev/sda /dev/sdb
+make write-usb DISK_A=/dev/sda DISK_B=/dev/sdb
 ```
 
 Label the sticks **1-A** and **1-B**. [Writing details and other output directories →](stages/05-write-usb/README.md)
+
+## Add more pairs
+
+Reuse the existing ISO; there is no need to rebuild the OS for each pair. Choose a new unused numeric ID and output directory. For example, create pair 2 as an empty replica:
+
+```bash
+make assemble PAIR=2
+make initialize PAIR=2
+lsblk -o NAME,PATH,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINTS
+# Identify two NEW destination USB disks; this overwrites both selected disks.
+make write-usb PAIR=2 DISK_A=/dev/sda DISK_B=/dev/sdb
+```
+
+Use your original `BUILD_DIR` if different from `build/default`. Label the sticks **2-A/2-B**, retain their manifest/serials, and test each boots independently. Each pair needs fresh identities; never clone an existing initialized pair.
+
+Connect the current active pair and both new sticks to one live computer, leaving the replica unmounted. If pair 1 is still active, populate pair 2:
+
+```bash
+sudo workspace-sync 1 2
+sudo zpool status workspace-2     # require both members ONLINE, no errors
+cd /
+sudo workspace-umount 2
+```
+
+Use the current active ID after a failover. Repeat with IDs 3, 4, and so on; omit `ACTIVE=1` when initializing replicas. `READY` means flashable, not a completed backup: [unlock/read-check the replica](docs/PAIRS.md#unlock-read-and-verify-a-replica) before relying on it. Later, `sudo workspace-sync 1 2 3` updates connected replicas from a shared checkpoint. [Pair operations and rotation →](docs/PAIRS.md)
 
 ## Use the live system
 

@@ -33,6 +33,31 @@ class CleanupTests(unittest.TestCase):
             self.assertTrue((build/'build.log').exists())
             self.assertTrue((build/'live-image-amd64.hybrid.iso').exists())
 
+    def test_default_cleanup_includes_legacy_binary_and_preserves_current_images(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            legacy = root / 'build'
+            current = legacy / 'default'
+            current.mkdir(parents=True)
+            (legacy / 'builder-image.json').write_text('[]')
+            (legacy / 'binary').mkdir()
+            (legacy / 'binary/work').write_text('temporary')
+            (current / 'builder-info.txt').write_text('builder')
+            (current / 'usb-a.img').write_text('keep')
+            with patch.object(cleaner, 'ROOT', root), \
+                    patch.object(cleaner, 'output', side_effect=['', json.dumps({'loopdevices': []})]), \
+                    patch.object(cleaner, 'mountinfo', return_value=''):
+                cleaner.clean_selected(current)
+            self.assertFalse((legacy / 'binary').exists())
+            self.assertEqual((current / 'usb-a.img').read_text(), 'keep')
+
+    def test_custom_cleanup_does_not_select_other_builds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build = Path(tmp).resolve() / 'custom'
+            with patch.object(cleaner, 'clean') as clean:
+                cleaner.clean_selected(build)
+            clean.assert_called_once_with(build)
+
     def test_refuses_mount_container_and_loop(self):
         build = Path('/build-test')
         cases = [

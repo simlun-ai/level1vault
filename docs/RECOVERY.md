@@ -136,7 +136,7 @@ With pair 2 active and pair 3 successfully rebound, replace the lost pair with a
 
    These use `build/default`; use your original `BUILD_DIR` if different. Do not set `ACTIVE=1` or clone an existing pair's initialized images.
 
-2. Follow [Writing USB drives](../stages/05-write-usb/README.md), identifying two new whole disks by serial/model before destructive writes. Use `build/default/pairs/4/usb-a.img` and `usb-b.img` as the inputs, and `make verify PAIR=4` for verification. Label the sticks **4A/4B**, save their manifest/serials outside the pools, and test each stick boots independently. Disconnect image loops and duplicate copies before attaching the physical pair.
+2. Follow [Writing USB drives](../stages/05-write-usb/README.md), identifying two new whole disks by serial/model before destructive writes. Run `make write-usb PAIR=4 DISK_A=/dev/sda DISK_B=/dev/sdb`, replacing both example devices with the verified whole disks. The target verifies and writes the pair 4 images. Label the sticks **4A/4B**, save their manifest/serials outside the pools, and test each stick boots independently. Disconnect image loops and duplicate copies before attaching the physical pair.
 
 3. On the live computer owning active pair 2, attach both sticks of pairs 3 and 4. Keep both replicas unmounted, then run:
 
