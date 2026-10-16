@@ -17,7 +17,7 @@ Docker shares the running host kernel. The container compiles ZFS **for Debian's
 
 ## Live system and disk layout
 
-The live image includes one Debian amd64 kernel and matching headers. Its chroot hook runs `dkms autoinstall -k <target-version>`, `depmod` and `modinfo` for that kernel, then regenerates initramfs. No running-host `uname -r` is used to select the target kernel. `zfs-initramfs` is excluded because the data pool must not be a boot dependency. Import/mount services and the ZFS systemd mount generator are disabled.
+The live image includes one Debian amd64 kernel and a matching `level1vault-zfs-modules` Debian package. Its chroot hook temporarily installs headers, compilers, and DKMS, runs `dkms autoinstall -k <target-version>`, and packages the complete compiled module set under `/usr/lib/modules/<target-version>/extra/level1vault/`. The standalone package depends on the exact target kernel package and ZFS userland version and provides `zfs-modules`. The hook then purges the temporary build packages, verifies module ownership, vermagic, and dependency resolution, and regenerates initramfs. The shipped OS has no compiler, headers, or DKMS. No running-host `uname -r` is used to select the target kernel. `zfs-initramfs` is excluded because the data pool must not be a boot dependency. Import/mount services and the ZFS systemd mount generator are disabled.
 
 Assembly uses `xorriso` to extract the ISO, `sgdisk` to partition regular files, `mkfs.vfat`/mtools to populate separate FAT images, and `grub-mkstandalone` to generate each fallback EFI loader. It embeds each FAT image at partition 1's offset. No assembly-time loop devices, udev daemon, mounts, or ZFS are needed.
 
@@ -25,7 +25,7 @@ Assembly uses `xorriso` to extract the ISO, `sgdisk` to partition regular files,
 
 | Area | Finding in supplied draft | Resolution / remaining check |
 | --- | --- | --- |
-| live-build kernel packages | `linux-image linux-headers` with flavour amd64 is valid. | Retained; hook now rejects zero or multiple bootable kernels. |
+| live-build kernel packages | `linux-image linux-headers` with flavour amd64 is valid. | Only `linux-image` is permanent; matching headers are temporary build dependencies. The hook rejects zero or multiple bootable kernels. |
 | live-build environment | Host defaults and recommended packages affect the image implicitly. | Ignore system defaults, disable recommendations, explicitly include live-config-systemd, a fixed simlun account hook, initramfs backend, DKMS build dependencies and console tools. |
 | headless access | No SSH server or remote authentication configuration; the local live account is explicitly provisioned. | Local console bring-up is explicit; remote access is not promised. Networking on actual NICs still needs testing. |
 | DKMS | Presence check is useful, but an empty kernel loop could succeed. Existing initramfs was not refreshed after identity/cache cleanup. | Exactly one kernel required; matching headers/DKMS/depmod/modinfo; regenerate initramfs afterward. Guest modprobe is required to validate loadability. |

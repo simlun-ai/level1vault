@@ -19,6 +19,21 @@ chroot "$ROOT" modinfo -k "$KERNEL" zfs
 VERMAGIC=$(chroot "$ROOT" modinfo -k "$KERNEL" -F vermagic zfs)
 [[ $VERMAGIC == "$KERNEL "* ]] || { echo 'ZFS kernel vermagic mismatch' >&2; exit 1; }
 
+# Verify independent module ownership and the absence of the build toolchain.
+MODULE=$(chroot "$ROOT" modinfo -k "$KERNEL" -n zfs)
+CANONICAL=$(chroot "$ROOT" readlink -f "$MODULE")
+[[ $CANONICAL == "/usr/lib/modules/$KERNEL/extra/level1vault/"* ]]
+chroot "$ROOT" dpkg-query -S "$CANONICAL" | grep -q '^level1vault-zfs-modules:'
+chroot "$ROOT" modprobe --show-depends --set-version "$KERNEL" zfs
+for tool in cc gcc g++ c++ clang make dkms; do
+  if chroot "$ROOT" sh -c 'command -v "$1"' sh "$tool"; then
+    echo "Unexpected build tool: $tool" >&2; exit 1
+  fi
+done
+[[ -z $(find "$ROOT/usr/src" -mindepth 1 -print -quit) ]]
+test ! -e "$ROOT/usr/local/lib/level1vault/build"
+chroot "$ROOT" dpkg --audit
+
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-umount"

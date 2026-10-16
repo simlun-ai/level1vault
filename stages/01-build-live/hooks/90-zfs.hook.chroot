@@ -6,7 +6,7 @@ if dpkg-query -W -f='${Status}' zfs-initramfs 2>/dev/null | grep -q 'install ok 
     exit 1
 fi
 
-# Build and verify ZFS support for the single target kernel.
+# Identify the single Debian kernel that the live image will boot.
 count=0
 for mods in /lib/modules/*; do
     [ -d "$mods" ] || continue
@@ -14,14 +14,63 @@ for mods in /lib/modules/*; do
     [ -f "/boot/vmlinuz-$version" ] || continue
     count=$((count + 1))
     kernel_version=$version
-    [ -d "/usr/src/linux-headers-$version" ] || {
-        echo "ERROR: missing headers for $version" >&2; exit 1;
-    }
-    dkms autoinstall -k "$version"
-    depmod "$version"
-    modinfo -k "$version" zfs >/dev/null
 done
 [ "$count" -eq 1 ] || { echo "ERROR: expected one kernel, found $count" >&2; exit 1; }
+
+# Install temporary build dependencies while protecting the runtime package set.
+build=/usr/local/lib/level1vault/build
+work=$(mktemp -d)
+trap 'rm -rf -- "$work"' EXIT
+export DEBIAN_FRONTEND=noninteractive
+dpkg-query -W -f='${binary:Package}\t${db:Status-Status}\n' | awk '$2 == "installed" {print $1}' | sort > "$work/runtime-packages"
+apt-mark showauto > "$work/runtime-auto"
+xargs -r apt-mark manual < "$work/runtime-packages"
+sed "s/@KERNEL@/$kernel_version/g" "$build/build-packages.list" > "$work/build-packages"
+apt-get update
+xargs -r apt-get install -y --no-install-recommends < "$work/build-packages"
+dkms autoinstall -k "$kernel_version"
+depmod "$kernel_version"
+modinfo -k "$kernel_version" zfs >/dev/null
+mkdir -p /usr/local/share/level1vault
+dpkg-query -W -f='${binary:Package}\t${Version}\n' | sort > /usr/local/share/level1vault/zfs-build-packages.tsv
+
+# Preserve the complete module set in a package that DKMS removal cannot delete.
+zfs_version=$(dpkg-query -W -f='${Version}' zfsutils-linux)
+python3 "$build/package-zfs.py" "$kernel_version" "$zfs_version" "$(dpkg --print-architecture)" \
+    "/lib/modules/$kernel_version/updates/dkms" /usr/share/doc/zfs-dkms/copyright "$work/zfs-modules.deb"
+dpkg -i "$work/zfs-modules.deb"
+apt-mark manual level1vault-zfs-modules
+
+# Remove the build packages and their dependencies from the shipped filesystem.
+dpkg-query -W -f='${binary:Package}\t${db:Status-Status}\n' | awk '$2 == "installed" {print $1}' | sort > "$work/after-build"
+comm -13 "$work/runtime-packages" "$work/after-build" | awk '$0 != "level1vault-zfs-modules"' > "$work/temporary-packages"
+xargs -r apt-mark auto < "$work/temporary-packages"
+xargs -r apt-get purge -y < "$work/build-packages"
+apt-get autoremove -y --purge
+xargs -r apt-mark auto < "$work/runtime-auto"
+apt-get clean
+rm -rf -- /usr/local/lib/level1vault/build
+
+# Verify the standalone modules and reject leftover compilers, headers, or DKMS.
+depmod "$kernel_version"
+module=$(modinfo -k "$kernel_version" -n zfs)
+[ "$(readlink -f "$module")" = "/usr/lib/modules/$kernel_version/extra/level1vault/${module##*/}" ]
+dpkg-query -S "$(readlink -f "$module")" | grep -q '^level1vault-zfs-modules:'
+case "$(modinfo -k "$kernel_version" -F vermagic zfs)" in
+    "$kernel_version "*) ;;
+    *) echo 'ERROR: packaged ZFS kernel version mismatch' >&2; exit 1;;
+esac
+modprobe --show-depends --set-version "$kernel_version" zfs
+for tool in cc gcc g++ c++ clang make dkms; do
+    if command -v "$tool" >/dev/null 2>&1; then
+        echo "ERROR: unexpected build tool in live image: $tool" >&2; exit 1
+    fi
+done
+if find /usr/src -mindepth 1 -print -quit | grep -q .; then
+    echo 'ERROR: build sources or headers remain in /usr/src' >&2; exit 1
+fi
+dpkg --audit
+apt-get check
 
 # Prevent import/mount through services, cached generator units, or stale build identity.
 systemctl mask zfs-import-cache.service zfs-import-scan.service zfs-import.service zfs-mount.service

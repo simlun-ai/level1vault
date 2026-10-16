@@ -1,0 +1,4 @@
+build-essential
+dkms
+zfs-dkms
+linux-headers-@KERNEL@

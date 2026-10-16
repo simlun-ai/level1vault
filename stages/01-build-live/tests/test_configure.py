@@ -37,7 +37,8 @@ class ScriptTests(unittest.TestCase):
         target = self.base / 'config/includes.chroot/usr/local/sbin/workspace-mount'
         self.assertEqual(target.read_bytes(), (ROOT / 'runtime/workspace-mount').read_bytes())
         self.assertEqual(target.stat().st_mode & 0o777, 0o755)
-        self.assertIn('linux-image linux-headers', self.calls())
+        self.assertIn('linux-image', self.calls())
+        self.assertNotIn('linux-headers', self.calls())
         self.assertIn('syslinux grub-efi', self.calls())
         again = subprocess.run(['bash', str(ROOT / 'stages/01-build-live/configure.sh')], cwd=self.base,
                                env=self.env, capture_output=True, text=True)

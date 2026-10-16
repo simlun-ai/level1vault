@@ -6,11 +6,8 @@ systemd-sysv
 initramfs-tools
 sudo
 locales
-zfs-dkms
 zfsutils-linux
 zfs-zed
-dkms
-build-essential
 kmod
 udev
 util-linux

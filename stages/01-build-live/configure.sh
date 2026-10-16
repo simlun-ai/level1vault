@@ -22,14 +22,17 @@ lb config \
   --initramfs live-boot \
   --initsystem systemd \
   --linux-flavours amd64 \
-  --linux-packages 'linux-image linux-headers' \
+  --linux-packages linux-image \
   --bootappend-live 'boot=live components nopersistence noeject hostname=level1vault username=simlun live-config.nocomponents=user-setup,sudo' \
   "$@"
 
 
 # Install the workspace helpers and image customization hooks.
 mkdir -p config/package-lists config/includes.chroot/usr/local/sbin config/hooks/live
+mkdir -p config/includes.chroot/usr/local/lib/level1vault/build
 cp "$SOURCE_DIR/stages/01-build-live/packages.list" config/package-lists/appliance.list.chroot
+cp "$SOURCE_DIR/stages/01-build-live/build-packages.list" config/includes.chroot/usr/local/lib/level1vault/build/
+cp "$SOURCE_DIR/stages/01-build-live/package-zfs.py" config/includes.chroot/usr/local/lib/level1vault/build/
 install -m 0755 "$SOURCE_DIR/runtime/workspace-mount" config/includes.chroot/usr/local/sbin/workspace-mount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-umount" config/includes.chroot/usr/local/sbin/workspace-umount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-activate" config/includes.chroot/usr/local/sbin/workspace-activate

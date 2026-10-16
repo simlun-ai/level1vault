@@ -77,6 +77,8 @@ If initialization fails, `INITIALIZING` remains and reruns are refused. Check `s
 
 Default Debian mirrors and the `debian:trixie` tag move over time. The wrapper records builder details and successful solve metadata in `builder-info.txt` and `build-metadata.json`; the chroot records package/kernel versions, and the host records its ZFS versions and pool GUID in `WORKSPACE-INFO.txt`.
 
+ZFS is compiled with temporary target-kernel headers and DKMS, then installed as the independent `level1vault-zfs-modules` package. Compilers, headers, and DKMS are removed before the live filesystem is compressed. `/usr/local/share/level1vault/zfs-build-packages.tsv` records the compilation environment; `packages.tsv` records the shipped package set. Rebuild the whole live image for kernel/ZFS updates; the live OS does not rebuild modules at boot.
+
 For repeatable package inputs, select verified Dockerfile frontend, BuildKit and Debian base image digests plus a Debian archive snapshot timestamp. Pin both the Dockerfile's toolchain package sources and live-build's bootstrap/chroot/security mirrors; pinning only the Docker image tag or only live-build mirrors is insufficient. The Dockerfile accepts `DEBIAN_IMAGE`; changing its APT sources to a historical snapshot is an explicit release configuration task.
 
 Example live-build arguments (replace the timestamp and digest with verified values):
