@@ -27,7 +27,7 @@ help:
 	  'make verify [OUT=...]             Check READY and final image checksums' \
 	  'make test                        Run local lint and unit/behavior tests' \
 	  'make test-container              Test real assembly and login in Trixie' \
-	  'make test-qemu PAIR=1             Test UEFI boot and recovery on disposable copies' \
+	  'make test-qemu                    Test pair 1 in QEMU; choose writable results automatically' \
 	  'make test-zfs                     Real ZFS tests; disposable VM only (see docs)' \
 	  'make check-build                 Inspect an already-built live system' \
 	  'make clean                       Remove legacy build work; preserve artifacts' \
@@ -72,7 +72,7 @@ test: lint test-unit
 test-container:
 	$(SUDO) env PAIR="$$PAIR" BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" bash pipeline/buildkit.sh test
 
-# Verify boot and workspace recovery without changing the original images.
+# Verify boot and recovery with automatic results storage (PAIR defaults to 1).
 test-qemu:
 	python3 stages/04-test-pair/run.py --out "$$OUT" --pair "$$PAIR" $(QEMU_ARGS)
 

@@ -22,7 +22,7 @@
 - Keep stage implementations, configuration, and tests under their owning `stages/NN-name/` directory.
 - Keep installed commands and their tests in `runtime/`; keep cross-stage ZFS integration in `integration-tests/zfs/`.
 - Keep orchestration in `pipeline/`. Introduce `common/` only for code actually shared across owners; do not add a generic shared `scripts/` directory.
-- New runs use `BUILD_DIR/live/`, `BUILD_DIR/pairs/PAIR/`, and `BUILD_DIR/validation/`; never relocate existing user artifacts during a source refactor.
+- New runs use `BUILD_DIR/live/`, `BUILD_DIR/pairs/PAIR/`, and `BUILD_DIR/validation/`; QEMU validation may fall back to `~/level1vault-qemu/` when the build directory is not writable. Never relocate existing user artifacts during a source refactor.
 
 ## Project constraints
 

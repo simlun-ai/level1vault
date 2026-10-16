@@ -80,6 +80,28 @@ class QemuTests(unittest.TestCase):
             runner.prepare_results(results)
         self.assertEqual(marker.read_text(), 'previous run')
 
+    def test_default_results_fall_back_to_private_user_storage_on_permission_error(self):
+        primary = self.base / 'root-owned-build' / 'validation' / 'run'
+        fallback = self.base / 'home' / 'level1vault-qemu' / 'run'
+        mkdir = Path.mkdir
+
+        def denied_build(path, *args, **kwargs):
+            if path == primary:
+                raise PermissionError('root-owned build directory')
+            return mkdir(path, *args, **kwargs)
+
+        with patch.object(Path, 'mkdir', autospec=True, side_effect=denied_build):
+            selected = runner.prepare_results(primary, fallback)
+        self.assertEqual(selected, fallback)
+        self.assertEqual(selected.stat().st_mode & 0o777, 0o700)
+        self.assertFalse(primary.exists())
+
+    def test_writable_default_results_do_not_use_fallback(self):
+        primary = self.base / 'validation' / 'run'
+        fallback = self.base / 'home' / 'run'
+        self.assertEqual(runner.prepare_results(primary, fallback), primary)
+        self.assertFalse(fallback.exists())
+
     def test_results_permission_failure_precedes_image_checks_and_passphrase(self):
         argv = ['run.py', '--pair', '1', '--accel', 'tcg',
                 '--results', str(self.base / 'validation' / 'run')]
