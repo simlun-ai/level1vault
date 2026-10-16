@@ -22,6 +22,8 @@ class ExtractTests(unittest.TestCase):
             for name in ('filesystem.squashfs', 'vmlinuz-6.12-fixture', 'initrd.img-6.12-fixture'):
                 (source / 'live' / name).write_text(name)
             (source / '.disk/live-uuid').write_text('boot uuid')
+            (source / '.disk/live-uuid').chmod(0o444)
+            (source / '.disk').chmod(0o555)
 
             def extract_command(args, **kwargs):
                 shutil.copytree(source, Path(args[-1]))
@@ -36,3 +38,7 @@ class ExtractTests(unittest.TestCase):
             self.assertEqual(release['kernel'], '6.12-fixture')
             self.assertIn('.disk/live-uuid', release['files'])
             self.assertTrue((base / 'release/live/release.json').is_file())
+            # Local export must be able to populate directories inherited from a read-only ISO.
+            self.assertEqual((base / 'release/.disk').stat().st_mode & 0o777, 0o755)
+            self.assertEqual((base / 'release/.disk/live-uuid').stat().st_mode & 0o777, 0o644)
+            self.assertEqual((base / 'release/.disk/live-uuid').read_text(), 'boot uuid')

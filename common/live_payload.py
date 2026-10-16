@@ -46,10 +46,18 @@ def extract(iso, destination):
         (live / 'packages.tsv').write_text(metadata(squash, 'packages.tsv') + '\n')
         if (source / '.disk').is_dir():
             shutil.copytree(source / '.disk', destination / '.disk')
-        files = {}
+
+        # Make the exported payload writable by the receiving workstation user.
+        # ISO directory modes can be read-only; BuildKit needs to populate them during local export.
+        destination.chmod(0o755)
         for path in sorted(destination.rglob('*')):
             if path.is_symlink():
                 raise ValueError(f'Payload contains a symlink: {path}')
+            path.chmod(0o755 if path.is_dir() else 0o644)
+
+        # Record the exact payload contents and their source revision.
+        files = {}
+        for path in sorted(destination.rglob('*')):
             if path.is_file():
                 if path.stat().st_size >= 4294967296:
                     raise ValueError(f'Payload file exceeds FAT32 limit: {path}')
