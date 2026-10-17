@@ -6,6 +6,9 @@ systemd-sysv
 initramfs-tools
 sudo
 locales
+man-db
+manpages
+less
 zfsutils-linux
 zfs-zed
 kmod

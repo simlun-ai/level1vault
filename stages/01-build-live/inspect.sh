@@ -41,6 +41,13 @@ done
 test ! -e "$ROOT/usr/local/lib/level1vault/build"
 chroot "$ROOT" dpkg --audit
 
+# Verify offline manual pages render for the live user after package cleanup.
+test -x "$ROOT/usr/bin/less"
+for page in '1 man' '1 ls' '5 proc' '8 zpool'; do
+  chroot "$ROOT" su - simlun -c "MANPAGER=cat man $page" > "$TASK_TMP/manpage"
+  test -s "$TASK_TMP/manpage"
+done
+
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-umount"

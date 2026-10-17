@@ -20,4 +20,6 @@ A failed build leaves diagnostic logs. Inspect those and retry with a fresh run 
 
 Tests live in `tests/`: `make test` runs configuration behavior checks and builds/extracts a real Debian module-package fixture, and `make test-container` verifies the real account/password/login setup in a disposable Debian build stage. `make check-build` requires a real completed ISO and verifies standalone module ownership plus the absence of build tools and headers. Module loadability is tested separately on the workstation.
 
+The live OS includes `man-db`, the standard Linux `manpages`, and the `less` pager for offline documentation (for example, `man ls`, `man proc`, and `man zpool`). Manual pages supplied by installed packages remain available. Image inspection verifies representative pages render as the live user after package cleanup.
+
 See [build details](../../docs/BUILD.md), [BuildKit](../../docs/BUILDKIT.md), and the [documentation index](../../docs/README.md).
