@@ -29,12 +29,15 @@ lb config \
   --initsystem systemd \
   --linux-flavours amd64 \
   --linux-packages linux-image \
-  --bootappend-live 'boot=live components nopersistence noeject hostname=level1vault username=simlun live-config.nocomponents=user-setup,sudo' \
+  --bootappend-live 'boot=live components nopersistence noeject hostname=level1vault username=simlun live-config.nocomponents=user-setup,sudo loglevel=4' \
   "$@"
 
 
 # Install the workspace helpers and image customization hooks.
 mkdir -p config/package-lists config/includes.chroot/usr/local/sbin config/hooks/live
+# Existing USB upgrades keep their old GRUB config; apply the console level at runtime too.
+mkdir -p config/includes.chroot/etc/sysctl.d
+printf 'kernel.printk = 4 4 1 7\n' > config/includes.chroot/etc/sysctl.d/99-level1vault-console.conf
 mkdir -p config/includes.chroot/usr/local/lib/level1vault/build
 cp "$SOURCE_DIR/stages/01-build-live/packages.list" config/package-lists/appliance.list.chroot
 cp -a "$REPOSITORY" config/includes.chroot/usr/local/lib/level1vault/build/repository
