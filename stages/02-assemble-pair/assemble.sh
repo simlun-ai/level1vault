@@ -67,7 +67,7 @@ set default=0
 set timeout=3
 menuentry 'level1vault Debian Live (stateless)' {
     search --no-floppy --fs-uuid --set=root $uuid
-    linux /live/vmlinuz boot=live components nopersistence noeject hostname=level1vault username=simlun live-config.nocomponents=user-setup,sudo live-media=/dev/disk/by-uuid/$uuid live-media-timeout=30
+    linux /live/vmlinuz boot=live components nopersistence noeject hostname=level1vault username=simlun live-config.nocomponents=user-setup,sudo live-media=/dev/disk/by-uuid/$uuid live-media-timeout=30 loglevel=4
     initrd /live/initrd.img
 }
 CFG
