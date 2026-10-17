@@ -46,7 +46,9 @@ assert m['images']['a']['esp_uuid'] != m['images']['b']['esp_uuid']
 assert m['images']['a']['zfs_partuuid'] != m['images']['b']['zfs_partuuid']
 for name in ('a', 'b'):
     uuid = m['images'][name]['esp_uuid']
-    assert uuid in (p/f'grub-{name}.cfg').read_text()
+    grub = (p/f'grub-{name}.cfg').read_text()
+    assert uuid in grub
+    assert 'loglevel=4' in grub
     with (p/f'out/usb-{name}.img').open('rb') as f:
         # First 256 KiB of the data partition remains blank (no ZFS labels).
         f.seek(65*1024*1024)
