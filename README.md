@@ -59,7 +59,7 @@ Use the current active ID after a failover. Repeat with IDs 3, 4, and so on; omi
 
 ## Use the live system
 
-Disable Secure Boot and boot either stick through UEFI; connect both for mirror redundancy. The console logs in as `simlun` (password `password`, passwordless sudo).
+Disable Secure Boot and boot either stick through UEFI; connect both for mirror redundancy. The console logs in as `simlun` (password `password`, passwordless sudo). Kernel messages below error severity are hidden from the console (`loglevel=4`), but remain available with `journalctl -k` or `dmesg`. The live OS also applies `kernel.printk = 4 4 1 7` after boot. This matters on upgraded USB pairs, which preserve their existing GRUB configuration and may still display early-boot messages until sysctl runs.
 
 ```bash
 sudo workspace-mount 1           # enter the workspace passphrase
