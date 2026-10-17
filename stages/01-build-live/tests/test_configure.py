@@ -49,6 +49,9 @@ class ScriptTests(unittest.TestCase):
         self.assertNotIn('linux-headers', self.calls())
         self.assertIn('--bootloaders\ngrub-efi\n', self.calls())
         self.assertNotIn('syslinux', self.calls())
+        self.assertIn('loglevel=4', self.calls())
+        console = self.base / 'config/includes.chroot/etc/sysctl.d/99-level1vault-console.conf'
+        self.assertEqual(console.read_text(), 'kernel.printk = 4 4 1 7\n')
         self.assertIn('--memtest\nnone\n', self.calls())
         again = subprocess.run(['bash', str(ROOT / 'stages/01-build-live/configure.sh')], cwd=self.base,
                                env=self.env, capture_output=True, text=True)
