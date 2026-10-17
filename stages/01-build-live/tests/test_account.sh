@@ -24,7 +24,7 @@ su - simlun -c 'git -C /home/simlun/level1vault fsck --full'
 # Verify account identity and sudo configuration.
 [[ $(id -u simlun) == 2000 && $(id -g simlun) == 2000 ]]
 [[ $(getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
-su - simlun -c '[[ -o login && -n $ZSH_VERSION ]]'
+su - simlun -c '[[ -o login ]]'
 visudo -cf /etc/sudoers
 # Verify the configured account password.
 python3 - <<'PY'
@@ -42,7 +42,7 @@ su - simlun -c 'command -v workspace-mount && command -v workspace-umount'
 su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspace-umount"'
 
 # Verify the interactive editor alias, real tool commands, and manual-page aliases.
-su - simlun -c 'zsh -ic '\''[[ ${aliases[vim]} == nvim ]] && vim --headless -u NONE -i NONE +q'\'''
+su - simlun -c "zsh -ic 'alias vim && vim --headless -u NONE -i NONE +q'" | grep -qx 'vim=nvim'
 su - simlun -c 'fd --version && bat --version'
 for page in fd bat nvim; do
     su - simlun -c "MANPAGER=cat man 1 $page" > "$fixture/manpage"

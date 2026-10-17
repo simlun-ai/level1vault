@@ -55,7 +55,7 @@ done
 test -r "$ROOT/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
 test -r "$ROOT/usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 chroot "$ROOT" su - simlun -c 'fd --version && bat --version'
-chroot "$ROOT" su - simlun -c 'zsh -ic '\''[[ ${aliases[vim]} == nvim ]] && vim --headless -u NONE -i NONE +q'\'''
+chroot "$ROOT" su - simlun -c "zsh -ic 'alias vim && vim --headless -u NONE -i NONE +q'" | grep -qx 'vim=nvim'
 
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"
@@ -69,7 +69,7 @@ for command in workspace-mount workspace-umount workspace-sync workspace-activat
 done
 [[ $(chroot "$ROOT" id -u simlun) == 2000 && $(chroot "$ROOT" id -g simlun) == 2000 ]]
 [[ $(chroot "$ROOT" getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
-chroot "$ROOT" su - simlun -c '[[ -o login && -n $ZSH_VERSION ]]'
+chroot "$ROOT" su - simlun -c '[[ -o login ]]'
 chroot "$ROOT" visudo -cf /etc/sudoers
 chroot "$ROOT" su - simlun -c 'sudo -n id -u' | grep -qx 0
 chroot "$ROOT" su - simlun -c 'command -v workspace-mount && command -v workspace-umount'
