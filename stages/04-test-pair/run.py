@@ -141,8 +141,8 @@ class Guest:
         self.expected_revision = expected_revision
 
     def login(self):
-        # Accept serial login and the default prompts from Zsh or older Bash images.
-        prompt = r'(?:simlun@[^\r\n]*\$ |level1vault% )'
+        # Accept Starship's colored dollar prompt and older Bash/default Zsh images.
+        prompt = r'(?:simlun@[^\r\n]*\$ |level1vault% |\$(?:\x1b\[[0-9;]*m)* )'
         result = self.child.expect([r'login: ', prompt], timeout=self.timeout)
         if result == 0:
             self.child.sendline('simlun')

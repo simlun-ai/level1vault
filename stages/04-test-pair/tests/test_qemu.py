@@ -161,7 +161,7 @@ class QemuTests(unittest.TestCase):
         self.assertIn('console=ttyS0', (work / 'grub-b.cfg').read_text())
 
     def test_login_accepts_zsh_and_older_bash_prompts(self):
-        for prompt in ('level1vault% ', 'simlun@level1vault:~$ '):
+        for prompt in ('level1vault% ', 'simlun@level1vault:~$ ', '\x1b[1;32m$\x1b[0m ', '$ '):
             for autologin in (True, False):
                 with self.subTest(prompt=prompt, autologin=autologin):
                     child = Mock()

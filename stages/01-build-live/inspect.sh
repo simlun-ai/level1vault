@@ -56,6 +56,9 @@ test -r "$ROOT/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
 test -r "$ROOT/usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 chroot "$ROOT" su - simlun -c 'fd --version && bat --version'
 chroot "$ROOT" su - simlun -c "zsh -ic 'alias vim && vim --headless -u NONE -i NONE +q'" | grep -qx 'vim=nvim'
+cp "$(dirname -- "${BASH_SOURCE[0]}")/tests/test_user_config.zsh" "$ROOT/tmp/level1vault-user-config.zsh"
+chroot "$ROOT" su - simlun -c 'zsh -il /tmp/level1vault-user-config.zsh --no-tmux'
+rm "$ROOT/tmp/level1vault-user-config.zsh"
 
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"

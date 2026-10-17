@@ -4,6 +4,8 @@ set -euo pipefail
 SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)
 
 # Install the live account and workspace helpers.
+install -d /usr/local/lib/level1vault/build
+cp -a "$SOURCE_DIR/stages/01-build-live/user-config" /usr/local/lib/level1vault/build/
 "$SOURCE_DIR/stages/01-build-live/hooks/50-account.hook.chroot"
 install -m 0755 "$SOURCE_DIR/runtime/workspace-mount" /usr/local/sbin/workspace-mount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-umount" /usr/local/sbin/workspace-umount
@@ -44,6 +46,7 @@ su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspac
 # Verify the interactive editor alias, real tool commands, and manual-page aliases.
 su - simlun -c "zsh -ic 'alias vim && vim --headless -u NONE -i NONE +q'" | grep -qx 'vim=nvim'
 su - simlun -c 'fd --version && bat --version'
+su - simlun -c "zsh -il '$SOURCE_DIR/stages/01-build-live/tests/test_user_config.zsh'"
 for page in fd bat nvim; do
     su - simlun -c "MANPAGER=cat man 1 $page" > "$fixture/manpage"
     test -s "$fixture/manpage"

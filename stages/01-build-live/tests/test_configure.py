@@ -45,6 +45,9 @@ class ScriptTests(unittest.TestCase):
         installed = self.base / 'config/includes.chroot/usr/local/lib/level1vault/build/repository'
         self.assertEqual((installed / 'source.bundle').read_text(), 'fixture')
         self.assertTrue((self.base / 'config/hooks/live/60-repository.hook.chroot').is_file())
+        for name in ('zshrc', 'tmux.conf', 'starship.toml'):
+            staged = self.base / 'config/includes.chroot/usr/local/lib/level1vault/build/user-config' / name
+            self.assertEqual(staged.read_bytes(), (ROOT / 'stages/01-build-live/user-config' / name).read_bytes())
         self.assertIn('linux-image', self.calls())
         self.assertNotIn('linux-headers', self.calls())
         self.assertIn('--bootloaders\ngrub-efi\n', self.calls())

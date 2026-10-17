@@ -1,0 +1,91 @@
+# Helpers
+#########
+
+source_if_exists() {
+  if [ -e "$1" ]; then
+    source "$1"
+  fi
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+
+# zshrc
+#######
+autoload -Uz compinit
+compinit
+
+# Tab completion: try case-insensitive prefixes, partial words, then substrings.
+zstyle ':completion:*' matcher-list \
+  'm:{a-zA-Z}={A-Za-z}' \
+  'r:|[._-]=* r:|=*' \
+  'l:|=* r:|=*'
+
+# Command history
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+
+# Share history and write new commands immediately. SHARE_HISTORY includes
+# incremental appending; Zsh advises against combining it with INC_APPEND_HISTORY.
+setopt SHARE_HISTORY
+setopt HIST_VERIFY
+
+# Don't hide outputs missing trailing newline
+unsetopt prompt_cr prompt_sp
+
+# Shortcuts
+alias reload="source ~/.zshrc"
+
+export CLICOLOR=1
+alias ls='ls --color=auto'
+alias l='ls -l'
+alias ll='ls -la'
+alias ..='cd ..'
+
+alias g='git'
+alias gc='git commit -v'
+alias gco='git checkout'
+alias gca='git commit -va'
+alias gd='git diff'
+alias gdc='git diff --cached'
+alias gf='git fetch'
+alias gfa='git fetch --all'
+alias gb='git branch'
+alias ga='git add'
+alias gaa='git add --all :/'
+alias gr='git -c commit.verbose=true rebase'
+alias gs='git stash -u'
+alias gst='git status'
+alias gsp='git stash pop'
+
+if command_exists nvim; then
+  alias vim='nvim'
+fi
+
+# Plugins
+source_if_exists "/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+
+# Prompt
+if command_exists starship; then
+  eval "$(starship init zsh)"
+fi
+
+# Auto jumping
+if command_exists zoxide; then
+  # Prints the matched directory before jumping to it.
+  export _ZO_ECHO=1
+  eval "$(zoxide init zsh)"
+  alias j="z"
+  alias ji="zi"
+fi
+
+# Fuzzy finder (CTRL+R for example)
+if command_exists fzf; then
+  source <(fzf --zsh)
+fi
+
+# Load highlighting after all plugins that install line-editor widgets.
+source_if_exists "/usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"

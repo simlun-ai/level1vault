@@ -20,10 +20,12 @@ ln -s /usr/bin/batcat /usr/local/bin/bat
 ln -s /usr/share/man/man1/fdfind.1.gz /usr/local/share/man/man1/fd.1.gz
 ln -s /usr/share/man/man1/batcat.1.gz /usr/local/share/man/man1/bat.1.gz
 
-# Configure the live user's editor alias and login command path.
-cat > /home/simlun/.zshrc <<'ZSHRC'
-alias vim=nvim
-ZSHRC
+# Install the live user's versioned application settings and login command path.
+config=/usr/local/lib/level1vault/build/user-config
+install -d -o 2000 -g 2000 -m 0755 /home/simlun/.config
+install -o 2000 -g 2000 -m 0644 "$config/zshrc" /home/simlun/.zshrc
+install -o 2000 -g 2000 -m 0644 "$config/tmux.conf" /home/simlun/.tmux.conf
+install -o 2000 -g 2000 -m 0644 "$config/starship.toml" /home/simlun/.config/starship.toml
 cat > /home/simlun/.zprofile <<'ZPROFILE'
 case ":$PATH:" in
     *:/usr/local/sbin:*) ;;
@@ -31,8 +33,8 @@ case ":$PATH:" in
 esac
 export PATH
 ZPROFILE
-chown 2000:2000 /home/simlun/.zshrc /home/simlun/.zprofile
-chmod 0644 /home/simlun/.zshrc /home/simlun/.zprofile
+chown 2000:2000 /home/simlun/.zprofile
+chmod 0644 /home/simlun/.zprofile
 
 # Enable passwordless sudo and the administrative command path.
 install -d -m 0755 /etc/sudoers.d /etc/profile.d /etc/live/config.conf.d
