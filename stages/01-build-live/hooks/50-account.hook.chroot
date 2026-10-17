@@ -10,8 +10,29 @@ fi
 
 # Create the live user with the expected identity and password.
 groupadd --gid 2000 simlun
-useradd --uid 2000 --gid 2000 --create-home --shell /bin/bash --groups sudo simlun
+useradd --uid 2000 --gid 2000 --create-home --shell /usr/bin/zsh --groups sudo simlun
 printf 'simlun:password\n' | chpasswd
+
+# Provide the requested command and manual-page names for Debian's renamed tools.
+install -d -m 0755 /usr/local/bin /usr/local/share/man/man1
+ln -s /usr/bin/fdfind /usr/local/bin/fd
+ln -s /usr/bin/batcat /usr/local/bin/bat
+ln -s /usr/share/man/man1/fdfind.1.gz /usr/local/share/man/man1/fd.1.gz
+ln -s /usr/share/man/man1/batcat.1.gz /usr/local/share/man/man1/bat.1.gz
+
+# Configure the live user's editor alias and login command path.
+cat > /home/simlun/.zshrc <<'ZSHRC'
+alias vim=nvim
+ZSHRC
+cat > /home/simlun/.zprofile <<'ZPROFILE'
+case ":$PATH:" in
+    *:/usr/local/sbin:*) ;;
+    *) PATH="/usr/local/sbin:$PATH" ;;
+esac
+export PATH
+ZPROFILE
+chown 2000:2000 /home/simlun/.zshrc /home/simlun/.zprofile
+chmod 0644 /home/simlun/.zshrc /home/simlun/.zprofile
 
 # Enable passwordless sudo and the administrative command path.
 install -d -m 0755 /etc/sudoers.d /etc/profile.d /etc/live/config.conf.d

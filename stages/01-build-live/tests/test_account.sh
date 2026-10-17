@@ -23,6 +23,8 @@ su - simlun -c 'git -C /home/simlun/level1vault fsck --full'
 
 # Verify account identity and sudo configuration.
 [[ $(id -u simlun) == 2000 && $(id -g simlun) == 2000 ]]
+[[ $(getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
+su - simlun -c '[[ -o login && -n $ZSH_VERSION ]]'
 visudo -cf /etc/sudoers
 # Verify the configured account password.
 python3 - <<'PY'
@@ -38,6 +40,14 @@ PY
 su - simlun -c 'sudo -n id -u' | grep -qx 0
 su - simlun -c 'command -v workspace-mount && command -v workspace-umount'
 su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspace-umount"'
+
+# Verify the interactive editor alias, real tool commands, and manual-page aliases.
+su - simlun -c 'zsh -ic '\''[[ ${aliases[vim]} == nvim ]] && vim --headless -u NONE -i NONE +q'\'''
+su - simlun -c 'fd --version && bat --version'
+for page in fd bat nvim; do
+    su - simlun -c "MANPAGER=cat man 1 $page" > "$fixture/manpage"
+    test -s "$fixture/manpage"
+done
 
 # Verify that live boot preserves the account settings.
 grep -qx LIVE_USERNAME=simlun /etc/live/config.conf.d/level1vault.conf

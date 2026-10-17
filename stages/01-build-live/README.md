@@ -22,4 +22,8 @@ Tests live in `tests/`: `make test` runs configuration behavior checks and build
 
 The live OS includes `man-db`, the standard Linux `manpages`, and the `less` pager for offline documentation (for example, `man ls`, `man proc`, and `man zpool`). Manual pages supplied by installed packages remain available. Image inspection verifies representative pages render as the live user after package cleanup.
 
+`simlun` logs into Zsh. Its `.zshrc` defines `alias vim=nvim`, and `.zprofile` includes the workspace helpers in the login path. Neovim replaces the requested Vim package. The image also ships `htop`, `jq`, `tree`, `watch` (from `procps`), `starship`, `fd-find`, `ripgrep`, `bat`, `zoxide`, `fzf`, `zsh-autosuggestions`, and `zsh-syntax-highlighting`, all from base Trixie. The plugins, prompt, and navigation integrations are installed for later configuration. `/usr/local/bin/fd` and `bat` link to Debian's `fdfind` and `batcat`, with corresponding local manpage aliases. Shell configuration and history are ephemeral like the rest of the live home directory.
+
+Container account tests exercise Zsh login, the workspace command path, the interactive `vim` alias with headless Neovim, and the command/manpage aliases. Image inspection repeats these checks after cleanup and verifies all requested commands and both plugin scripts are present.
+
 See [build details](../../docs/BUILD.md), [BuildKit](../../docs/BUILDKIT.md), and the [documentation index](../../docs/README.md).

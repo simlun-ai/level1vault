@@ -43,10 +43,19 @@ chroot "$ROOT" dpkg --audit
 
 # Verify offline manual pages render for the live user after package cleanup.
 test -x "$ROOT/usr/bin/less"
-for page in '1 man' '1 ls' '5 proc' '8 zpool'; do
+for page in '1 man' '1 ls' '5 proc' '8 zpool' '1 zsh' '1 nvim' '1 fd' '1 bat'; do
   chroot "$ROOT" su - simlun -c "MANPAGER=cat man $page" > "$TASK_TMP/manpage"
   test -s "$TASK_TMP/manpage"
 done
+
+# Verify the requested userland and installed shell plugins survived cleanup.
+for command in zsh htop jq tree watch starship fd rg bat zoxide fzf nvim; do
+  chroot "$ROOT" su - simlun -c "command -v $command"
+done
+test -r "$ROOT/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+test -r "$ROOT/usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+chroot "$ROOT" su - simlun -c 'fd --version && bat --version'
+chroot "$ROOT" su - simlun -c 'zsh -ic '\''[[ ${aliases[vim]} == nvim ]] && vim --headless -u NONE -i NONE +q'\'''
 
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"
@@ -59,8 +68,11 @@ for command in workspace-mount workspace-umount workspace-sync workspace-activat
   grep -Fq "sudo $command" "$ROOT/etc/motd"
 done
 [[ $(chroot "$ROOT" id -u simlun) == 2000 && $(chroot "$ROOT" id -g simlun) == 2000 ]]
+[[ $(chroot "$ROOT" getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
+chroot "$ROOT" su - simlun -c '[[ -o login && -n $ZSH_VERSION ]]'
 chroot "$ROOT" visudo -cf /etc/sudoers
 chroot "$ROOT" su - simlun -c 'sudo -n id -u' | grep -qx 0
+chroot "$ROOT" su - simlun -c 'command -v workspace-mount && command -v workspace-umount'
 chroot "$ROOT" su - simlun -c 'sudo -n sh -c "command -v workspace-mount && command -v workspace-umount"'
 
 # Verify the live user owns a complete, clean checkout of the build revision.

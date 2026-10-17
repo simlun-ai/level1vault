@@ -44,6 +44,8 @@ case $PHASE in
   boot)
     # Verify the stateless live system and manual-only workspace policy.
     [[ $(id -un) == simlun && $(id -u) == 2000 && $(id -g) == 2000 ]]
+    [[ $(getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
+    zsh -lic '[[ ${aliases[vim]} == nvim ]] && command -v workspace-mount'
     [[ $(sudo -n id -u) == 0 ]]
     sudo -n sh -c 'command -v workspace-mount && command -v workspace-umount'
     for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
