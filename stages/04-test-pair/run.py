@@ -141,8 +141,8 @@ class Guest:
         self.expected_revision = expected_revision
 
     def login(self):
-        # Accept either live autologin or the ordinary serial login prompt.
-        prompt = r'simlun@[^\r\n]*\$ '
+        # Accept serial login and the default prompts from Zsh or older Bash images.
+        prompt = r'(?:simlun@[^\r\n]*\$ |level1vault% )'
         result = self.child.expect([r'login: ', prompt], timeout=self.timeout)
         if result == 0:
             self.child.sendline('simlun')
