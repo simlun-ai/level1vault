@@ -6,7 +6,7 @@
 
 Use a Linux amd64 workstation with working ZFS and local, rootful Docker Engine with the Buildx plugin. Ubuntu 22.04 is the tested host example; it is not a distribution requirement. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. The previous container workflow took about 17 minutes in CI; BuildKit timings and storage use need validation. Have at least 80 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
 
-Install [Docker Engine with Buildx](https://docs.docker.com/engine/install/) and verify `sudo docker buildx version`. Install the remaining host utilities using your distribution’s packages. For example, on Ubuntu 22.04:
+Install [Docker Engine with Buildx](https://docs.docker.com/engine/install/) and verify `docker buildx version`. Your normal user must be able to access the local Docker daemon (for example, using Docker's documented Linux post-installation setup). Run `make` without sudo; individual host stages request it. Install the remaining host utilities using your distribution’s packages. For example, on Ubuntu 22.04:
 
 ```bash
 sudo apt update
@@ -17,8 +17,8 @@ sudo systemctl enable --now docker
 sudo modprobe zfs
 zpool --version
 sudo zpool list
-sudo docker info
-sudo docker buildx version
+docker info
+docker buildx version
 ```
 
 Keep your host distribution's own ZFS packages and kernel. Do not replace them with Debian packages. If the workstation already has an imported pool named `workspace-1`, initialization refuses to proceed; use another host or resolve that name conflict deliberately. Other existing host pools are left alone.
@@ -33,7 +33,7 @@ From a fresh full Git checkout on the prepared workstation:
 make prepare-pairs N=3
 ```
 
-`N` is mandatory and must be a positive integer. The target authenticates with sudo once, checks host prerequisites, and prompts for the new workspace encryption passphrase twice **before** building. It then runs as one privileged process, so sudo does not expire midway through the build. The passphrase stays in memory and is passed to the first initializer through stdin; it is never saved in arguments, environment, images, or logs. All later subprocesses have closed stdin and require no operator input.
+`N` is mandatory and must be a positive integer. The target authenticates with sudo once, checks host prerequisites, and prompts for the new workspace encryption passphrase twice **before** building. The host coordinator retains privilege so sudo does not expire midway through the build, but runs Buildx as the invoking user with that user’s Docker configuration. Host-created markers and reports are published with the invoking UID/GID, including on handled failures. Direct root invocation with `SUDO=` retains root ownership. The passphrase stays in memory and is passed to the first initializer through stdin; it is never saved in arguments, environment, images, or logs. All later subprocesses have closed stdin and require no operator input.
 
 The command builds one ISO, inspects it, assembles unique pairs numbered 1 through N, initializes pair 1 as active and the others as replicas, and populates every replica from a shared raw encrypted checkpoint. Only the new images are attached on host loops. Imports use their recorded pool GUIDs and private device search directories. The command exports only its own pools, detaches their loops, recalculates final checksums, and verifies every pair before reporting success. Replicas inherit pair 1's workspace passphrase.
 
@@ -75,7 +75,7 @@ Successful output:
 | `build/default/validation/<test-run>/` | Optional workstation acceptance reports |
 
 
-`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts may be root-owned; readable files can be inspected normally. To report a build failure, include the final 100 lines of `build/default/build.log` and the complete error printed by the wrapper. The chroot stays inside BuildKit; failed-stage output is available in the streamed host build.log.
+`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts, build logs, and initialization metadata belong to the invoking user; ownership inside the OS and encrypted workspace images remains unchanged. Existing root-owned archives are not migrated or recursively chowned. Use a fresh user-writable `BUILD_DIR` for new runs. To report a build failure, include the final 100 lines of `build/default/build.log` and the complete error printed by the wrapper. The chroot stays inside BuildKit; failed-stage output is available in the streamed host build.log.
 
 For configuration customization, pass extra `lb config` options after the build directory. Do not override kernel flavour, architecture or boot layout without updating the associated checks. For frozen package inputs and base image digest selection, see [reproducibility](#reproducibility).
 
@@ -111,7 +111,7 @@ Example live-build arguments (replace the timestamp and digest with verified val
 
 ```bash
 snapshot=REPLACE_WITH_VERIFIED_TIMESTAMP
-sudo env DEBIAN_IMAGE=debian:trixie@sha256:VERIFIED_DIGEST \
+env DEBIAN_IMAGE=debian:trixie@sha256:VERIFIED_DIGEST \
   ./pipeline/buildkit.sh build "$PWD/build-pinned" \
   --mirror-bootstrap "https://snapshot.debian.org/archive/debian/$snapshot/" \
   --mirror-chroot "https://snapshot.debian.org/archive/debian/$snapshot/" \

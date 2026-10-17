@@ -50,6 +50,7 @@ esac''')
         # These tests do no privileged IO: replace the root guard, lock location
         # and block-node predicate, while retaining the remaining script logic.
         text = (ROOT/'stages/03-initialize-pair/initialize.sh').read_text()
+        text = text.replace('$(dirname -- "${BASH_SOURCE[0]}")/../../common/artifact_owner.py', str(ROOT / 'common/artifact_owner.py'))
         text = '\n'.join(line for line in text.splitlines() if not line.startswith('[[ $EUID'))+'\n'
         text = text.replace('/run/lock/level1vault-initialize.lock', str(self.base/'lock'))
         text = text.replace('[[ -b ${dev}p2 ]]', '[[ -e ${dev}p2 ]]')

@@ -102,3 +102,36 @@ if args[:2] == ['buildx', 'build']:
         (build/'pairs/1/READY').touch()
         self.assertNotEqual(self.run_task('check', build).returncode, 0)
         self.assertEqual(self.builds(), [])
+
+    def test_clean_removes_only_recorded_checkout_builders_without_bootstrapping(self):
+        tools = self.base / 'bin'
+        records = self.base / 'records'
+        records.mkdir()
+        for builder in ('level1vault-first', 'level1vault-second'):
+            (records / builder).write_text(str(ROOT) + '\n')
+        git = tools / 'git'
+        git.write_text('#!/bin/sh\nprintf "%s\\n" "$RECORDS/level1vault-unused"\n')
+        git.chmod(0o755)
+        env = dict(self.env, LEVEL1VAULT_LOCKED='1', RECORDS=str(records))
+        result = self.run_task('clean', env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = list(map(json.loads, self.log.read_text().splitlines()))
+        self.assertEqual([cmd for cmd in calls if cmd[:2] == ['buildx', 'rm']],
+                         [['buildx', 'rm', 'level1vault-first'], ['buildx', 'rm', 'level1vault-second']])
+        self.assertFalse(list(records.iterdir()))
+        self.assertFalse(any(cmd[:2] == ['buildx', 'create'] or '--bootstrap' in cmd for cmd in calls))
+        result = self.run_task('clean', env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_clean_refuses_a_record_owned_by_another_checkout(self):
+        tools = self.base / 'bin'
+        records = self.base / 'records'
+        records.mkdir()
+        (records / 'level1vault-other').write_text('/another/checkout\n')
+        git = tools / 'git'
+        git.write_text('#!/bin/sh\nprintf "%s\\n" "$RECORDS/level1vault-unused"\n')
+        git.chmod(0o755)
+        result = self.run_task('clean', env=dict(self.env, LEVEL1VAULT_LOCKED='1', RECORDS=str(records)))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('ownership differs', result.stderr)
+        self.assertFalse(any(cmd[:2] == ['buildx', 'rm'] for cmd in map(json.loads, self.log.read_text().splitlines())))

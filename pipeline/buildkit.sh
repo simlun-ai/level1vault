@@ -3,7 +3,18 @@ set -euo pipefail
 
 # Read the requested action and build settings.
 SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-BUILDX_BUILDER=${BUILDX_BUILDER:-level1vault}
+# Enter the invoking user's Docker configuration before creating any files.
+if [[ $EUID == 0 && ${SUDO_UID:-0} != 0 ]]; then
+  exec python3 "$SOURCE_DIR/pipeline/lifecycle.py" user bash "$SOURCE_DIR/pipeline/buildkit.sh" "$@"
+fi
+if [[ ${LEVEL1VAULT_LOCKED:-0} != 1 ]]; then
+  if [[ ${1:-} == clean ]]; then
+    echo 'Use make clean to coordinate local and Docker cleanup' >&2; exit 1
+  fi
+  exec python3 "$SOURCE_DIR/pipeline/lifecycle.py" shared bash "$SOURCE_DIR/pipeline/buildkit.sh" "$@"
+fi
+BUILDX_BUILDER=${BUILDX_BUILDER:-$(python3 "$SOURCE_DIR/pipeline/lifecycle.py" builder-name)}
+
 DEBIAN_IMAGE=${DEBIAN_IMAGE:-debian:trixie}
 PAIR_ID=${PAIR:-1}
 [[ $PAIR_ID =~ ^[1-9][0-9]*$ ]] || { echo 'PAIR must be a positive integer' >&2; exit 2; }
@@ -31,10 +42,34 @@ if any('rootless' in x for x in info.get('SecurityOptions', [])):
     sys.exit('Use rootful Docker Engine')
 PY
 
+# Resolve checkout-local ownership records without relying on the caller's cwd.
+BUILDER_RECORD=$(cd "$SOURCE_DIR" && realpath -m "$(git rev-parse --git-path "level1vault-builders/$BUILDX_BUILDER")")
+
+# Remove only builders created by this checkout; never create one during cleanup.
+if [[ $ACTION == clean ]]; then
+  shopt -s nullglob
+  records=("$(dirname -- "$BUILDER_RECORD")"/*)
+  if [[ ${#records[@]} == 0 ]]; then
+    echo 'No recorded checkout BuildKit state to clean'
+  fi
+  for record in "${records[@]}"; do
+    [[ -f $record && ! -L $record && $(cat "$record") == "$SOURCE_DIR" ]] || {
+      echo 'Builder ownership differs; refusing cleanup' >&2; exit 1;
+    }
+    builder=${record##*/}
+    [[ $builder =~ ^level1vault([a-zA-Z0-9_.-]*)$ ]] || exit 1
+    docker buildx rm "$builder"
+    rm -- "$record"
+  done
+  exit 0
+fi
+
 # Prepare the dedicated project builder.
 if ! docker buildx inspect "$BUILDX_BUILDER" >/dev/null 2>&1; then
   docker buildx create --name "$BUILDX_BUILDER" --driver docker-container \
     --buildkitd-flags '--allow-insecure-entitlement security.insecure' >/dev/null
+  mkdir -p -- "$(dirname -- "$BUILDER_RECORD")"
+  printf '%s\n' "$SOURCE_DIR" > "$BUILDER_RECORD"
 fi
 DRIVER=$(LC_ALL=C docker buildx inspect "$BUILDX_BUILDER" | awk '$1 == "Driver:" {print $2}')
 [[ $DRIVER == docker-container ]] || { echo 'Dedicated builder must use docker-container driver' >&2; exit 1; }

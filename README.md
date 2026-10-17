@@ -4,7 +4,7 @@ A stateless Debian 13 Live system on pairs of bootable USB drives. Each pair hol
 
 ## Build
 
-Use a **Linux amd64 workstation with working ZFS**, local rootful Docker with Buildx, and at least 80 GiB free. Debian build tools run inside Docker. [Setup and build details →](docs/BUILD.md)
+Use a **Linux amd64 workstation with working ZFS**, local rootful Docker with Buildx accessible to your user, and at least 80 GiB free. Debian build tools run inside Docker. [Setup and build details →](docs/BUILD.md)
 
 ```bash
 git clone https://github.com/simlun-ai/level1vault.git
@@ -14,7 +14,7 @@ make prepare-pairs N=3           # choose the number of pairs
 
 Sudo authentication and the new workspace passphrase/confirmation happen up front. The command builds and inspects the OS once, prepares pairs **1 through N**, initializes pair 1 as active, populates the others as encrypted replicas, and verifies final checksums. No further input is needed during preparation.
 
-Ready-to-write images are `build/default/pairs/1/usb-a.img` and `usb-b.img`, then the same filenames under `pairs/2/`, and so on. Only USB writing remains; no initial replication is needed after flashing. Use a new `BUILD_DIR` for another batch. The command never overwrites an existing run. Each needs a USB drive of at least 12 GiB (16 GiB recommended). Optional: [test in QEMU first](docs/QEMU.md).
+Exports and host metadata are owned by your invoking user. Ready-to-write images are `build/default/pairs/1/usb-a.img` and `usb-b.img`, then the same filenames under `pairs/2/`, and so on. Only USB writing remains; no initial replication is needed after flashing. Use a new `BUILD_DIR` for another batch. The command never overwrites an existing run. Each needs a USB drive of at least 12 GiB (16 GiB recommended). Optional: [test in QEMU first](docs/QEMU.md).
 
 ## Write the USB drives
 
@@ -95,7 +95,7 @@ This rebuilds and verifies the OS once, then replaces the FAT OS files on A and 
 make help                       # command overview
 make test                       # local lint and behavior tests
 make test-container             # assembly and login tests in Debian containers
-make clean                      # clean legacy build work; retain artifacts
+make clean                      # remove temporary work and BuildKit state; retain artifacts
 make cache-clean                # prune unused BuildKit cache
 ```
 

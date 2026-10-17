@@ -41,7 +41,6 @@ jobs:
           persist-credentials: false
       - uses: docker/setup-buildx-action@v3
         with:
-          name: level1vault
           buildkitd-flags: --allow-insecure-entitlement security.insecure
       - name: Build real Debian Live ISO and boot images
         run: make build SUDO=
@@ -51,6 +50,14 @@ jobs:
         run: |
           bash pipeline/buildkit.sh release build/default build/default/upgrade
           python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "stages/06-upgrade-os"); import upgrade; upgrade.load_release(Path("build/default/upgrade").resolve())'
+      - name: Verify host ownership and checkout BuildKit cleanup
+        run: |
+          test -z "$(find build/default ! -uid "$(id -u)" -print -quit)"
+          builder=$(python3 pipeline/lifecycle.py builder-name)
+          make clean
+          test -z "$(docker volume ls -q --filter "name=buildx_buildkit_${builder}0_state")"
+          (cd build/default/pairs/1 && sha256sum -c PREPARED-SHA256SUMS)
+          test -f build/default/upgrade/UPGRADE-READY
       - name: Save build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
