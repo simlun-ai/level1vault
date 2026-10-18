@@ -192,4 +192,25 @@ class UpgradeTests(unittest.TestCase):
             result = subprocess.run(['make', 'upgrade-os', 'UPGRADE_DIR=/prepared', 'SUDO=false', 'DISK_A=', 'DISK_B=', *args],
                                     cwd=ROOT, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
-            self.assertNotIn('python3 pipeline/upgrade-os.py', result.stdout)
+            self.assertNotIn('python3 stages/06-upgrade-os/upgrade.py', result.stdout)
+
+    def test_incomplete_or_invalid_release_never_inspects_disks(self):
+        (self.release / 'UPGRADE-READY').unlink()
+        with patch.object(upgrade, 'inspect_pair') as inspect:
+            with self.assertRaisesRegex(ValueError, 'complete release'):
+                upgrade.apply_release(self.release, '2', Path('/a'), Path('/b'))
+            (self.release / 'UPGRADE-READY').touch()
+            (self.release / 'live/release.json').write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'release format'):
+                upgrade.apply_release(self.release, '2', Path('/a'), Path('/b'))
+            inspect.assert_not_called()
+
+    def test_entrypoint_locks_and_applies_without_building(self):
+        with patch.object(upgrade, 'prerequisites'), patch.object(upgrade, 'open'), \
+                patch.object(upgrade.fcntl, 'flock') as lock, \
+                patch.object(upgrade.subprocess, 'run') as run, \
+                patch.object(upgrade, 'apply_release') as apply:
+            upgrade.main(['--release', str(self.release), '--pair', '2', '--disk-a', '/a', '--disk-b', '/b'])
+        run.assert_not_called()
+        lock.assert_called_once()
+        apply.assert_called_once_with(self.release, '2', Path('/a'), Path('/b'))

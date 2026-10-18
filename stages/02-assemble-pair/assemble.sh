@@ -35,6 +35,7 @@ trap 'exit 143' TERM
 
 # Prepare the OS payload shared with in-place upgrades.
 SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+BOOT_PARAMETERS=$(cat "$SOURCE_DIR/common/boot-parameters.txt")
 python3 "$SOURCE_DIR/common/live_payload.py" "$ISO" "$TMP/payload"
 KERNEL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["kernel"])' "$TMP/payload/live/release.json")
 TARGET_ZFS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["zfs_package"])' "$TMP/payload/live/release.json")
@@ -67,7 +68,7 @@ set default=0
 set timeout=3
 menuentry 'level1vault Debian Live (stateless)' {
     search --no-floppy --fs-uuid --set=root $uuid
-    linux /live/vmlinuz boot=live components nopersistence noeject hostname=level1vault username=simlun live-config.nocomponents=user-setup,sudo live-media=/dev/disk/by-uuid/$uuid live-media-timeout=30 loglevel=4
+    linux /live/vmlinuz $BOOT_PARAMETERS live-media=/dev/disk/by-uuid/$uuid live-media-timeout=30
     initrd /live/initrd.img
 }
 CFG

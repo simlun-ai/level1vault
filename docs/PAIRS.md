@@ -141,9 +141,9 @@ After interruption, reconnect the same authoritative source/destination pairs an
 
 Each destination gets independent `level1vault-<destination-pool-guid>` holds on its last common snapshot. Pending snapshots are held before transfer. Updating one pair cannot release another pair's base. Success moves only the relevant destination's holds; **no snapshots are automatically deleted**. Old holds on a retired source do not move remotely after failover. Retain them until the old history/owner is deliberately retired.
 
-Inspect free space, snapshots and holds periodically. Prune only deliberately selected, unheld old snapshots after accounting for every offsite copy. Do not force-destroy snapshots, release live helper holds, clear source bindings or use `zfs receive -A` as routine retries. A full destination may need capacity/retention work or reseeding while another verified copy remains intact.
+Inspect free space, snapshots and holds periodically. Sync never prunes automatically. For explicit retention, use [snapshot cleanup](#snapshot-cleanup). Do not force-destroy snapshots, release live helper holds, clear source bindings or use `zfs receive -A` as routine retries. A full destination may need retention work or reseeding while another verified copy remains intact.
 
-All mount, sync, activation and export helpers share a lock. Sync leaves pools imported. Before poweroff or moving sticks:
+Mount, sync, activation, retention and export helpers share a lock. Sync leaves pools imported. Before poweroff or moving sticks:
 
 ```bash
 cd /
@@ -153,6 +153,23 @@ sudo poweroff
 ```
 
 Export validates the pair identity, never imports pools and never forces a busy export. Close applications and leave the workspace in every shell before retrying a failure. Do not remove a running boot stick while SquashFS is still being read from it.
+
+## Snapshot cleanup
+
+`workspace-prune PAIR --keep N` previews old project checkpoints on an **already imported** pair. Choose a positive count; the newest N project checkpoints are retained in creation order. For example, after mounting or syncing pair 1:
+
+```bash
+sudo workspace-prune 1 --keep 10           # preview only
+sudo workspace-prune 1 --keep 10 --apply   # delete the eligible checkpoints
+```
+
+The command prints `KEEP` with a reason or `WOULD DELETE` for every snapshot. Only `--apply` deletes anything. Run it separately for each imported active or replica pair; it neither imports/unlocks pools nor changes their roles. An incomplete receive or inconsistent role is refused. Export with `workspace-umount` afterward as usual.
+
+Only snapshots using the helper's reserved `l1v-YYYYMMDDTHHMMSSZ-xxxxxxxx` naming format are eligible. User-named snapshots are untouched; do not use that reserved format for your own snapshots. All held snapshots, clone origins, visible pending endpoints and snapshots already marked for deferred destruction are preserved. Holds retain the incremental bases of disconnected offsite replicas too, so more than N snapshots may remain. Retired-replica holds require deliberate investigation; pruning never releases them.
+
+Before each exact deletion, the helper rechecks identity and eligibility under the workspace lock. It never uses recursive, forced or deferred destruction, never aborts receives, and stops on an error. Successful earlier deletions remain deleted if a later one fails; rerun the preview before retrying. Do not concurrently manipulate pools or snapshots through manual ZFS commands, which do not take the helper's lock.
+
+Deletion removes those historical recovery points; it does not remove current files. Retained holds and shared blocks can limit reclaimed space. Keep external records of offsite copies and select a retention count that fits your recovery needs.
 
 ## Encryption and compatibility
 

@@ -69,7 +69,7 @@ When only inspecting a potentially stale original member, first fence every othe
 
 ## OS updates and limitations
 
-**Use `make prepare-upgrade BUILD_DIR=build/YYYY-MM-DD` on the host, then `make upgrade-os UPGRADE_DIR=build/YYYY-MM-DD PAIR=N DISK_A=... DISK_B=...` for existing pairs.** Preparation builds/inspects the OS without USB disks; the separate writing step replaces only the FAT live payload and live-media markers, preserving disk-specific boot files, filesystem/partition identities, and the ZFS partitions. It updates A then B in place, without retaining an old OS copy. An interrupted copy can be repaired by rerunning the same verified release. See [OS upgrades](UPGRADES.md) for requirements, reports, release reuse and recovery. Whole-image `write-usb` remains for new pairs and overwrites workspace data.
+Follow [OS upgrades](UPGRADES.md) to replace only the FAT live payload. That runbook covers preparation, disk identification, reports and repairing interrupted copies. Whole-image `write-usb` is for new pairs and overwrites workspace data.
 
 - The running root resets; FAT/SquashFS stored on USB are not physically write-protected or cryptographically verified.
 - Live changes and the ZFS ARC consume RAM; test the minimum hardware configuration.
@@ -77,76 +77,8 @@ When only inspecting a potentially stale original member, first fence every othe
 - Each assembled pair has its own identities. Initialized images are not generic replacement-member templates.
 - Signing EFI/kernel/DKMS for Secure Boot, remote authentication and automated replacement-drive provisioning remain outside this workflow.
 
-## Example: fail over with three pairs
+## Whole-pair recovery
 
-Suppose you have three USB pairs:
+Use [fenced activation](PAIRS.md#fail-over-to-the-next-numbered-pair), then [rebind surviving replicas](PAIRS.md#continue-replication-after-failover). Numeric priority is not snapshot freshness: inspect surviving checkpoints before selecting the new active pair. Keep a returning former active pair isolated until its history has been examined.
 
-| Pair | Role | Contents |
-| --- | --- | --- |
-| 1 | Active | Your working workspace |
-| 2 | Replica | Your last sync from pair 1 |
-| 3 | Replica | Your last sync from pair 1 |
-
-Pair 1 fails while you are working. Stop its computer and disconnect both sticks, ensuring no other machine or image copy can write to that pool. Then boot using pair 2, with pairs 2 and 3 connected. Inspect the surviving replicas' health and completed checkpoints before choosing one: numeric order does not indicate freshness.
-
-```bash
-sudo workspace-activate --next 1 --fenced
-```
-
-The arguments mean:
-
-- **`--next 1`** selects the visible pair with the lowest numeric ID greater than 1. Here, that is **pair 2**. If only pair 3 were available, it would select pair 3. It does not wrap around to earlier IDs.
-- **`--fenced`** confirms that you have prevented the old active pair from accepting writes. The command does not disconnect or disable pair 1 for you.
-
-Pair 2 becomes active. The command prints the selected pool and its last completed snapshot. Mount the selected pair to resume working:
-
-```bash
-sudo workspace-mount 2
-```
-
-You recover the data that reached pair 2 during its last successful sync. Changes left only on the failed pair 1 are absent. Verify expected files before continuing.
-
-To make pair 3 follow the new active pair, explicitly rebind it while it is unmounted:
-
-```bash
-sudo workspace-sync --rebind 2 3
-```
-
-This requires pair 3's latest snapshot to exist in pair 2's history. If pair 3 is newer or divergent, the helper refuses; preserve and inspect that data rather than forcing a rollback. See [replication after failover](PAIRS.md#continue-replication-after-failover).
-
-After a successful rebind, routine updates use:
-
-```bash
-sudo workspace-sync 2 3
-```
-
-Keep old pair 1 isolated if it returns: it contains the previous active workspace and may have conflicting history. Promoting pair 2 does not make pair 1 safe to reuse.
-
-## Next step: add pair 4 to restore three working pairs
-
-With pair 2 active and pair 3 successfully rebound, replace the lost pair with a fresh, unused ID, **4**. Keep pair 1 fenced.
-
-1. On the Linux build workstation, from the repository root, reuse the existing live ISO and create an **empty replica**, using a new output directory:
-
-   ```bash
-   make assemble PAIR=4
-   make initialize PAIR=4
-   ```
-
-   These use `build/default`; use your original `BUILD_DIR` if different. Do not set `ACTIVE=1` or clone an existing pair's initialized images.
-
-2. Follow [Writing USB drives](../stages/05-write-usb/README.md), identifying two new whole disks by serial/model before destructive writes. Run `make write-usb PAIR=4 DISK_A=/dev/sda DISK_B=/dev/sdb`, replacing both example devices with the verified whole disks. The target verifies and writes the pair 4 images. Label the sticks **4A/4B**, save their manifest/serials outside the pools, and test each stick boots independently. Disconnect image loops and duplicate copies before attaching the physical pair.
-
-3. On the live computer owning active pair 2, attach both sticks of pairs 3 and 4. Keep both replicas unmounted, then run:
-
-   ```bash
-   sudo workspace-sync 2 3 4
-   sudo zpool status level1-workspace-3
-   sudo zpool status level1-workspace-4
-   ```
-
-   Require successful sync and both members of each mirror ONLINE with no errors. Pair 4 receives its encrypted filesystem and passphrase from pair 2; it needs no `--rebind` because it is new.
-
-4. [Unlock and verify pair 4](PAIRS.md#unlock-read-and-verify-a-replica), substituting active ID **2** and replica ID **4** in that procedure. Check expected files and a clean scrub. Before moving drives, close workspace files, `cd /`, and run `sudo workspace-umount`; keep the running boot USB connected until shutdown.
-
-You now have three working pairs: **2 active, 3 and 4 replicas**. Continue routine replication with `sudo workspace-sync 2 3 4` when all are connected.
+To restore the replica count, [add a fresh pair](../README.md#add-more-pairs) with an unused ID and sync from the current active pair. Do not clone an initialized pair or initialize a second independent active workspace.

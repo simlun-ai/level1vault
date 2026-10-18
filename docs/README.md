@@ -27,8 +27,8 @@ Start with the [quick start](../README.md) to build and use the first pair. Thes
 | [Shared QEMU checks](../stages/04-test-pair/README.md) | Generated manual commands matching the automated boot, reboot, degraded-write and rejoin scenarios |
 | [Persistent home and sessions](HOME.md) | Root autologin, start/tmux, encrypted home, defaults, export and upgrades |
 | [Pair operations](PAIRS.md) | Any number of pairs, encrypted replication, rotation, ordered failover and retention |
-| [Recovery and updates](RECOVERY.md) | Safe imports/exports, degraded mirrors, replacement members and OS updates |
+| [Recovery](RECOVERY.md) | Fenced imports, degraded mirrors and replacement members |
 | [Development](DEVELOPMENT.md) | Make targets, local tests, CI, cleanup and repository layout |
 | [Architecture](ARCHITECTURE.md) | Live root, boot layout, DKMS, host/container responsibilities and design review |
-| [Validation](VALIDATION.md) | Recorded results, hardware status and remaining acceptance checks |
+| [Validation](VALIDATION.md) | Current acceptance checklist and explicitly historical results |
 

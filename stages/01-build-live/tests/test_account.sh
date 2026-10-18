@@ -70,7 +70,7 @@ test -x "/usr/local/sbin/start"
 test -x "/usr/local/sbin/workspace-home"
 
 # Verify the guide covers every installed workspace command.
-for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
+for command in workspace-mount workspace-umount workspace-sync workspace-activate workspace-prune; do
     grep -Fq "sudo $command" /etc/motd
 done
 

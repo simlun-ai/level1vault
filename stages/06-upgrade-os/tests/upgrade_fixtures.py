@@ -16,6 +16,7 @@ def make_release(root, text='new OS'):
                 'source_commit': '1' * 40, 'files': files}
     manifest['release_id'] = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
     (root / 'live/release.json').write_text(json.dumps(manifest))
+    (root / 'UPGRADE-READY').touch()
     return manifest
 
 

@@ -13,5 +13,6 @@
 !stages/06-upgrade-os/
 !stages/06-upgrade-os/**
 !runtime/
+!runtime/start
 !runtime/workspace-*
 **/__pycache__

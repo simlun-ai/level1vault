@@ -248,6 +248,75 @@ def create_checkpoint(source):
 
 
 
+# Preview or delete old project checkpoints without releasing replication holds.
+def retention_plan(pair, keep):
+    require(keep >= 1, 'Keep at least one project checkpoint')
+    pool = pool_name(pair)
+    data = pool + '/data'
+    pools = run('zpool', 'list', '-H', '-o', 'name').splitlines()
+    require(pool in pools, 'Import the selected pair with a workspace command before pruning')
+    require(prop(pool, PROPERTY + 'pair') == pair, 'Pair identity does not match')
+    state = prop(pool, PROPERTY + 'state')
+    require((state, prop(data, 'readonly')) in (('active', 'off'), ('replica', 'on')),
+            'Pair state and readonly policy do not agree')
+    require(prop(pool, PROPERTY + 'pending-snapshot') == '-' and
+            prop(data, 'receive_resume_token') == '-', 'Finish the pending receive before pruning this pair')
+    validate_data(data)
+
+    # Offsite bases are protected by persistent holds, even while disconnected.
+    # Also protect visible pending endpoints by name and GUID across failovers.
+    pending_names, pending_guids = set(), set()
+    for other in pools:
+        if re.fullmatch(r'level1-workspace-[1-9][0-9]*', other):
+            pending_names.add(prop(other, PROPERTY + 'pending-snapshot'))
+            pending_guids.add(prop(other, PROPERTY + 'pending-guid'))
+    entries = snapshots(data)
+    project = [(name, guid) for name, guid in entries
+               if re.fullmatch(r'l1v-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}', name.split('@', 1)[1])]
+    newest = {name for name, _ in project[-keep:]}
+    project_names = {name for name, _ in project}
+    plan = []
+    for name, guid in entries:
+        if name not in project_names:
+            reason = 'user snapshot'
+        elif name in newest:
+            reason = 'recent checkpoint'
+        elif name in pending_names or guid in pending_guids:
+            reason = 'pending checkpoint'
+        elif run('zfs', 'holds', '-H', name):
+            reason = 'held checkpoint'
+        elif prop(name, 'clones') != '-':
+            reason = 'clone origin'
+        elif prop(name, 'defer_destroy') == 'on':
+            reason = 'already marked for deferred destruction'
+        else:
+            reason = None
+        plan.append((name, guid, reason))
+    return plan
+
+
+def prune(pair, keep, apply=False):
+    plan = retention_plan(pair, keep)
+    for name, _, reason in plan:
+        print(f'KEEP {name}: {reason}' if reason else f'WOULD DELETE {name}')
+    candidates = [(name, guid) for name, guid, reason in plan if reason is None]
+    if not apply:
+        print(f'Dry run: {len(candidates)} checkpoint(s) eligible. Repeat with --apply to delete.')
+        return
+
+    # Recheck policy and identity before each exact deletion; never recurse,
+    # force, defer destruction, release holds or abort an interrupted receive.
+    require(retention_plan(pair, keep) == plan, 'Retention state changed; rerun the preview')
+    for name, guid in candidates:
+        require(prop(name, 'guid') == guid and not run('zfs', 'holds', '-H', name) and
+                prop(name, 'clones') == '-' and prop(name, 'defer_destroy') != 'on',
+                f'{name}: retention state changed; rerun the preview')
+        command('zfs', 'destroy', name)
+        print(f'DELETED {name}')
+    print(f'Deleted {len(candidates)} checkpoint(s). Export with workspace-umount before disconnecting.')
+
+
+
 # Find visible pairs in numeric order.
 def discover_pairs():
     names = run('zpool', 'list', '-H', '-o', 'name').splitlines()
@@ -304,10 +373,18 @@ def activate(pair, fenced=False):
 
 
 
-# Parse the requested synchronization or activation operation.
+# Parse synchronization, activation or explicit retention.
 def main():
     activation = sys.argv[1:2] == ['--activate']
-    if activation:
+    pruning = sys.argv[1:2] == ['--prune']
+    if pruning:
+        parser = argparse.ArgumentParser(prog='workspace-prune', description='Preview old project checkpoints on an imported pair; holds and user snapshots are preserved.')
+        parser.add_argument('pair', type=pair_id)
+        parser.add_argument('--keep', required=True, type=lambda value: int(pair_id(value)), metavar='N',
+                            help='retain at least the newest N project checkpoints (N >= 1)')
+        parser.add_argument('--apply', action='store_true', help='delete eligible checkpoints; otherwise only preview')
+        args = parser.parse_args(sys.argv[2:])
+    elif activation:
         parser = argparse.ArgumentParser(prog='workspace-activate', description='Activate an existing numbered replica in place after fencing the old active pair.')
         choice = parser.add_mutually_exclusive_group(required=True)
         choice.add_argument('pair', nargs='?', type=pair_id)
@@ -329,6 +406,9 @@ def main():
     require(os.geteuid() == 0, 'Run with sudo')
     with open('/run/lock/level1vault-workspace.lock', 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        if pruning:
+            prune(args.pair, args.keep, args.apply)
+            return
         command('modprobe', 'zfs')
         if not os.path.exists('/etc/hostid') or os.stat('/etc/hostid').st_size == 0:
             command('zgenhostid')

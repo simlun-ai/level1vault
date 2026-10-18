@@ -49,7 +49,7 @@ case $PHASE in
     sudo -iu simlun zsh -lic '[[ ${aliases[vim]} == nvim ]] && command -v workspace-mount'
     [[ $(sudo -n id -u) == 0 ]]
     sudo -n sh -c 'command -v workspace-mount && command -v workspace-umount'
-    for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
+    for command in workspace-mount workspace-umount workspace-sync workspace-activate workspace-prune; do
       grep -Fq "sudo $command" /etc/motd
     done
     grep -qw nopersistence /proc/cmdline
