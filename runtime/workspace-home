@@ -12,7 +12,7 @@ import tempfile
 WORKSPACE = Path('/mnt/workspace')
 HOME = Path('/home/simlun')
 DEFAULTS = Path('/usr/local/share/level1vault/home-default')
-UID = GID = 2000
+UID = GID = 1000
 
 
 def mounted(path):
@@ -39,7 +39,7 @@ def directory(path):
 
 
 def require_idle():
-    processes = subprocess.run(['pgrep', '-u', '2000'], capture_output=True, text=True)
+    processes = subprocess.run(['pgrep', '-u', str(UID)], capture_output=True, text=True)
     if processes.returncode == 0:
         raise RuntimeError('simlun still has running processes (possibly detached tmux). '
                            'Exit all simlun sessions and jobs before changing the home mount. '
@@ -77,7 +77,7 @@ def attach(dataset):
     directory(persistent)
     info = persistent.stat()
     if (info.st_uid, info.st_gid, info.st_mode & 0o777) != (UID, GID, 0o700):
-        raise RuntimeError(f'{persistent} must be owned by 2000:2000 with mode 0700')
+        raise RuntimeError(f'{persistent} must be owned by {UID}:{GID} with mode 0700')
     subprocess.run(['mount', '--bind', str(persistent), str(HOME)], check=True)
     verify_mount(mounted(HOME), dataset, '/home/simlun')
 

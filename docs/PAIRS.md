@@ -123,7 +123,7 @@ Free `/mnt/workspace` by unmounting/exporting the active pair's dataset, then:
 cd /
 sudo workspace-umount 1
 sudo workspace-mount 2
-stat -c '%u:%g %a' /mnt/workspace   # 2000:2000 750 for a new workspace root
+stat -c '%u:%g %a' /mnt/workspace   # 1000:1000 750 for a new workspace root
 # Read expected files and compare checksums. Writes to a replica should fail.
 sudo zpool scrub workspace-2
 sudo zpool wait -t scrub workspace-2

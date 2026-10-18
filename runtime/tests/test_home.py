@@ -107,6 +107,7 @@ class HomeTests(unittest.TestCase):
         self.process_status = 0
         with self.assertRaisesRegex(RuntimeError, 'running processes'):
             home.attach(self.dataset)
+        self.assertIn(['pgrep', '-u', str(os.getuid())], self.calls)
         self.process_status = 1
         home.attach(self.dataset)
         self.process_status = 0

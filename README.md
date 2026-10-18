@@ -86,7 +86,7 @@ start                           # select the only complete connected pair; enter
 # Or: start 1                    # explicitly select pair 1, including degraded use
 ```
 
-`start` mounts the active workspace, attaches its encrypted persistent home at `/home/simlun`, and opens or reattaches the `workspace` tmux session as `simlun` (UID/GID 2000). Your home, shell settings, history and files survive reboot and replicate with the workspace. Zsh is the working shell; `vim` aliases Neovim. The full repository and Git history are initially available at `~/level1vault`.
+`start` mounts the active workspace, attaches its encrypted persistent home at `/home/simlun`, and opens or reattaches the `workspace` tmux session as `simlun` (UID/GID 1000). Your home, shell settings, history and files survive reboot and replicate with the workspace. Zsh is the working shell; `vim` aliases Neovim. The full repository and Git history are initially available at `~/level1vault`.
 
 Exit every tmux pane to return to root. You will be asked `Run workspace-umount? [Y/n]`, then, after a successful export, `Power off? [Y/n]`. Enter accepts each prompt. Detaching leaves tmux running; run `start` to reattach and finish before exporting. Stop other `simlun` sessions and background jobs too.
 

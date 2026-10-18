@@ -44,7 +44,7 @@ case $PHASE in
   boot)
     # Verify the stateless live system and manual-only workspace policy.
     [[ $(id -un) == root && $(id -u) == 0 ]]
-    [[ $(id -u simlun) == 2000 && $(id -g simlun) == 2000 ]]
+    [[ $(id -u simlun) == 1000 && $(id -g simlun) == 1000 ]]
     [[ $(getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
     sudo -iu simlun zsh -lic '[[ ${aliases[vim]} == nvim ]] && command -v workspace-mount'
     [[ $(sudo -n id -u) == 0 ]]
@@ -63,14 +63,14 @@ case $PHASE in
     # Unlock the workspace and verify its identity, ownership, and health.
     sudo workspace-mount "$PAIR"
     [[ $(findmnt -n -o SOURCE --mountpoint /mnt/workspace) == "$DATASET" ]]
-    [[ $(stat -c '%u:%g %a' /mnt/workspace) == '2000:2000 750' ]]
+    [[ $(stat -c '%u:%g %a' /mnt/workspace) == '1000:1000 750' ]]
     [[ $(sudo zfs get -H -o value encryption "$DATASET") == aes-256-gcm ]]
     [[ $(sudo zfs get -H -o value readonly "$DATASET") == off ]]
     if [[ $VALUE != rejoining ]]; then
       [[ $(sudo zpool list -H -o health "$POOL") == "$VALUE" ]]
     fi
     [[ $(findmnt -n -o FSROOT --mountpoint /home/simlun) == /home/simlun ]]
-    [[ $(stat -c '%u:%g %a' /home/simlun) == '2000:2000 700' ]]
+    [[ $(stat -c '%u:%g %a' /home/simlun) == '1000:1000 700' ]]
     ;;
   write)
     # Write workspace data and a marker that must disappear after reboot.

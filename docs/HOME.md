@@ -1,6 +1,6 @@
 # Persistent home and working sessions
 
-The live console automatically logs in as root. Root's home and OS changes remain temporary. The `simlun` account (UID/GID 2000, Zsh, passwordless sudo) uses a persistent home after the active encrypted workspace is unlocked. No SSH server or remote root authentication is added.
+The live console automatically logs in as root. Root's home and OS changes remain temporary. The `simlun` account (UID/GID 1000, Zsh, passwordless sudo) uses a persistent home after the active encrypted workspace is unlocked. No SSH server or remote root authentication is added.
 
 ## Everyday workflow
 
@@ -21,7 +21,7 @@ Detaching (Control-a, then d) also returns to root, but keeps the tmux session r
 
 ## First use, replication and upgrades
 
-On the first active mount, create `home/simlun` inside the existing encrypted `workspace-N/data` dataset, owned by `2000:2000`, mode `0700`. Seed it from the image's immutable `/usr/local/share/level1vault/home-default`, including dotfiles and the full offline repository checkout. Publish the seeded directory only after copying and ownership setup succeed. If a normal home directory already exists, validate its ownership/mode and preserve its contents; never merge defaults over it. Unexpected symlinks, ownership, permissions or mount sources cause refusal for inspection.
+On the first active mount, create `home/simlun` inside the existing encrypted `workspace-N/data` dataset, owned by `1000:1000`, mode `0700`. Seed it from the image's immutable `/usr/local/share/level1vault/home-default`, including dotfiles and the full offline repository checkout. Publish the seeded directory only after copying and ownership setup succeed. If a normal home directory already exists, validate its ownership/mode and preserve its contents; never merge defaults over it. Unexpected symlinks, ownership, permissions or mount sources cause refusal for inspection.
 
 Existing USB pairs need only an OS upgrade and their first active mount to initialize this directory. No repartitioning, new dataset or encryption-key change is required. Home files are included in the existing workspace snapshots, raw encrypted replication and failover. An active promoted replica uses its saved home when mounted. Other files already in `/mnt/workspace` stay in place.
 

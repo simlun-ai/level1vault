@@ -31,6 +31,6 @@ fi
 
 # Verify all installed configuration files belong to the live user.
 for file in ~/.zshrc ~/.zprofile ~/.tmux.conf ~/.config/starship.toml; do
-  [[ $(stat -c '%u:%g %a' "$file") == '2000:2000 644' ]]
+  [[ $(stat -c '%u:%g %a' "$file") == '1000:1000 644' ]]
 done
 print 'Live user configuration checks passed.'

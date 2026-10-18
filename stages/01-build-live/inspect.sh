@@ -81,7 +81,7 @@ chroot "$ROOT" python3 /usr/local/sbin/workspace-sync --help >/dev/null
 for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
   grep -Fq "sudo $command" "$ROOT/etc/motd"
 done
-[[ $(chroot "$ROOT" id -u simlun) == 2000 && $(chroot "$ROOT" id -g simlun) == 2000 ]]
+[[ $(chroot "$ROOT" id -u simlun) == 1000 && $(chroot "$ROOT" id -g simlun) == 1000 ]]
 [[ $(chroot "$ROOT" getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
 chroot "$ROOT" su - simlun -c '[[ -o login ]]'
 chroot "$ROOT" visudo -cf /etc/sudoers
@@ -92,7 +92,7 @@ chroot "$ROOT" su - simlun -c 'sudo -n sh -c "command -v workspace-mount && comm
 # Verify the live user owns a complete, clean checkout of the build revision.
 CHECKOUT="$ROOT/home/simlun/level1vault"
 [[ -d $CHECKOUT/.git ]]
-[[ -z $(find "$CHECKOUT" \( ! -uid 2000 -o ! -gid 2000 \) -print -quit) ]]
+[[ -z $(find "$CHECKOUT" \( ! -uid 1000 -o ! -gid 1000 \) -print -quit) ]]
 chroot "$ROOT" su - simlun -c 'cd /home/simlun/level1vault && git fsck --full'
 [[ $(chroot "$ROOT" su - simlun -c 'git -C /home/simlun/level1vault rev-parse --is-shallow-repository') == false ]]
 [[ $(chroot "$ROOT" su - simlun -c 'git -C /home/simlun/level1vault rev-parse HEAD') == "$(cat "$ROOT/usr/local/share/level1vault/source-commit")" ]]

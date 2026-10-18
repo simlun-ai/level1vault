@@ -8,7 +8,7 @@
 - Mocked behavior tests, including host-pool conflict refusal, incomplete-image refusal before host mutations and USB readback corruption detection, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
 - CI on Ubuntu 22.04 builds the actual Debian Trixie toolchain container and runs file-only assembly **without privileged mode**. A small synthetic ISO exercises real GPT creation, FAT population, per-drive GRUB EFI output, metadata, medium UUID markers, unique identifiers and empty data partitions.
 
-Real ZFS integration [passed on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38711305462) using newly created small GPT image pairs and loop devices. The numbered-pair test uses IDs 1, 2, 3 and 10: encrypted initialization, wrong/correct stdin passphrases, UID/GID 2000 writes, shared full/incremental checkpoints, unloaded source keys, independent per-destination holds, interrupted/resumed full and incremental receives, read-only replica mounting and divergent/mounted destination refusal. It exercises in-place numeric failover 1→2→3, fencing/observable-active-owner refusal, explicit source rebinding with the existing destination dataset GUID preserved, and preservation/refusal of a returning former active pair with unreplicated writes. The test only writes new file-backed mirrors on a disposable runner, not physical USB devices, and requires an explicit disposable-test flag.
+Real ZFS integration [passed on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38711305462) using newly created small GPT image pairs and loop devices. The numbered-pair test uses IDs 1, 2, 3 and 10: encrypted initialization, wrong/correct stdin passphrases, UID/GID 1000 writes, shared full/incremental checkpoints, unloaded source keys, independent per-destination holds, interrupted/resumed full and incremental receives, read-only replica mounting and divergent/mounted destination refusal. It exercises in-place numeric failover 1→2→3, fencing/observable-active-owner refusal, explicit source rebinding with the existing destination dataset GUID preserved, and preservation/refusal of a returning former active pair with unreplicated writes. The test only writes new file-backed mirrors on a disposable runner, not physical USB devices, and requires an explicit disposable-test flag.
 
 The synthetic kernel/initrd are dummy payloads: that assembly test does not boot Linux or compile DKMS.
 
@@ -39,12 +39,12 @@ The operator verified the [QEMU procedure](QEMU.md), including the normal guest 
 ## Verify the new account and helpers after rebuilding
 
 ```bash
-id simlun                         # uid=2000, primary gid=2000
+id simlun                         # uid=1000, primary gid=1000
 sudo -n id -u                      # 0, without prompting
 command -v workspace-mount workspace-umount workspace-sync
 cat /etc/motd                     # workspace command quick guide
 sudo workspace-mount 1             # enter the encryption passphrase
-stat -c '%u:%g %a' /mnt/workspace # 2000:2000 750
+stat -c '%u:%g %a' /mnt/workspace # 1000:1000 750
 sudo -iu simlun sh -c 'printf "owned by simlun\n" > /mnt/workspace/simlun-write-test'
 cd /
 sudo workspace-umount
@@ -125,7 +125,7 @@ Unexpected power-loss recovery should use a separate disposable image pair; it c
 
 ## N-pair and ordered-failover acceptance after rebuilding
 
-Follow [PAIRS.md](PAIRS.md) to provision unique numbered pairs. Exercise at least four IDs, including 2 and 10, to verify numeric order. Verify shared-checkpoint full and incremental receives, passphrase unlock, UID/GID 2000 ownership, read-only replica use, both members ONLINE and clean scrubs. Rotate one offsite copy at a time. On disposable images, interrupt and resume full/incremental transfers, fence/export the active pair, activate the next numeric ID in place, make UID 2000 writes, and rebind the remaining replicas using their common checkpoint. Repeat failover and verify names/identities stay stable. Confirm incomplete receives, an observably active former owner, absent fencing acknowledgement, divergent writes/snapshots and source changes without --rebind all fail safely. Record completed checkpoints, IDs and physical-device locations outside the pools.
+Follow [PAIRS.md](PAIRS.md) to provision unique numbered pairs. Exercise at least four IDs, including 2 and 10, to verify numeric order. Verify shared-checkpoint full and incremental receives, passphrase unlock, UID/GID 1000 ownership, read-only replica use, both members ONLINE and clean scrubs. Rotate one offsite copy at a time. On disposable images, interrupt and resume full/incremental transfers, fence/export the active pair, activate the next numeric ID in place, make UID 1000 writes, and rebind the remaining replicas using their common checkpoint. Repeat failover and verify names/identities stay stable. Confirm incomplete receives, an observably active former owner, absent fencing acknowledgement, divergent writes/snapshots and source changes without --rebind all fail safely. Record completed checkpoints, IDs and physical-device locations outside the pools.
 
 ## BuildKit refactor acceptance
 

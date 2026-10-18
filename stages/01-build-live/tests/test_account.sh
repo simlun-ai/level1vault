@@ -23,11 +23,11 @@ mkdir -p /usr/local/lib/level1vault/build
 python3 "$SOURCE_DIR/stages/01-build-live/repository.py" bundle "$fixture/source" /usr/local/lib/level1vault/build/repository
 cp "$SOURCE_DIR/stages/01-build-live/repository.py" /usr/local/lib/level1vault/build/
 "$SOURCE_DIR/stages/01-build-live/hooks/60-repository.hook.chroot"
-[[ $(stat -c '%u:%g' /home/simlun/level1vault/.git) == 2000:2000 ]]
+[[ $(stat -c '%u:%g' /home/simlun/level1vault/.git) == 1000:1000 ]]
 su - simlun -c 'git -C /home/simlun/level1vault fsck --full'
 
 # Verify account identity and sudo configuration.
-[[ $(id -u simlun) == 2000 && $(id -g simlun) == 2000 ]]
+[[ $(id -u simlun) == 1000 && $(id -g simlun) == 1000 ]]
 [[ $(getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
 su - simlun -c '[[ -o login ]]'
 visudo -cf /etc/sudoers

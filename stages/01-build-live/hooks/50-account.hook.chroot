@@ -2,15 +2,15 @@
 set -eu
 # Create the exact account before SquashFS is generated. Boot-time user-setup
 # and sudo live-config components are disabled so they cannot replace it.
-if getent passwd simlun >/dev/null || getent passwd 2000 >/dev/null || \
-   getent group simlun >/dev/null || getent group 2000 >/dev/null; then
-    echo 'ERROR: account name or numeric ID 2000 is already allocated' >&2
+if getent passwd simlun >/dev/null || getent passwd 1000 >/dev/null || \
+   getent group simlun >/dev/null || getent group 1000 >/dev/null; then
+    echo 'ERROR: account name or numeric ID 1000 is already allocated' >&2
     exit 1
 fi
 
 # Create the live user with the expected identity and password.
-groupadd --gid 2000 simlun
-useradd --uid 2000 --gid 2000 --create-home --shell /usr/bin/zsh --groups sudo simlun
+groupadd --gid 1000 simlun
+useradd --uid 1000 --gid 1000 --create-home --shell /usr/bin/zsh --groups sudo simlun
 printf 'simlun:password\n' | chpasswd
 
 # Provide the requested command and manual-page names for Debian's renamed tools.
@@ -22,10 +22,10 @@ ln -s /usr/share/man/man1/batcat.1.gz /usr/local/share/man/man1/bat.1.gz
 
 # Install the live user's versioned application settings and login command path.
 config=/usr/local/lib/level1vault/build/user-config
-install -d -o 2000 -g 2000 -m 0755 /home/simlun/.config
-install -o 2000 -g 2000 -m 0644 "$config/zshrc" /home/simlun/.zshrc
-install -o 2000 -g 2000 -m 0644 "$config/tmux.conf" /home/simlun/.tmux.conf
-install -o 2000 -g 2000 -m 0644 "$config/starship.toml" /home/simlun/.config/starship.toml
+install -d -o 1000 -g 1000 -m 0755 /home/simlun/.config
+install -o 1000 -g 1000 -m 0644 "$config/zshrc" /home/simlun/.zshrc
+install -o 1000 -g 1000 -m 0644 "$config/tmux.conf" /home/simlun/.tmux.conf
+install -o 1000 -g 1000 -m 0644 "$config/starship.toml" /home/simlun/.config/starship.toml
 cat > /home/simlun/.zprofile <<'ZPROFILE'
 case ":$PATH:" in
     *:/usr/local/sbin:*) ;;
@@ -33,7 +33,7 @@ case ":$PATH:" in
 esac
 export PATH
 ZPROFILE
-chown 2000:2000 /home/simlun/.zprofile
+chown 1000:1000 /home/simlun/.zprofile
 chmod 0644 /home/simlun/.zprofile
 
 # Enable passwordless sudo and the administrative command path.
@@ -59,8 +59,8 @@ cat > /etc/live/config.conf.d/level1vault.conf <<'CONFIG'
 LIVE_USERNAME=root
 LIVE_CONFIG_NOCOMPONENTS=user-setup,sudo
 CONFIG
-[ "$(id -u simlun)" -eq 2000 ]
-[ "$(id -g simlun)" -eq 2000 ]
+[ "$(id -u simlun)" -eq 1000 ]
+[ "$(id -g simlun)" -eq 1000 ]
 
 # Autologin locally as root even when an upgraded USB retains username=simlun in GRUB.
 # The late drop-in overrides live-config's generated autologin configuration.

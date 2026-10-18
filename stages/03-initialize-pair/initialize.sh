@@ -124,7 +124,7 @@ if [[ $ACTIVE == --active ]]; then
   # Set workspace ownership and permissions.
   # Mount beneath a private altroot, never over the host's /mnt/workspace.
   zfs mount "$POOL/data"
-  chown 2000:2000 "$MOUNT_ROOT/mnt/workspace"
+  chown 1000:1000 "$MOUNT_ROOT/mnt/workspace"
   chmod 0750 "$MOUNT_ROOT/mnt/workspace"
   zfs unmount "$POOL/data"
 else

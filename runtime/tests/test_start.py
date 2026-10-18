@@ -85,7 +85,7 @@ class StartTests(unittest.TestCase):
                 del self.env[variable]
 
     def test_nonroot_never_mounts(self):
-        self.env['UID_RESULT'] = '2000'
+        self.env['UID_RESULT'] = '1000'
         result, calls = self.run_start()
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('workspace-mount', calls)
