@@ -10,8 +10,8 @@ The Dockerfile produces files through `FROM scratch` targets and BuildKit's loca
 | --- | --- | --- |
 | `toolchain`, `source` | Debian Trixie tools and allowlisted source files | No |
 | `live` | live-build, Debian target kernel/DKMS, ISO; remove the temporary chroot before committing the layer | `RUN --security=insecure` |
-| `assembly` | File-only GPT/FAT/GRUB assembly from the live ISO | No |
-| `artifacts` | Scratch stage exporting `live/` and `pairs/PAIR/` | No commands |
+| `assembly` | File-only GPT/FAT/GRUB assembly and sparse archive creation from the live ISO | No |
+| `artifacts` | Scratch stage exporting `live/` and a temporary pair archive for host extraction | No commands |
 | `pair-assembly`, `pair-artifacts` | Assemble/export another pair from an existing ISO | No |
 | `test-assembly`, `test-account`, `test-results` | Sandboxed assembly/login tests and scratch result export | No |
 | `inspection`, `inspection-results` | Inspect an existing ISO; host wrapper separately checks prepared image markers | No |
@@ -22,7 +22,7 @@ No host `/dev`, `/lib/modules`, Docker socket or checkout/build bind mounts are 
 
 ## Requirements and commands
 
-Install Docker Engine with the Buildx plugin; verify `docker buildx version` as your normal user. The Dockerfile uses the `docker/dockerfile:1-labs` frontend for the privileged RUN. The wrapper uses named contexts, metadata export and stage-specific cache controls. CI installs current Buildx. An older distribution Docker package without Buildx is insufficient; see [Docker's installation instructions](https://docs.docker.com/engine/install/).
+Install GNU tar (the `tar` package on Debian/Ubuntu) and Docker Engine with the Buildx plugin; verify `docker buildx version` as your normal user. The Dockerfile uses the `docker/dockerfile:1-labs` frontend for the privileged RUN. The wrapper uses named contexts, metadata export and stage-specific cache controls. CI installs current Buildx. An older distribution Docker package without Buildx is insufficient; see [Docker's installation instructions](https://docs.docker.com/engine/install/).
 
 ```bash
 make builder                       # create/bootstrap the dedicated builder
@@ -45,7 +45,7 @@ make build BUILD_DIR=build-next FRESH=1
 
 Each wrapper build/assembly call generates a fresh `ASSEMBLY_ID` build argument, consumed only in the assembly stages. This forces GPT/PARTUUID/FAT identity generation to rerun while allowing the expensive ISO stage to stay cached. Never use raw cached `pair-artifacts` output as a new pair. The supported Make/wrapper entrypoints always supply the fresh ID.
 
-`make test-container` forces the test stages to rerun. It also exports two small synthetic pairs through the real scratch/local-export path, checks their completion markers, and verifies all ESP/data partition identities are distinct across both pairs.
+`make test-container` forces the test stages to rerun. It also exports two small synthetic pairs through the real sparse archive/local-export/extraction path, checks their completion markers, logical image sizes and sparse allocation, and verifies all ESP/data partition identities are distinct across both pairs.
 
 BuildKit retains intermediate cache on its own Docker volume. `make cache-clean` prunes unused cache on the selected dedicated builder, including its cached ISO; it leaves host images and workspace data intact. `make clean` removes all builders recorded as created by this checkout, including their BuildKit state volumes and cache, plus guarded transient directories from older builds. It never creates or bootstraps a builder during cleanup. The next build recreates its builder. A checkout-wide exclusive lock refuses cleanup while supported build, initialization, USB-writing, upgrade, or QEMU commands are active. Host checks also refuse mounted or loop-attached images. ISO files, initialized images, manifests, logs, and reusable upgrade releases remain on the host. Neither cleanup command runs a global Docker prune. The previous shared `level1vault` builder is left untouched; it may belong to another checkout. If it is no longer needed, inspect it and remove it explicitly with `docker buildx rm level1vault`.
 
@@ -53,9 +53,9 @@ BuildKit retains intermediate cache on its own Docker volume. `make cache-clean`
 
 A successful full export contains `live/live-image-amd64.hybrid.iso`, `live/live-build.log` and the prepared `pairs/PAIR/` images. The wrapper adds `build.log` (plain BuildKit output, including failures), `builder-info.txt` and `build-metadata.json` (successful solve metadata/provenance). No chroot is exported. BuildKit cannot export an unsuccessful stage's files; use the streamed host `build.log` for failed live-build diagnostics.
 
-Allow at least 80 GiB free across Docker storage and output storage for a full build, with more for retained versions. Raw images are 24 GiB per pair; do not rely on sparse allocation surviving BuildKit layer/export processing. The full workflow must be tested on the intended filesystem and storage budget. Inspection transfers only the ISO to avoid another copy of the raw pair.
+Allow at least 80 GiB free across Docker storage and output storage for a full build, with more for retained versions. Raw images have a logical size of 24 GiB per pair. Assembly packages them with GNU tar sparse metadata in the same RUN, then removes the raw files before BuildKit commits the layer. Only the compact, uncompressed archive crosses the layer-copy and local-export boundaries; the host wrapper extracts it as the invoking user into a temporary sibling directory and renames that directory into place after successful extraction. The transport archive is removed after a successful full build. The final image names, logical sizes, manifests and fresh identities are unchanged; allocated storage depends on image contents and filesystem support for sparse files. The full workflow must be tested on the intended filesystem and storage budget. Inspection transfers only the ISO to avoid another copy of the raw pair.
 
-Successful output is not ready to flash until host initialization writes `READY`. An export interrupted after writing some files is incomplete; use only an export that completed successfully and contains `IMAGES-PREPARED`. The wrapper refuses existing output paths, including partial outputs, to avoid merging artifacts or overwriting initialized data. Preserve failed logs and retry in a fresh directory.
+Successful output is not ready to flash until host initialization writes `READY`. A pair is published only after archive extraction succeeds; failed extraction removes its temporary directory. An export interrupted after writing some files is incomplete; use only an export that completed successfully and contains `IMAGES-PREPARED`. The wrapper refuses existing output paths, including partial outputs, to avoid merging artifacts or overwriting initialized data. Preserve failed logs and retry in a fresh directory.
 
 For reproducible releases, pin the Dockerfile frontend, BuildKit image, Debian base image and package snapshots; default tags and mirrors move. See [reproducibility](BUILD.md#reproducibility).
 

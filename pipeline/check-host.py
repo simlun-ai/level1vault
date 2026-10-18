@@ -14,9 +14,9 @@ GROUPS = {
     'Build and container tests': {
         'bash': 'bash', 'sh': 'dash', 'git': 'git', 'make': 'make', 'python3': 'python3',
         'sudo': 'sudo', 'docker': 'docker.io', 'awk': 'mawk', 'grep': 'grep',
-        'sed': 'sed', 'find': 'findutils',
+        'sed': 'sed', 'find': 'findutils', 'tar': 'tar',
         **dict.fromkeys(('realpath', 'mktemp', 'chown', 'chmod', 'cp', 'mkdir', 'rm', 'cat',
-                         'tee', 'head', 'install', 'dirname', 'uname', 'env', 'id', 'ls', 'sort', 'date', 'truncate', 'touch', 'rmdir'), 'coreutils'),
+                         'tee', 'head', 'install', 'dirname', 'uname', 'env', 'id', 'ls', 'sort', 'date', 'truncate', 'touch', 'rmdir', 'mv'), 'coreutils'),
     },
     'Initialization, USB writing and upgrades': {
         **dict.fromkeys(('zpool', 'zfs', 'zdb', 'zgenhostid'), 'zfsutils-linux'),

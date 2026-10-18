@@ -33,7 +33,19 @@ class ScriptTests(unittest.TestCase):
         self.tool('docker', '''echo "docker $*" >> "$LOG"
 case "$1" in
 context) echo unix:///var/run/docker.sock;;
-buildx) case "$2" in inspect) echo "Driver: docker-container";; esac;;
+buildx) case "$2" in
+inspect) echo "Driver: docker-container";;
+build)
+  for arg do
+    case "$arg" in type=local,dest=*) dest=${arg#*dest=}; dest=${dest%%,*};; esac
+  done
+  mkdir -p "$dest/pairs"
+  prepared=$(mktemp -d)
+  touch "$prepared/IMAGES-PREPARED"
+  tar -cf "$dest/pairs/1.tar" -C "$prepared" .
+  rm -rf "$prepared"
+  ;;
+esac;;
 info) echo '{"OSType":"linux","Architecture":"x86_64","SecurityOptions":[]}';;
 esac''')
         self.tool('uname', 'echo x86_64')
