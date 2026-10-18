@@ -2,6 +2,7 @@
 **
 !pipeline/
 !pipeline/Dockerfile
+!pipeline/pair-archive.sh
 !stages/
 !stages/01-build-live/
 !stages/01-build-live/**

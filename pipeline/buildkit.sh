@@ -115,6 +115,10 @@ case $ACTION in
       --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
       --metadata-file "$DEST/build-metadata.json" \
       --output "type=local,dest=$DEST,platform-split=false" "$SOURCE_DIR" 2>&1 | tee "$DEST/build.log"
+    if [[ $ACTION == build ]]; then
+      bash "$SOURCE_DIR/pipeline/pair-archive.sh" unpack "$DEST/pairs/$PAIR_ID.tar" "$DEST/pairs/$PAIR_ID"
+      rm -- "$DEST/pairs/$PAIR_ID.tar"
+    fi
     ;;
 
   # Export another image pair from an existing ISO.
@@ -126,10 +130,14 @@ case $ACTION in
     # Send only the ISO, never the directory containing initialized ZFS images.
     cp --reflink=auto --sparse=always "$BUILD_DIR/live/live-image-amd64.hybrid.iso" "$TASK_TMP/"
     target='pair-artifacts'
-    if [[ $ACTION == release ]]; then target='upgrade-from-iso-artifacts'; fi
+    export_dest=$TASK_TMP/export
+    if [[ $ACTION == release ]]; then target='upgrade-from-iso-artifacts'; export_dest=$DEST; fi
     "${base[@]}" --target "$target" --build-context "iso-input=$TASK_TMP" \
       --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
-      --output "type=local,dest=$DEST,platform-split=false" "$SOURCE_DIR"
+      --output "type=local,dest=$export_dest,platform-split=false" "$SOURCE_DIR"
+    if [[ $ACTION == assemble ]]; then
+      bash "$SOURCE_DIR/pipeline/pair-archive.sh" unpack "$TASK_TMP/export/pair.tar" "$DEST"
+    fi
     ;;
 
   # Verify container behavior and distinct exported image identities.
@@ -145,7 +153,8 @@ case $ACTION in
       "${base[@]}" --target pair-artifacts --build-context "iso-input=$TASK_TMP/iso" \
         --build-arg IMAGE_MIB=512 --build-arg ESP_MIB=64 \
         --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
-        --output "type=local,dest=$TASK_TMP/pair-$pair,platform-split=false" "$SOURCE_DIR"
+        --output "type=local,dest=$TASK_TMP/export-$pair,platform-split=false" "$SOURCE_DIR"
+      bash "$SOURCE_DIR/pipeline/pair-archive.sh" unpack "$TASK_TMP/export-$pair/pair.tar" "$TASK_TMP/pair-$pair"
     done
     python3 "$SOURCE_DIR/stages/02-assemble-pair/tests/check_exports.py" "$TASK_TMP"
     ;;

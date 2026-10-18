@@ -6,7 +6,7 @@ FROM ${DEBIAN_IMAGE} AS toolchain
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     live-build debootstrap xorriso squashfs-tools dosfstools mtools \
     grub-efi-amd64-bin grub-common grub2-common \
-    gdisk util-linux ca-certificates git python3 file cpio rsync kmod apt-utils initramfs-tools-core sudo passwd \
+    gdisk util-linux ca-certificates git python3 file cpio rsync kmod apt-utils initramfs-tools-core sudo passwd tar \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 
@@ -16,6 +16,7 @@ COPY stages/01-build-live/ /src/stages/01-build-live/
 COPY stages/02-assemble-pair/ /src/stages/02-assemble-pair/
 COPY runtime/ /src/runtime/
 COPY common/ /src/common/
+COPY pipeline/pair-archive.sh /src/pipeline/pair-archive.sh
 COPY stages/06-upgrade-os/ /src/stages/06-upgrade-os/
 
 # Accept the full committed source history without local Git configuration.
@@ -31,13 +32,14 @@ RUN --security=insecure LEVEL1VAULT_REPOSITORY=/repository bash /src/stages/01-b
 FROM source AS assembly
 COPY --from=live /artifacts/live-image-amd64.hybrid.iso /input/live.iso
 ARG ASSEMBLY_ID
-RUN test -n "$ASSEMBLY_ID" && /src/stages/02-assemble-pair/assemble.sh /input/live.iso /out
+RUN test -n "$ASSEMBLY_ID" && /src/stages/02-assemble-pair/assemble.sh /input/live.iso /out \
+    && bash /src/pipeline/pair-archive.sh pack /out /export/pair.tar && rm -rf /out
 
 # Export the ISO and prepared pair under their stage output directories.
 FROM scratch AS artifacts
 ARG PAIR_ID=1
 COPY --from=live /artifacts/ /live/
-COPY --from=assembly /out/ /pairs/${PAIR_ID}/
+COPY --from=assembly /export/pair.tar /pairs/${PAIR_ID}.tar
 
 # Accept an existing ISO for an additional pair.
 FROM scratch AS iso-input
@@ -46,9 +48,10 @@ COPY --from=iso-input /live-image-amd64.hybrid.iso /input/live.iso
 ARG ASSEMBLY_ID
 ARG IMAGE_MIB=12288
 ARG ESP_MIB=4096
-RUN test -n "$ASSEMBLY_ID" && /src/stages/02-assemble-pair/assemble.sh /input/live.iso /out
+RUN test -n "$ASSEMBLY_ID" && /src/stages/02-assemble-pair/assemble.sh /input/live.iso /out \
+    && bash /src/pipeline/pair-archive.sh pack /out /export/pair.tar && rm -rf /out
 FROM scratch AS pair-artifacts
-COPY --from=pair-assembly /out/ /
+COPY --from=pair-assembly /export/ /
 
 # Verify each container stage using its own tests.
 FROM source AS test-assembly

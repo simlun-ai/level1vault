@@ -19,7 +19,7 @@ class BuildKitTests(unittest.TestCase):
         tools.mkdir()
         self.log = self.base/'calls.jsonl'
         docker = tools/'docker'
-        docker.write_text('#!' + sys.executable + '\n' + '''import json, os, pathlib, sys
+        docker.write_text('#!' + sys.executable + '\n' + '''import io, json, os, pathlib, sys, tarfile
 args = sys.argv[1:]
 with open(os.environ['CALLS'], 'a') as f:
     f.write(json.dumps(args) + '\\n')
@@ -34,6 +34,17 @@ if args[:2] == ['buildx', 'build']:
         assert sorted(x.name for x in pathlib.Path(context).iterdir()) == expected
     dest = args[args.index('--output')+1].split('dest=',1)[1].split(',')[0]
     pathlib.Path(dest).mkdir(parents=True, exist_ok=True)
+    target = args[args.index('--target')+1]
+    if target in ('artifacts', 'pair-artifacts'):
+        pair = next((x.split('=', 1)[1] for x in args if x.startswith('PAIR_ID=')), '1')
+        archive = pathlib.Path(dest) / (f'pairs/{pair}.tar' if target == 'artifacts' else 'pair.tar')
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(archive, 'w') as output:
+            data = b'prepared image'
+            image = tarfile.TarInfo('usb-a.img')
+            image.size = len(data)
+            output.addfile(image, io.BytesIO(data))
+            output.addfile(tarfile.TarInfo('IMAGES-PREPARED'))
 ''')
         docker.chmod(0o755)
         self.env = dict(os.environ, PATH=f'{tools}:{os.environ["PATH"]}', CALLS=str(self.log), TMPDIR=str(self.base))
@@ -56,6 +67,10 @@ if args[:2] == ['buildx', 'build']:
         for name in ['pair-2', 'pair-3']:
             result = self.run_task('assemble', build, build/name)
             self.assertEqual(result.returncode, 0, result.stderr)
+        for name in ['pair-2', 'pair-3']:
+            self.assertEqual((build/name/'usb-a.img').read_bytes(), b'prepared image')
+            self.assertTrue((build/name/'IMAGES-PREPARED').is_file())
+            self.assertFalse((build/name/'pair.tar').exists())
         commands = self.builds()
         self.assertEqual(len(commands), 2)
         ids = [next(x for x in cmd if x.startswith('ASSEMBLY_ID=')) for cmd in commands]
@@ -63,6 +78,14 @@ if args[:2] == ['buildx', 'build']:
         self.assertTrue(all('--allow' not in cmd for cmd in commands))
         self.assertNotEqual(self.run_task('assemble', build, build/'pair-2').returncode, 0)
         self.assertEqual(len(self.builds()), 2)
+
+    def test_full_build_unpacks_the_selected_pair_and_removes_transport_archive(self):
+        destination = self.base/'full'
+        result = self.run_task('build', destination, env=dict(self.env, PAIR='7'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((destination/'pairs/7/usb-a.img').read_bytes(), b'prepared image')
+        self.assertTrue((destination/'pairs/7/IMAGES-PREPARED').is_file())
+        self.assertFalse((destination/'pairs/7.tar').exists())
 
     def test_failed_export_is_not_success_and_config_arguments_preserve_boundaries(self):
         env = dict(self.env, FAIL_EXPORT='1')

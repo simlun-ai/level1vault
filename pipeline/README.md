@@ -8,6 +8,7 @@ The root Makefile is the public command interface. This directory owns the share
 - `upgrade-os.py` requires an explicit completed `UPGRADE_DIR`, validates the selected existing pair, and invokes the stage 6 updater without building.
 - `prepare-pairs.py` collects the passphrase up front and orchestrates one OS build, inspection, N initializations, replica seeding and final verification (`make prepare-pairs N=3`).
 - `Dockerfile` connects live-build, assembly, inspection, test, and scratch-export targets.
+- `pair-archive.sh` packages sparse images before layer export and extracts prepared pairs as the invoking user.
 - `buildkit.sh` manages the dedicated builder and exports; stage implementations stay under `../stages/`.
 - `lifecycle.py` locks checkout operations against cleanup and hands BuildKit commands back to the invoking sudo user.
 - `clean.py` checks host resources and removes guarded legacy temporary build state; `buildkit.sh clean` removes checkout-owned builders and their state volumes. Both preserve host artifacts and workspace data.
