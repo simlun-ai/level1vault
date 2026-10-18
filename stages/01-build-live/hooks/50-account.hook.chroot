@@ -62,8 +62,8 @@ CONFIG
 [ "$(id -u simlun)" -eq 1000 ]
 [ "$(id -g simlun)" -eq 1000 ]
 
-# Autologin locally as root even when an upgraded USB retains username=simlun in GRUB.
-# The late drop-in overrides live-config's generated autologin configuration.
+# Enforce root autologin on both local and serial consoles.
+# Keep the explicit serial service policy used by workstation QEMU acceptance.
 for unit in getty@ serial-getty@; do
     install -d -m 0755 "/etc/systemd/system/$unit.service.d"
     cat > "/etc/systemd/system/$unit.service.d/zz-level1vault-root.conf" <<'GETTY'
@@ -92,6 +92,9 @@ Pair IDs below are examples; use the IDs printed on your USB pairs.
                                  Active: writable. Replica: read-only.
   sudo workspace-sync 1 2        Copy active pair 1 to unmounted replica pair 2.
                                  Add more replica IDs to update them too; rerun to resume.
+  sudo workspace-prune 1 --keep 10
+                                 Preview old checkpoints; add --apply to delete.
+                                 Holds, pending checkpoints and user snapshots are kept.
   sudo workspace-activate --next 1 --fenced
                                  Promote the next connected pair after pair 1.
                                  Fence/disconnect the old active pair FIRST.
@@ -102,7 +105,7 @@ Pair IDs below are examples; use the IDs printed on your USB pairs.
 
 Export successfully before removing workspace drives; keep the boot USB
 connected until shutdown. OS changes reset on reboot; workspace data persists.
-More options: workspace-sync --help or workspace-activate --help
+More options: workspace-sync --help, workspace-activate --help, workspace-prune --help
 
 Passphrase hint: Ho.
 MOTD

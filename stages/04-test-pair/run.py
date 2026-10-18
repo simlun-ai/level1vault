@@ -117,7 +117,7 @@ class Guest:
         self.expected_revision = expected_revision
 
     def login(self):
-        # Require root autologin, including when upgrading an older GRUB configuration.
+        # Require root autologin on the serial console.
         prompt = r'root@[^\r\n]*# '
         result = self.child.expect([r'login: ', prompt], timeout=self.timeout)
         require(result == 1, 'Expected automatic root console login')

@@ -306,6 +306,28 @@ def main():
             for pool in POOLS[1:]:
                 assert 'level1vault-' + run('zpool', 'get', '-H', '-o', 'value', 'guid', pool) in held
 
+            # Retention preserves held replication bases and user snapshots.
+            source = 'level1-workspace-1/data'
+            retained = sync.create_checkpoint(source)
+            command('zfs', 'hold', 'operator-hold', retained)
+            obsolete = sync.create_checkpoint(source)
+            newest = sync.create_checkpoint(source)
+            user_snapshot = source + '@operator-checkpoint'
+            command('zfs', 'snapshot', user_snapshot)
+            before = sync.snapshots(source)
+            helper('workspace-prune', '1', '--keep', '1')
+            assert sync.snapshots(source) == before
+            helper('workspace-prune', '1', '--keep', '1', '--apply')
+            after = dict(sync.snapshots(source))
+            assert obsolete not in after
+            assert all(name in after for name in (retained, newest, user_snapshot, checkpoint[0]))
+            helper('workspace-prune', '2', '--keep', '1', '--apply')
+            assert sync.snapshots('level1-workspace-2/data')[-1][1] == checkpoint[1]
+            helper('workspace-sync', '1', '2', '3', '10')
+            checkpoint = sync.snapshots(source)[-1]
+            for pair in PAIRS[1:]:
+                assert sync.snapshots('level1-workspace-' + pair + '/data')[-1][1] == checkpoint[1]
+
             # Reusing an explicit checkpoint when rotating pairs separately.
             helper('workspace-sync', '--snapshot', checkpoint[0].split('@')[1], '1', '10')
             helper('workspace-sync', '2', '3', ok=False)  # inactive source

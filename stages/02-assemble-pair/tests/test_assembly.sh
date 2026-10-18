@@ -47,6 +47,8 @@ for name in ('a', 'b'):
     grub = (p/f'grub-{name}.cfg').read_text()
     assert uuid in grub
     assert 'loglevel=4' in grub
+    assert 'username=root' in grub
+    assert 'username=simlun' not in grub
     with (p/f'out/usb-{name}.img').open('rb') as f:
         # First 256 KiB of the data partition remains blank (no ZFS labels).
         f.seek(65*1024*1024)

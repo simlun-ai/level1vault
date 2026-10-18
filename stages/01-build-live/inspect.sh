@@ -76,9 +76,11 @@ test -x "$ROOT/usr/local/sbin/workspace-discover"
 test -x "$ROOT/usr/local/sbin/workspace-umount"
 test -x "$ROOT/usr/local/sbin/workspace-sync"
 test -x "$ROOT/usr/local/sbin/workspace-activate"
+test -x "$ROOT/usr/local/sbin/workspace-prune"
+chroot "$ROOT" /usr/local/sbin/workspace-prune --help >/dev/null
 chroot "$ROOT" /usr/local/sbin/workspace-activate --help >/dev/null
 chroot "$ROOT" python3 /usr/local/sbin/workspace-sync --help >/dev/null
-for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
+for command in workspace-mount workspace-umount workspace-sync workspace-activate workspace-prune; do
   grep -Fq "sudo $command" "$ROOT/etc/motd"
 done
 [[ $(chroot "$ROOT" id -u simlun) == 1000 && $(chroot "$ROOT" id -g simlun) == 1000 ]]
