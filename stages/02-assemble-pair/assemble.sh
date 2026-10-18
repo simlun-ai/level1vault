@@ -3,7 +3,7 @@ set -euo pipefail
 # File-only assembly: no root, loop devices, mounts, udev, or ZFS module required.
 [[ $# -eq 2 ]] || { echo "Usage: $0 ISO NEW_OUTPUT_DIRECTORY" >&2; exit 2; }
 for cmd in xorriso unsquashfs sgdisk mkfs.vfat mcopy grub-mkstandalone \
-  blkid python3 realpath truncate sha256sum stat cp dd mktemp; do
+  blkid python3 realpath truncate stat cp dd mktemp; do
   command -v "$cmd" >/dev/null || { echo "Missing command: $cmd" >&2; exit 1; }
 done
 
@@ -101,8 +101,7 @@ assert images['a']['zfs_partuuid'] != images['b']['zfs_partuuid'], 'Duplicate pa
     'images': images}, indent=2)+'\n')
 PY
 
-# Publish checksums and mark the images ready for initialization.
-(cd "$OUT_DIR" && sha256sum usb-a.img usb-b.img images.json > PREPARED-SHA256SUMS)
-{ date -u +build_time=%FT%TZ; sha256sum "$ISO"; dpkg-query -W live-build grub-common grub-efi-amd64-bin; } > "$OUT_DIR/BUILD-INFO.txt"
+# Record build information and mark the images ready for initialization.
+{ date -u +build_time=%FT%TZ; dpkg-query -W live-build grub-common grub-efi-amd64-bin; } > "$OUT_DIR/BUILD-INFO.txt"
 touch "$OUT_DIR/IMAGES-PREPARED"
 printf 'Boot images prepared in %s; ZFS partitions are empty. Run make initialize on the host.\n' "$OUT_DIR"

@@ -11,7 +11,7 @@ from upgrade import digest, load_release, require
 def apply_to_copy(image, release):
     # Restrict test updates to regular files and validate the release first.
     require(image.is_file() and not image.is_symlink(), 'Expected a disposable regular image file')
-    manifest = load_release(release)
+    load_release(release)
     device = str(image) + '@@1048576'
     with tempfile.TemporaryDirectory(prefix='upgrade-readback-') as temporary:
         root = Path(temporary)
@@ -33,10 +33,8 @@ def apply_to_copy(image, release):
             if (release / name).exists():
                 subprocess.run(['mcopy', '-s', '-i', device, str(release / name), '::/'], check=True)
 
-        # Verify the payload and unchanged boot files on the copied filesystem.
-        checksums = dict(manifest['files'], **originals)
-        checksums['live/release.json'] = digest(release / 'live/release.json')
-        for index, (name, checksum) in enumerate(checksums.items()):
+        # Check boot-file preservation on the disposable filesystem.
+        for index, (name, checksum) in enumerate(originals.items()):
             target = root / ('readback-' + str(index))
             subprocess.run(['mcopy', '-i', device, '::/' + name, str(target)], check=True)
             require(digest(target) == checksum, f'Test-copy readback mismatch: {name}')

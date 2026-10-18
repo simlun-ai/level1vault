@@ -146,7 +146,6 @@ case $ACTION in
         --build-arg IMAGE_MIB=512 --build-arg ESP_MIB=64 \
         --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
         --output "type=local,dest=$TASK_TMP/pair-$pair,platform-split=false" "$SOURCE_DIR"
-      (cd "$TASK_TMP/pair-$pair" && sha256sum -c PREPARED-SHA256SUMS)
     done
     python3 "$SOURCE_DIR/stages/02-assemble-pair/tests/check_exports.py" "$TASK_TMP"
     ;;
@@ -158,7 +157,6 @@ case $ACTION in
     [[ -f $OUT_DIR/IMAGES-PREPARED && ! -e $OUT_DIR/READY && ! -e $OUT_DIR/INITIALIZING ]] || {
       echo 'Inspect only uninitialized prepared artifacts' >&2; exit 1;
     }
-    (cd "$OUT_DIR" && sha256sum -c PREPARED-SHA256SUMS)
     TASK_TMP=$(mktemp -d)
     mkdir "$TASK_TMP/input"
     cp --reflink=auto --sparse=always "$BUILD_DIR/live/live-image-amd64.hybrid.iso" "$TASK_TMP/input/"

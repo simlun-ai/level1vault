@@ -12,7 +12,7 @@ cd level1vault
 make prepare-pairs N=3           # choose the number of pairs
 ```
 
-Sudo authentication and the new workspace passphrase/confirmation happen up front. The command builds and inspects the OS once, prepares pairs **1 through N**, initializes pair 1 as active, populates the others as encrypted replicas, and verifies final checksums. No further input is needed during preparation.
+Sudo authentication and the new workspace passphrase/confirmation happen up front. The command builds and inspects the OS once, prepares pairs **1 through N**, initializes pair 1 as active, populates the others as encrypted replicas, and publishes readiness after exporting the pools. No further input is needed during preparation.
 
 Exports and host metadata are owned by your invoking user. Ready-to-write images are `build/default/pairs/1/usb-a.img` and `usb-b.img`, then the same filenames under `pairs/2/`, and so on. Only USB writing remains; no initial replication is needed after flashing. Use a new `BUILD_DIR` for another batch. The command never overwrites an existing run. Each needs a USB drive of at least 12 GiB (16 GiB recommended). Optional: [test in QEMU first](docs/QEMU.md).
 

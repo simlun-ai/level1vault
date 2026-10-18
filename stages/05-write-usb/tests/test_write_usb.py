@@ -1,6 +1,7 @@
 """Verify disk-writing guards and command ordering without opening real devices."""
 import copy
 import hashlib
+import io
 import importlib.util
 import json
 from pathlib import Path
@@ -22,11 +23,8 @@ class WriteUsbTests(unittest.TestCase):
         self.out = Path(self.tmp.name).resolve()
         (self.out / 'READY').touch()
         (self.out / 'WORKSPACE-INFO.txt').write_text('pair=4\nstate=replica\n')
-        checksums = []
         for name in ('usb-a.img', 'usb-b.img', 'images.json'):
             (self.out / name).write_text(name)
-            checksums.append(hashlib.sha256(name.encode()).hexdigest() + '  ' + name + '\n')
-        (self.out / 'SHA256SUMS').write_text(''.join(checksums))
         self.disks = [dict(name='/dev/sda', device_id=1, type='disk', size=1000, tran='usb', ro=False,
                            children=[dict(name='/dev/sda2', type='part', mountpoints=[None], ro=False)]),
                       dict(name='/dev/sdb', device_id=2, type='disk', size=1000, tran='usb', ro=False)]
@@ -41,17 +39,17 @@ class WriteUsbTests(unittest.TestCase):
     def write(self):
         writer.write_pair(self.out, '4', Path('/dev/sda'), Path('/dev/sdb'))
 
-    def test_writes_both_images_only_after_validation_and_repairs_gpt(self):
+    def test_writes_and_verifies_before_relocating_and_validating_gpt(self):
+        events = []
         with patch.object(writer, 'output', side_effect=self.output), \
                 patch.object(writer, 'disk_info', side_effect=self.disks), \
-                patch.object(writer.subprocess, 'run') as run:
+                patch.object(writer, 'write_image', side_effect=lambda image, disk: events.append(('write', disk.name))), \
+                patch.object(writer.subprocess, 'run', side_effect=lambda cmd, **kw: events.append(tuple(cmd))):
             self.write()
-        commands = [call.args[0] for call in run.call_args_list]
-        self.assertEqual([cmd[0] for cmd in commands], ['dd', 'sgdisk', 'dd', 'sgdisk', 'sync', 'partprobe'])
-        self.assertIn('if=' + str(self.out / 'usb-a.img'), commands[0])
-        self.assertIn('of=/dev/sda', commands[0])
-        self.assertIn('if=' + str(self.out / 'usb-b.img'), commands[2])
-        self.assertIn('of=/dev/sdb', commands[2])
+        self.assertEqual(events, [('write', 'sda'), ('sgdisk', '-e', '/dev/sda'),
+                                  ('sfdisk', '--verify', '/dev/sda'), ('write', 'sdb'),
+                                  ('sgdisk', '-e', '/dev/sdb'), ('sfdisk', '--verify', '/dev/sdb'),
+                                  ('sync',), ('partprobe', '/dev/sda', '/dev/sdb')])
 
     def test_rejects_second_disk_before_writing_first(self):
         self.disks[1]['size'] = 1
@@ -85,13 +83,14 @@ class WriteUsbTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Not a block device'):
             writer.disk_info(self.out / 'usb-a.img')
 
-    def test_source_integrity_failure_prevents_device_access(self):
-        (self.out / 'usb-a.img').write_text('changed')
+    def test_source_readiness_failure_prevents_device_access(self):
+        (self.out / 'READY').unlink()
         with patch.object(writer, 'output') as output, patch.object(writer.subprocess, 'run') as run:
-            with self.assertRaisesRegex(ValueError, 'Checksum mismatch'):
+            with self.assertRaisesRegex(ValueError, 'READY'):
                 self.write()
         output.assert_not_called()
         run.assert_not_called()
+        (self.out / 'READY').touch()
         with self.assertRaisesRegex(ValueError, 'PAIR'):
             writer.verify_images(self.out, '3')
 
@@ -112,10 +111,93 @@ class WriteUsbTests(unittest.TestCase):
     def test_write_failure_stops_before_second_disk(self):
         with patch.object(writer, 'output', side_effect=self.output), \
                 patch.object(writer, 'disk_info', side_effect=self.disks), \
-                patch.object(writer.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'dd')) as run:
-            with self.assertRaises(subprocess.CalledProcessError):
+                patch.object(writer, 'write_image', side_effect=ValueError('readback mismatch')) as write, \
+                patch.object(writer.subprocess, 'run') as run:
+            with self.assertRaisesRegex(ValueError, 'readback mismatch'):
                 self.write()
-        self.assertEqual(run.call_count, 1)
+        self.assertEqual(write.call_count, 1)
+        run.assert_not_called()
+
+    def test_stream_write_fsync_flush_and_readback_exact_extent(self):
+        image = self.out / 'usb-a.img'
+        image.write_bytes(b'payload' * (4 * 1024 * 1024 // 7 + 1))
+        disk = self.out / 'disk'
+        disk.write_bytes(b'x' * (image.stat().st_size + 3000))
+        events = []
+        fsync = writer.os.fsync
+        def flush(cmd, **kwargs):
+            events.append('flush')
+            self.assertEqual(cmd, ['blockdev', '--flushbufs', str(disk)])
+        def synced(fd):
+            events.append('fsync')
+            fsync(fd)
+        with patch.object(writer.os, 'fsync', side_effect=synced), \
+                patch.object(writer.subprocess, 'run', side_effect=flush):
+            writer.write_image(image, disk)
+        self.assertEqual(events, ['fsync', 'flush'])
+        self.assertEqual(disk.read_bytes(), image.read_bytes() + b'x' * 3000)
+
+    def test_readback_rejects_corruption_short_reads_and_flush_errors(self):
+        disk = self.out / 'disk'
+        expected = hashlib.sha256(b'expected').hexdigest()
+        for data, message in ((b'corrupt!', 'checksum mismatch'), (b'short', 'Short USB readback')):
+            disk.write_bytes(data)
+            with patch.object(writer.subprocess, 'run'):
+                with self.assertRaisesRegex(ValueError, message):
+                    writer.readback(disk, 8, expected)
+        with patch.object(writer.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'blockdev')):
+            with self.assertRaises(subprocess.CalledProcessError):
+                writer.readback(disk, 8, expected)
+
+    def test_readback_propagates_device_read_errors(self):
+        with patch.object(writer.subprocess, 'run'), \
+                patch.object(Path, 'open', side_effect=OSError('device read error')):
+            with self.assertRaisesRegex(OSError, 'device read error'):
+                writer.readback(self.out / 'disk', 8, '0' * 64)
+
+    def test_fsync_error_prevents_readback(self):
+        image = self.out / 'usb-a.img'
+        disk = self.out / 'disk'
+        disk.write_bytes(b'x' * 100)
+        with patch.object(writer.os, 'fsync', side_effect=OSError('flush failed')), \
+                patch.object(writer, 'readback') as readback:
+            with self.assertRaisesRegex(OSError, 'flush failed'):
+                writer.write_image(image, disk)
+        readback.assert_not_called()
+
+    def test_zero_byte_write_stops_instead_of_looping(self):
+        original = Path.open
+        def opened(path, *args, **kwargs):
+            if path.name == 'disk':
+                from unittest.mock import MagicMock
+                target = MagicMock()
+                target.__enter__.return_value.write.return_value = 0
+                return target
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'open', opened), patch.object(writer, 'readback') as readback:
+            with self.assertRaisesRegex(ValueError, 'Short USB write'):
+                writer.write_image(self.out / 'usb-a.img', self.out / 'disk')
+        readback.assert_not_called()
+
+    def test_stream_writer_handles_partial_writes(self):
+        image = self.out / 'usb-a.img'
+        data = image.read_bytes()
+        class PartialDisk(io.BytesIO):
+            def write(self, block):
+                return super().write(block[:2])
+            def fileno(self):
+                return 123
+            def close(self):
+                pass
+        target = PartialDisk()
+        original = Path.open
+        def opened(path, *args, **kwargs):
+            return target if path.name == 'disk' else original(path, *args, **kwargs)
+        with patch.object(Path, 'open', opened), patch.object(writer.os, 'fsync'), \
+                patch.object(writer, 'readback') as readback:
+            writer.write_image(image, self.out / 'disk')
+        self.assertEqual(target.getvalue(), data)
+        readback.assert_called_once_with(self.out / 'disk', len(data), hashlib.sha256(data).hexdigest())
 
     def test_make_requires_both_arguments_before_sudo(self):
         for disks in ([], ['DISK_A=/dev/sda'], ['DISK_B=/dev/sdb']):

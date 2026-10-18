@@ -35,7 +35,7 @@ make prepare-pairs N=3
 
 `N` is mandatory and must be a positive integer. The target authenticates with sudo once, checks host prerequisites, and prompts for the new workspace encryption passphrase twice **before** building. The host coordinator retains privilege so sudo does not expire midway through the build, but runs Buildx as the invoking user with that user’s Docker configuration. Host-created markers and reports are published with the invoking UID/GID, including on handled failures. Direct root invocation with `SUDO=` retains root ownership. The passphrase stays in memory and is passed to the first initializer through stdin; it is never saved in arguments, environment, images, or logs. All later subprocesses have closed stdin and require no operator input.
 
-The command builds one ISO, inspects it, assembles unique pairs numbered 1 through N, initializes pair 1 as active and the others as replicas, and populates every replica from a shared raw encrypted checkpoint. Only the new images are attached on host loops. Imports use their recorded pool GUIDs and private device search directories. The command exports only its own pools, detaches their loops, recalculates final checksums, and verifies every pair before reporting success. Replicas inherit pair 1's workspace passphrase.
+The command builds one ISO, inspects it, assembles unique pairs numbered 1 through N, initializes pair 1 as active and the others as replicas, and populates every replica from a shared raw encrypted checkpoint. Only the new images are attached on host loops. Imports use their recorded pool GUIDs and private device search directories. The command exports only its own pools, detaches their loops, and publishes readiness for every pair before reporting success. Replicas inherit pair 1's workspace passphrase.
 
 On success, write each pair using [the USB target](../stages/05-write-usb/README.md):
 
@@ -70,7 +70,7 @@ Successful output:
 | `build/default/pairs/1/usb-a.img`, `usb-b.img` | Stage 2 bootable pair |
 | `build/default/pairs/1/images.json` | Target versions and per-image identities |
 | `build/default/pairs/1/BUILD-INFO.txt` | Assembly record |
-| `build/default/pairs/1/PREPARED-SHA256SUMS`, `IMAGES-PREPARED` | Stage 2 completion and checksums |
+| `build/default/pairs/1/IMAGES-PREPARED` | Stage 2 completion marker |
 | `build/default/builder-info.txt`, `build-metadata.json`, `build.log` | Pipeline records |
 | `build/default/validation/<test-run>/` | Optional workstation acceptance reports |
 
@@ -88,12 +88,11 @@ make initialize PAIR=1 ACTIVE=1
 # Enter/confirm the workspace encryption passphrase at ZFS's stdin prompt.
 test -f build/default/pairs/1/READY
 cat build/default/pairs/1/WORKSPACE-INFO.txt
-(cd build/default/pairs/1 && sha256sum -c SHA256SUMS)
 ```
 
-This verifies the prepared checksums, refuses attached/previously initialized images, attaches both files using loop devices, verifies their data PARTUUIDs and blank signatures, and creates **one pool across both partitions**. Nothing is created on physical USBs at this stage.
+This validates prepared metadata, refuses attached/previously initialized images, attaches both files using loop devices, verifies their data PARTUUIDs and blank signatures, and creates **one pool across both partitions**. Nothing is created on physical USBs at this stage.
 
-The pool has `ashift=12`, `cachefile=none`, an unmountable root dataset, and an AES-256-GCM encrypted `workspace-1/data` with `keyformat=passphrase`, `keylocation=prompt`, `canmount=noauto`, LZ4 compression and the expected mountpoint. It briefly mounts the new dataset beneath a private temporary altroot to set the filesystem root to `2000:2000`, mode `0750`, without covering a host mountpoint. The passphrase is read directly by ZFS from stdin and is never saved in the image or manifest. The script exports the pool and detaches loops before writing `READY` and final image checksums. It never imports/exports unrelated host pools.
+The pool has `ashift=12`, `cachefile=none`, an unmountable root dataset, and an AES-256-GCM encrypted `workspace-1/data` with `keyformat=passphrase`, `keylocation=prompt`, `canmount=noauto`, LZ4 compression and the expected mountpoint. It briefly mounts the new dataset beneath a private temporary altroot to set the filesystem root to `2000:2000`, mode `0750`, without covering a host mountpoint. The passphrase is read directly by ZFS from stdin and is never saved in the image or manifest. The script exports the pool and detaches loops before writing `READY`. It never imports/exports unrelated host pools.
 
 To support Ubuntu 22.04's OpenZFS 2.1 and Debian 13's newer ZFS, creation uses `zpool create -d` and enables **`lz4_compress`, `encryption` and encryption's required dependencies** (including `extensible_dataset` for resumable receives). These features are supported by OpenZFS 2.1. This omits newer optional pool features. `zpool status` may report that supported features are disabled; that message is expected. **Do not run `zpool upgrade`** if you need continued access from hosts using OpenZFS 2.1. Exact host/live-system package equality is not required.
 

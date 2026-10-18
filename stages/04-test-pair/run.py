@@ -4,7 +4,6 @@ import argparse
 import base64
 import datetime
 import getpass
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -31,15 +30,6 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def digest(path):
-    # Check large images without loading them into memory.
-    value = hashlib.sha256()
-    with path.open('rb') as stream:
-        for block in iter(lambda: stream.read(4 * 1024 * 1024), b''):
-            value.update(block)
-    return value.hexdigest()
-
-
 def verify_inputs(out, pair, sys_block=Path('/sys/block')):
     # Reject incomplete, unexpected, or host-attached source images.
     require(out.is_dir(), 'OUT must be an initialized image directory')
@@ -60,19 +50,6 @@ def verify_inputs(out, pair, sys_block=Path('/sys/block')):
             resolved = Path('/' + backing.lstrip('/')).resolve()
             require(resolved not in files[:2], f'Source image is attached to {entry.parts[-3]}')
 
-    # Verify only the expected manifest entries, never paths supplied by a checksum file.
-    recorded = {}
-    for line in (out / 'SHA256SUMS').read_text().splitlines():
-        match = re.fullmatch(r'([a-fA-F0-9]{64}) [ *](.+)', line)
-        require(match is not None, 'Malformed SHA256SUMS')
-        checksum, name = match.groups()
-        require(name in names and name not in recorded, 'Unexpected or duplicate checksum entry')
-        recorded[name] = checksum.lower()
-    require(set(recorded) == set(names), 'SHA256SUMS must cover both images and images.json')
-    for path in files:
-        require(digest(path) == recorded[path.name], f'Checksum mismatch: {path.name}')
-    return recorded
-
 
 def serial_config(config):
     # Enable the test console without changing the image's boot selection.
@@ -87,15 +64,14 @@ def serial_config(config):
     return ''.join(lines)
 
 
-def prepare_copies(out, work, checksums, upgrade_release=None):
+def prepare_copies(out, work, upgrade_release=None):
     # Copy the raw disks while QEMU's normal source locking is in effect.
     for side in ('a', 'b'):
         source = out / f'usb-{side}.img'
         target = work / source.name
         command('qemu-img', 'convert', '-f', 'raw', '-O', 'raw', str(source), str(target))
-        require(digest(target) == checksums[source.name], 'Source changed during copying; stop all writers')
 
-        # Apply optional OS upgrades only after the disposable copy is verified.
+        # Apply optional OS upgrades only to the disposable copy.
         if upgrade_release is not None:
             subprocess.run([sys.executable, str(ROOT / 'stages/06-upgrade-os/copy_test.py'),
                             str(target), str(upgrade_release)], check=True)
@@ -193,7 +169,7 @@ class Guest:
         require(self.child.exitstatus == 0, 'QEMU did not exit cleanly')
 
 
-def run_suite(args, expect, out, results, checksums, firmware, passphrase):
+def run_suite(args, expect, out, results, firmware, passphrase):
     # Keep copied workspace data temporary even when a test is interrupted.
     run_id = uuid.uuid4().hex[:16]
     completed = []
@@ -201,11 +177,11 @@ def run_suite(args, expect, out, results, checksums, firmware, passphrase):
     if args.upgrade_release is not None:
         expected_revision = json.loads((args.upgrade_release / 'live/release.json').read_text())['source_commit']
     report = {'status': 'running', 'pair': args.pair, 'run': run_id,
-              'source_checksums': checksums, 'completed': completed}
+              'completed': completed}
     try:
         with tempfile.TemporaryDirectory(prefix='disks-', dir=results) as temporary:
             work = Path(temporary)
-            prepare_copies(out, work, checksums, args.upgrade_release)
+            prepare_copies(out, work, args.upgrade_release)
             for scenario in json.loads(SCENARIOS.read_text()):
                 print(f"QEMU: {scenario['name']} — {scenario['purpose']}", flush=True)
                 variables = work / 'vars.fd'
@@ -294,7 +270,7 @@ def main():
         for tool in ('mdir', 'mdeltree'):
             require(shutil.which(tool) is not None, f'Missing host tool: {tool}')
     print('Checking source images; stop all VMs and detach their host loop mappings.', flush=True)
-    checksums = verify_inputs(out, args.pair)
+    verify_inputs(out, args.pair)
     if args.passphrase_stdin:
         passphrase = sys.stdin.readline().rstrip('\n')
     else:
@@ -305,7 +281,7 @@ def main():
     # Protect test logs and run the acceptance suite on private copies.
     os.umask(0o077)
     try:
-        run_suite(args, pexpect, out, results, checksums, firmware, passphrase)
+        run_suite(args, pexpect, out, results, firmware, passphrase)
     except (pexpect.TIMEOUT, pexpect.EOF):
         raise RuntimeError('Guest timed out or exited unexpectedly; inspect the scenario log (unlock exchange omitted)') from None
     print('QEMU acceptance passed; original images were not modified.', flush=True)

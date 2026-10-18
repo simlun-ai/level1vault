@@ -55,9 +55,6 @@ def prepare(base, pair, active=False):
                          run('sgdisk', '-i', '2', str(image)).splitlines() if line.startswith('Partition unique GUID:'))
         images[side] = {'file': image.name, 'zfs_partuuid': part_uuid}
     (out/'images.json').write_text(json.dumps({'format': 1, 'images': images}))
-    with (out/'PREPARED-SHA256SUMS').open('w') as f:
-        for name in ['usb-a.img', 'usb-b.img', 'images.json']:
-            f.write(hashlib.sha256((out/name).read_bytes()).hexdigest() + '  ' + name + '\n')
     (out/'IMAGES-PREPARED').touch()
     cmd = ['bash', str(ROOT/'stages/03-initialize-pair/initialize.sh'), str(out), pair]
     if active:
@@ -135,8 +132,6 @@ def verify_os_upgrade(out, base):
             value.update(block)
             remaining -= len(block)
     assert value.hexdigest() == data_before[0]
-    with (out/'SHA256SUMS').open('w') as stream:
-        command('sha256sum', 'usb-a.img', 'usb-b.img', 'images.json', cwd=out, stdout=stream)
 
 
 def interrupted_transfer(send, destination, readonly):
@@ -182,11 +177,11 @@ def main():
 
             verify_os_upgrade(base/'pairs/1', base)
 
-            # Verify pre-flash replica seeding and finalized image checksums.
+            # Verify pre-flash replica seeding and completion markers.
             command('python3', str(ROOT/'stages/03-initialize-pair/seed.py'), str(base), '2')
             assert not set(run('zpool', 'list', '-H', '-o', 'name').splitlines()).intersection(POOLS)
             for pair in ['1', '2']:
-                command('bash', str(ROOT/'stages/03-initialize-pair/verify.sh'), str(base/'pairs'/pair))
+                assert (base/'pairs'/pair/'READY').is_file()
             for pair in PAIRS:
                 pool = 'workspace-' + pair
                 out = base/'pairs'/pair

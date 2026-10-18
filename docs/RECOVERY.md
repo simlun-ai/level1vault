@@ -131,7 +131,6 @@ With pair 2 active and pair 3 successfully rebound, replace the lost pair with a
    ```bash
    make assemble PAIR=4
    make initialize PAIR=4
-   make verify PAIR=4
    ```
 
    These use `build/default`; use your original `BUILD_DIR` if different. Do not set `ACTIVE=1` or clone an existing pair's initialized images.

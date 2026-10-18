@@ -12,7 +12,6 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 | `make prepare-pairs N=3` | Build once and prepare N complete pairs with prompts up front |
 | `make build` | Build the Trixie toolchain, live ISO and first prepared image pair in a new `build/default/` |
 | `make initialize PAIR=1 ACTIVE=1` | Initialize the first writable encrypted mirror on the host; prompt for its passphrase |
-| `make verify` | Require `READY` and verify final image/manifest checksums |
 | `make assemble PAIR=2` | Reuse the existing ISO to assemble a new pair with unique identities |
 | `make initialize PAIR=2` | Initialize an empty replica; its first receive creates the encrypted data filesystem |
 | `make builder` | Create/bootstrap the dedicated BuildKit builder |
@@ -30,7 +29,6 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 ```bash
 make build BUILD_DIR=build-next
 make initialize BUILD_DIR=build-next PAIR=5 ACTIVE=1
-make verify OUT=build-next/pairs/5
 ```
 
 Only set `ACTIVE=1` when provisioning the initial writable pair for a deployment. Additional pairs default to replicas. Do not provision a second independent active pair as a failover shortcut; follow [pair operations](PAIRS.md).
@@ -74,7 +72,7 @@ QEMU testing uses `stages/04-test-pair/run.py`, the guest checks in `stages/04-t
 
 **CI does not launch VMs.** QEMU boot/recovery acceptance is an explicit workstation operation through `make test-qemu PAIR=N`. CI still lints the guest checks, unit-tests the runner without launching QEMU, and checks that the manual acceptance instructions match the shared test sources. Native file-backed ZFS integration on the disposable CI runner remains separate and does not launch a guest.
 
-`make check-build` expects prepared, uninitialized images. Run it before `make initialize`; later initialization intentionally changes the data partitions and image checksums. Full builds and hardware acceptance remain separate from the fast tests. See [validation](VALIDATION.md).
+`make check-build` expects prepared, uninitialized images. Run it before `make initialize`; later initialization intentionally changes the data partitions. Full builds and hardware acceptance remain separate from the fast tests. See [validation](VALIDATION.md).
 
 ## Cleanup and rebuilds
 
@@ -85,7 +83,7 @@ make clean                       # default build directory
 make clean BUILD_DIR=build-next  # a selected build directory
 ```
 
-Current builds export artifacts only; their working state is in BuildKit. Use `make cache-clean` to prune its unused cache. The default `make clean` also checks recognized legacy work directly under `build/`, including `build/binary/`. Selecting another `BUILD_DIR` selects its local transient work; Docker cleanup still removes all builders recorded for this checkout. `make clean` removes those builders and their state/cache volumes; a subsequent build recreates them. For legacy builds, cleanup removes only `chroot/`, `cache/`, `config/` and `binary/` inside a recognized build directory. It retains the ISO, every image pair (including initialized workspaces), manifests, logs, checksums and state markers. It never exports pools, detaches loops or deletes Docker images. Docker must be available for cleanup checks. A checkout-wide lifecycle lock rejects cleanup during supported operations, even if no legacy transient directories exist. Cleanup refuses active container binds, mounted filesystems and loop-backed files under the checkout or selected build, as well as unexpected paths or symlinks.
+Current builds export artifacts only; their working state is in BuildKit. Use `make cache-clean` to prune its unused cache. The default `make clean` also checks recognized legacy work directly under `build/`, including `build/binary/`. Selecting another `BUILD_DIR` selects its local transient work; Docker cleanup still removes all builders recorded for this checkout. `make clean` removes those builders and their state/cache volumes; a subsequent build recreates them. For legacy builds, cleanup removes only `chroot/`, `cache/`, `config/` and `binary/` inside a recognized build directory. It retains the ISO, every image pair (including initialized workspaces), manifests, logs and state markers. It never exports pools, detaches loops or deletes Docker images. Docker must be available for cleanup checks. A checkout-wide lifecycle lock rejects cleanup during supported operations, even if no legacy transient directories exist. Cleanup refuses active container binds, mounted filesystems and loop-backed files under the checkout or selected build, as well as unexpected paths or symlinks.
 
 The retained build is an archive of artifacts, not a reusable live-build working directory. The builder still refuses an existing directory, so rebuild with a fresh name:
 

@@ -1,6 +1,6 @@
 # Stage 2: assemble a bootable pair
 
-Input: the stage 1 live ISO. Output: `usb-a.img`, `usb-b.img`, `images.json`, `BUILD-INFO.txt`, `PREPARED-SHA256SUMS`, and `IMAGES-PREPARED` in a new pair directory. Workspace partitions are empty.
+Input: the stage 1 live ISO. Output: `usb-a.img`, `usb-b.img`, `images.json`, `BUILD-INFO.txt` and `IMAGES-PREPARED` in a new pair directory. Workspace partitions are empty.
 
 `assemble.sh ISO NEW_OUTPUT_DIRECTORY` creates GPT images and independently bootable EFI filesystems using file operations inside the sandboxed BuildKit stage. Every assembly has fresh disk identities.
 

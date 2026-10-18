@@ -29,23 +29,18 @@ class QemuTests(unittest.TestCase):
         (self.out / 'WORKSPACE-INFO.txt').write_text('pair=1\nstate=active\n')
         for name in ('usb-a.img', 'usb-b.img', 'images.json'):
             (self.out / name).write_text(name)
-        self.checksums = {name: runner.digest(self.out / name)
-                          for name in ('usb-a.img', 'usb-b.img', 'images.json')}
-        (self.out / 'SHA256SUMS').write_text(''.join(f'{checksum}  {name}\n'
-                                                  for name, checksum in self.checksums.items()))
 
     def verify(self):
         return runner.verify_inputs(self.out, '1', self.sysfs)
 
-    def test_preflight_checks_identity_checksums_and_partial_setup(self):
-        self.assertEqual(self.verify(), self.checksums)
+    def test_preflight_checks_identity_and_partial_setup(self):
+        self.assertIsNone(self.verify())
         (self.out / 'INITIALIZING').touch()
         with self.assertRaisesRegex(RuntimeError, 'completed'):
             self.verify()
         (self.out / 'INITIALIZING').unlink()
         (self.out / 'usb-a.img').write_text('changed')
-        with self.assertRaisesRegex(RuntimeError, 'Checksum mismatch'):
-            self.verify()
+        self.verify()
 
     def test_rejects_attached_images_and_symlinks(self):
         entry = self.sysfs / 'loop0/loop/backing_file'
@@ -59,16 +54,12 @@ class QemuTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'regular files'):
             self.verify()
 
-    def test_rejects_replica_wrong_pair_and_unexpected_checksum_paths(self):
+    def test_rejects_replica_and_wrong_pair(self):
         for info in ('pair=1\nstate=replica\n', 'pair=2\nstate=active\n'):
             (self.out / 'WORKSPACE-INFO.txt').write_text(info)
             with self.assertRaisesRegex(RuntimeError, 'active pair'):
                 self.verify()
         (self.out / 'WORKSPACE-INFO.txt').write_text('pair=1\nstate=active\n')
-        with (self.out / 'SHA256SUMS').open('a') as stream:
-            stream.write('a' * 64 + '  ../../unexpected\n')
-        with self.assertRaisesRegex(RuntimeError, 'Unexpected'):
-            self.verify()
 
     def test_results_are_private_and_existing_runs_are_preserved(self):
         results = self.base / 'validation' / 'run'
@@ -135,7 +126,7 @@ class QemuTests(unittest.TestCase):
         self.assertEqual(args[args.index('-monitor') + 1], 'none')
         self.assertNotIn('-virtfs', args)
 
-    def test_copy_operations_patch_only_verified_copies(self):
+    def test_copy_operations_patch_only_disposable_copies(self):
         work = self.base / 'copies'
         work.mkdir()
 
@@ -150,14 +141,14 @@ class QemuTests(unittest.TestCase):
 
         with patch.object(runner, 'command', side_effect=fake_command), \
                 patch.object(runner.subprocess, 'run') as upgrade_copy:
-            runner.prepare_copies(self.out, work, self.checksums, self.base / 'release')
+            runner.prepare_copies(self.out, work, self.base / 'release')
         self.assertEqual(upgrade_copy.call_count, 2)
         for call, side in zip(upgrade_copy.call_args_list, ('a', 'b')):
             args = call.args[0]
             self.assertTrue(args[1].endswith('stages/06-upgrade-os/copy_test.py'))
             self.assertEqual(Path(args[2]), work / f'usb-{side}.img')
             self.assertNotIn(str(self.out / f'usb-{side}.img'), args)
-        self.assertEqual(self.verify(), self.checksums)
+        self.assertIsNone(self.verify())
         self.assertIn('console=ttyS0', (work / 'grub-b.cfg').read_text())
 
     def test_login_accepts_zsh_and_older_bash_prompts(self):

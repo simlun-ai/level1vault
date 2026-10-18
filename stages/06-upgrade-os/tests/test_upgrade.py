@@ -81,8 +81,12 @@ class UpgradeTests(unittest.TestCase):
     def test_invalid_payloads_are_rejected_before_mounting(self):
         self.assertEqual(upgrade.load_release(self.release), self.manifest)
         (self.release / 'live/vmlinuz').write_text('corrupt')
-        with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
-            upgrade.load_release(self.release)
+        # Source hashes are checked only against the written USB payload.
+        self.assertEqual(upgrade.load_release(self.release), self.manifest)
+        with patch.object(upgrade, 'command'):
+            upgrade.replace_payload(self.esp, self.release, self.manifest)
+        with self.assertRaisesRegex(ValueError, 'OS readback mismatch'):
+            upgrade.verify_payload(self.esp, self.manifest)
         self.manifest['files']['../../outside'] = '0' * 64
         import hashlib
         identity = dict(self.manifest)
@@ -131,6 +135,22 @@ class UpgradeTests(unittest.TestCase):
                 with upgrade.mounted('/dev/example1', readonly=False):
                     pass
         self.assertTrue(root.is_dir())
+
+    def test_update_flushes_after_unmount_before_final_readback(self):
+        events = []
+        @contextmanager
+        def mounted(esp, readonly):
+            events.append('ro' if readonly else 'rw')
+            yield self.esp
+            events.append('unmount')
+        boot = upgrade.boot_identity(self.esp, 'AAAA-BBBB')
+        def command(*args):
+            events.append(args[0])
+        with patch.object(upgrade, 'mounted', side_effect=mounted), \
+                patch.object(upgrade, 'command', side_effect=command):
+            upgrade.update_esp('/dev/example1', 'AAAA-BBBB', self.release, self.manifest, boot)
+        self.assertEqual(events, ['rw', 'sync', 'unmount', 'blockdev', 'ro', 'unmount'])
+        upgrade.verify_payload(self.esp, self.manifest)
 
     def test_pair_preflight_failure_never_starts_writing(self):
         with patch.object(upgrade, 'inspect_pair', side_effect=ValueError('wrong pair')), \

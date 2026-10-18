@@ -5,8 +5,8 @@
 - `make test-qemu PAIR=N` implements workstation-only UEFI boot, reboot persistence/overlay reset, encrypted mounting, ownership, independent A/B boot, degraded writes and rejoin/scrub checks on disposable image copies. CI does not launch VMs; it only lints and unit-tests the runner and checks documentation consistency. See [QEMU testing](QEMU.md) and the [shared manual checks](../stages/04-test-pair/README.md); implementation and mocked runner tests alone do not constitute a successful VM run. Record the first successful workstation suite run below once verified.
 - Account/password verification, real PAM login/MOTD display and passwordless sudo/PATH checks in a disposable Trixie container.
 - Shell syntax and ShellCheck across builders, Docker entrypoint, live hook/runtime helper and assembly test.
-- Mocked behavior tests, including host-pool conflict refusal, checksum failure before host mutations, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
-- CI on Ubuntu 22.04 builds the actual Debian Trixie toolchain container and runs file-only assembly **without privileged mode**. A small synthetic ISO exercises real GPT creation, FAT population, per-drive GRUB EFI output, metadata checksums, medium UUID markers, unique identifiers and empty data partitions.
+- Mocked behavior tests, including host-pool conflict refusal, incomplete-image refusal before host mutations and USB readback corruption detection, existing signature rejection, initialization rerun refusal, export-failure loop retention and the conservative pool feature arguments.
+- CI on Ubuntu 22.04 builds the actual Debian Trixie toolchain container and runs file-only assembly **without privileged mode**. A small synthetic ISO exercises real GPT creation, FAT population, per-drive GRUB EFI output, metadata, medium UUID markers, unique identifiers and empty data partitions.
 
 Real ZFS integration [passed on Ubuntu 22.04](https://github.com/simlun-ai/level1vault/actions/runs/38711305462) using newly created small GPT image pairs and loop devices. The numbered-pair test uses IDs 1, 2, 3 and 10: encrypted initialization, wrong/correct stdin passphrases, UID/GID 2000 writes, shared full/incremental checkpoints, unloaded source keys, independent per-destination holds, interrupted/resumed full and incremental receives, read-only replica mounting and divergent/mounted destination refusal. It exercises in-place numeric failover 1→2→3, fencing/observable-active-owner refusal, explicit source rebinding with the existing destination dataset GUID preserved, and preservation/refusal of a returning former active pair with unreplicated writes. The test only writes new file-backed mirrors on a disposable runner, not physical USB devices, and requires an explicit disposable-test flag.
 
@@ -20,11 +20,11 @@ The synthetic kernel/initrd are dummy payloads: that assembly test does not boot
 - Executable workspace-mount and absence of baked-in hostid/pool cache.
 - Masked automatic pool import/mount services and mount generator.
 - Live-boot components in the actual initramfs.
-- Prepared-image state markers and checksums for both images and metadata.
+- Prepared-image state markers and distinct image identities.
 
 The workflow keeps diagnostic logs/manifests as an Actions artifact. It can also be rerun manually from GitHub Actions. Kernel/package versions depend on the configured Debian mirrors; this records one verified build, not a package pin.
 
-The operator verified the [QEMU procedure](QEMU.md), including the normal guest boot/mount/reboot sequence, on 2026-10-15. QEMU required desktop-user execution and writable image/OVMF files; no kvm group change was needed. Host-owned checksum files require `sudo tee`. The operator subsequently confirmed each physical USB boots independently on a laptop after disabling Secure Boot, and the ZFS mirror works with both sticks connected. This confirms basic physical boot and both-member mirror operation. Physical degraded-write/rejoin and the new numbered-pair failover workflow remain unconfirmed. Continue with the checks below; a successful module presence/vermagic check does not prove it loads on the target machine.
+The operator verified the [QEMU procedure](QEMU.md), including the normal guest boot/mount/reboot sequence, on 2026-10-15. QEMU required desktop-user execution and writable image/OVMF files; no kvm group change was needed. The operator subsequently confirmed each physical USB boots independently on a laptop after disabling Secure Boot, and the ZFS mirror works with both sticks connected. This confirms basic physical boot and both-member mirror operation. Physical degraded-write/rejoin and the new numbered-pair failover workflow remain unconfirmed. Continue with the checks below; a successful module presence/vermagic check does not prove it loads on the target machine.
 
 ## Required Linux host + Docker build checks
 
@@ -32,9 +32,9 @@ The operator verified the [QEMU procedure](QEMU.md), including the normal guest 
 2. `make build` completes a real live-build inside Trixie. Capture build.log, builder-info.txt and build-metadata.json. The hook verifies one Debian target kernel and matching ZFS DKMS module even though container uname reports the host's kernel.
 3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable workspace-mount, no zfs-initramfs package.
 4. Inspect initramfs with lsinitramfs: live-boot and required USB/FAT drivers present. ZFS is data only, not a root-boot dependency.
-5. File assembly leaves IMAGES-PREPARED and PREPARED-SHA256SUMS, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.
-6. On the host, run stages/03-initialize-pair/initialize.sh. Verify one mirror is created, LZ4 plus encryption and its required dependencies are enabled, workspace-1/data is noauto, the pool is exported, loops detached, and READY/final SHA256SUMS/WORKSPACE-INFO.txt exist.
-7. Check final checksums before VM tests. Checksums must be refreshed after VM writes, with pool exported and VM stopped.
+5. File assembly leaves IMAGES-PREPARED, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.
+6. On the host, run stages/03-initialize-pair/initialize.sh. Verify one mirror is created, LZ4 plus encryption and its required dependencies are enabled, workspace-1/data is noauto, the pool is exported, loops detached, and READY/WORKSPACE-INFO.txt exist.
+7. Check completion markers before VM tests. Before USB writing, stop VMs, export the pool and detach loops. USB writes are verified by reading back the written data.
 
 ## Verify the new account and helpers after rebuilding
 

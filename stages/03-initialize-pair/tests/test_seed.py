@@ -52,7 +52,7 @@ class SeedTests(unittest.TestCase):
             self.assertEqual(sum(args[:2] == ('losetup', '-d') for args in calls), 4)
             for pair in (1, 2):
                 self.assertTrue((build / 'pairs' / str(pair) / 'READY').exists())
-                self.assertIn('usb-a.img', (build / 'pairs' / str(pair) / 'SHA256SUMS').read_text())
+                self.assertFalse((build / 'pairs' / str(pair) / 'SHA256SUMS').exists())
 
     def test_failed_export_retains_its_loops_and_never_touches_unrelated_pool(self):
         with patch.object(seed, 'imported_pools', return_value={'workspace-1': '100', 'unrelated': '999'}), \

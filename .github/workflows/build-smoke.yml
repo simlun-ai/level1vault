@@ -46,7 +46,7 @@ jobs:
         run: make build SUDO=
       - name: Inspect target ZFS module, initramfs and image artifacts
         run: make check-build SUDO=
-      - name: Export and verify the OS upgrade release from the inspected ISO
+      - name: Export and validate OS upgrade metadata from the inspected ISO
         run: |
           bash pipeline/buildkit.sh release build/default build/default/upgrade
           python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "stages/06-upgrade-os"); import upgrade; upgrade.load_release(Path("build/default/upgrade").resolve())'
@@ -56,7 +56,6 @@ jobs:
           builder=$(python3 pipeline/lifecycle.py builder-name)
           make clean
           test -z "$(docker volume ls -q --filter "name=buildx_buildkit_${builder}0_state")"
-          (cd build/default/pairs/1 && sha256sum -c PREPARED-SHA256SUMS)
           test -f build/default/upgrade/UPGRADE-READY
       - name: Save build diagnostics
         if: always()

@@ -3,7 +3,6 @@
 import argparse
 from contextlib import contextmanager
 import fcntl
-import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -26,7 +25,7 @@ from usb_devices import describe_disk, imported_devices, require, validate_idle
 ESP_TYPE = 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
 ZFS_TYPE = '6a898cc3-1dd2-11b2-99a6-080020736631'
 OS_FILES = {'live/vmlinuz', 'live/initrd.img', 'live/filesystem.squashfs', 'live/packages.tsv'}
-TOOLS = ('lsblk', 'zpool', 'zdb', 'sfdisk', 'blkid', 'fsck.vfat', 'mount', 'umount', 'sync')
+TOOLS = ('lsblk', 'zpool', 'zdb', 'sfdisk', 'blkid', 'fsck.vfat', 'mount', 'umount', 'sync', 'blockdev')
 
 
 def output(*args):
@@ -38,13 +37,10 @@ def command(*args):
 
 
 def load_release(release):
-    # Verify the release identity and every permitted payload file before USB access.
+    # Validate release metadata and permitted paths before USB access.
     manifest = json.loads((release / 'live/release.json').read_text())
     require(manifest.get('format') == 1, 'Unsupported OS release format')
-    identity = dict(manifest)
-    release_id = identity.pop('release_id')
-    require(hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest() == release_id,
-            'OS release metadata checksum mismatch')
+    require(re.fullmatch(r'[0-9a-f]{64}', manifest['release_id']) is not None, 'Invalid release identity')
     require(re.fullmatch(r'[0-9a-f]{40}', manifest['source_commit']) is not None, 'Invalid source revision')
     files = manifest['files']
     require(OS_FILES.issubset(files), 'Incomplete OS payload')
@@ -57,7 +53,7 @@ def load_release(release):
         require(source.is_file() and not any(part.is_symlink() for part in [source, *source.parents]),
                 f'Payload must be a regular file without symlinks: {name}')
         require(source.stat().st_size < 4294967296, f'File exceeds FAT32 limit: {name}')
-        require(digest(source) == checksum, f'Payload checksum mismatch: {name}')
+        require(re.fullmatch(r'[0-9a-f]{64}', checksum) is not None, f'Invalid readback checksum: {name}')
     return manifest
 
 
@@ -174,19 +170,18 @@ def replace_payload(root, release, manifest):
         target = root / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(release / name, target)
-    for name, checksum in manifest['files'].items():
-        require(digest(root / name) == checksum, f'OS copy verification failed: {name}')
     shutil.copyfile(release / 'live/release.json', root / 'live/release.json')
     command('sync', '-f', root)
 
 
 def update_esp(esp, esp_uuid, release, manifest, boot):
-    # Apply the release and verify it again after a clean unmount.
+    # Apply the release and read back the USB payload after a clean unmount.
     with mounted(esp, readonly=False) as root:
         require(boot_identity(root, esp_uuid) == boot, 'Boot files changed before update')
         check_space(root, release)
         replace_payload(root, release, manifest)
         require(boot_identity(root, esp_uuid) == boot, 'Boot files changed during update')
+    command('blockdev', '--flushbufs', esp)
     with mounted(esp, readonly=True) as root:
         verify_payload(root, manifest)
         require(boot_identity(root, esp_uuid) == boot, 'Boot files changed after update')

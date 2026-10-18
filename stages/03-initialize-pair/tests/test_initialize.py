@@ -45,8 +45,6 @@ esac''')
         (self.out/'images.json').write_text(json.dumps({'format': 1, 'images': {
             'a': {'file': 'usb-a.img', 'zfs_partuuid': 'aaa'},
             'b': {'file': 'usb-b.img', 'zfs_partuuid': 'bbb'}}}))
-        hashes = subprocess.check_output(['sha256sum', 'usb-a.img', 'usb-b.img', 'images.json'], cwd=self.out)
-        (self.out/'PREPARED-SHA256SUMS').write_bytes(hashes)
         # These tests do no privileged IO: replace the root guard, lock location
         # and block-node predicate, while retaining the remaining script logic.
         text = (ROOT/'stages/03-initialize-pair/initialize.sh').read_text()
@@ -79,6 +77,7 @@ esac''')
         self.assertEqual(self.calls().count('zpool export workspace-1'), 1)
         self.assertEqual(self.calls().count('losetup -d'), 2)
         self.assertTrue((self.out/'READY').exists())
+        self.assertFalse((self.out/'SHA256SUMS').exists())
         self.assertFalse((self.out/'INITIALIZING').exists())
         self.assertNotIn('zpool import', self.calls())
         self.assertNotIn('zpool upgrade', self.calls())
@@ -91,8 +90,8 @@ esac''')
         self.assertNotIn('zpool create', self.calls())
         self.assertNotIn('losetup --find', self.calls())
 
-    def test_checksum_failure_precedes_host_mutations(self):
-        (self.out/'usb-a.img').write_text('changed image')
+    def test_missing_prepared_marker_precedes_host_mutations(self):
+        (self.out/'IMAGES-PREPARED').unlink()
         r = self.run_initialize()
         self.assertNotEqual(r.returncode, 0)
         self.assertEqual(self.calls(), '')

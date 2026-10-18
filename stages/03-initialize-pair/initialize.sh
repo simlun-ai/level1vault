@@ -12,7 +12,7 @@ PAIR_STATE=replica
 [[ $ACTIVE != --active ]] || PAIR_STATE=active
 
 # Check host tools and prepared image markers.
-for cmd in zpool zfs modprobe losetup udevadm blkid wipefs sha256sum python3 flock realpath mktemp chown chmod; do
+for cmd in zpool zfs modprobe losetup udevadm blkid wipefs python3 flock realpath mktemp chown chmod; do
   command -v "$cmd" >/dev/null || { echo "Missing host command: $cmd" >&2; exit 1; }
 done
 OUT_DIR=$(realpath -- "$1")
@@ -20,12 +20,11 @@ OUT_DIR=$(realpath -- "$1")
   echo 'Expected fresh prepared images (no READY or INITIALIZING marker)' >&2; exit 1;
 }
 
-# Reserve initialization and verify the prepared artifacts.
+# Reserve initialization and validate the prepared metadata.
 exec 9>/run/lock/level1vault-initialize.lock
 flock -n 9 || { echo 'Another initialization is in progress' >&2; exit 1; }
 # Recheck after locking in case another invocation finished while we started.
 [[ ! -e $OUT_DIR/READY && ! -e $OUT_DIR/INITIALIZING ]] || exit 1
-(cd "$OUT_DIR" && sha256sum -c PREPARED-SHA256SUMS)
 python3 - "$OUT_DIR/images.json" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
@@ -77,7 +76,7 @@ cleanup() {
     echo 'Initialization incomplete. Inspect INITIALIZING and any remaining pool/loops before recovery.' >&2
   fi
   python3 "$(dirname -- "${BASH_SOURCE[0]}")/../../common/artifact_owner.py" \
-    "$OUT_DIR/INITIALIZING" "$OUT_DIR/WORKSPACE-INFO.txt" "$OUT_DIR/SHA256SUMS" "$OUT_DIR/READY" || rc=1
+    "$OUT_DIR/INITIALIZING" "$OUT_DIR/WORKSPACE-INFO.txt" "$OUT_DIR/READY" || rc=1
   exit "$rc"
 }
 trap cleanup EXIT
@@ -152,8 +151,7 @@ losetup -d "$B"
 B=''
 udevadm settle --timeout=30
 
-# Publish the initialized checksums and readiness marker.
-(cd "$OUT_DIR" && sha256sum usb-a.img usb-b.img images.json > SHA256SUMS)
+# Publish readiness after exporting the pool and detaching both images.
 rm -- "$OUT_DIR/INITIALIZING"
 touch "$OUT_DIR/READY"
 printf 'Mirror initialized and exported. %s is ready for host-side VM tests and USB writing.\n' "$OUT_DIR"

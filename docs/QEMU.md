@@ -6,7 +6,7 @@
 
 This is an opt-in workstation test, not a CI job. CI checks the runner's code and documentation consistency without launching a VM.
 
-Run this after `make initialize PAIR=1 ACTIVE=1`, with an initialized **active** pair. Stop other VMs using the images and detach their host loop mappings first. Keep them idle until copying finishes. The runner verifies `SHA256SUMS`, rejects loop-attached sources, and copies both images with `qemu-img`'s normal source locking. It never imports a pool on the host, opens a physical disk, or writes the original images.
+Run this after `make initialize PAIR=1 ACTIVE=1`, with an initialized **active** pair. Stop other VMs using the images and detach their host loop mappings first. Keep them idle until copying finishes. The runner checks readiness and pair identity, rejects loop-attached sources, and copies both images with `qemu-img`'s normal source locking. It never imports a pool on the host, opens a physical disk, or writes the original images.
 
 Install QEMU, its image tools, OVMF, mtools and Python pexpect using your distribution's package manager. For example, on Ubuntu:
 
@@ -25,7 +25,7 @@ The selected directory holds disposable disks as well as logs. To choose another
 make test-qemu QEMU_ARGS="--results /path/to/new-run"
 ```
 
-The runner checks that it can create private results storage before checking image hashes or asking for the passphrase. An explicit `--results` path must not already exist; permission errors there fail rather than switching locations.
+The runner checks that it can create private results storage before checking image readiness or asking for the passphrase. An explicit `--results` path must not already exist; permission errors there fail rather than switching locations.
 
 The suite boots both drives, checks manual-only import, account settings, encryption, ownership, persistence and RAM-overlay reset across reboot. It then boots A alone, writes while degraded, rejoins and scrubs; repeats for B alone; and verifies both writes survived. Every boot starts without an imported pool. Each VM shuts down after a successful export. These are the same [shared acceptance checks](../stages/04-test-pair/README.md) used by the manual procedure.
 
@@ -33,7 +33,7 @@ For an OS upgrade acceptance run, add `QEMU_ARGS='--upgrade-release /path/to/rel
 
 The test copies retain the real UEFI loaders and live system. Only their external GRUB configuration is changed to add a serial console; the originals and build configuration are untouched. Each scenario uses fresh OVMF variables, no network, and no host directory sharing. These are virtio-disk tests, not USB transport tests.
 
-Allow space for another full pair (up to 24 GiB with default images, usually less due to sparse copying), plus 4 GiB guest RAM. Copies are deleted on completion, failure, or a handled interrupt; private logs and `result.json` remain in the selected results directory (printed at startup). An uncatchable kill or host crash can leave a `disks-*` directory there: stop its QEMU process before manually removing it. Logs can include pool and system metadata. Original image checksums do **not** need refreshing after this automated suite.
+Allow space for another full pair (up to 24 GiB with default images, usually less due to sparse copying), plus 4 GiB guest RAM. Copies are deleted on completion, failure, or a handled interrupt; private logs and `result.json` remain in the selected results directory (printed at startup). An uncatchable kill or host crash can leave a `disks-*` directory there: stop its QEMU process before manually removing it. Logs can include pool and system metadata.
 
 Matching standard OVMF `_4M` or unsuffixed files are detected automatically. Override both together if your distribution stores them elsewhere. KVM is the default; TCG is slower but works without KVM:
 
@@ -80,8 +80,4 @@ sudo reboot
 
 After reboot `/etc/reset-check` must be absent; manually mount the workspace and confirm `check.txt` survives. Run `cd /` then `sudo workspace-umount` before shutting down. Also boot **A alone and B alone**, using fresh OVMF variables, and perform the degraded/rejoin tests in [validation checklist](VALIDATION.md). Virtio tests do not replace USB transport/hardware tests.
 
-VM writes change the raw image hashes. After completing tests, with the pool exported, VM stopped and loops detached, record new hashes from the repository root:
-
-```bash
-(cd build/default/pairs/1 && sha256sum usb-a.img usb-b.img images.json | sudo tee SHA256SUMS)
-```
+After manual tests, export the pool, stop the VM and detach host loops before writing USB drives. The writer verifies the bytes read back from each physical stick; no image checksum refresh is needed.

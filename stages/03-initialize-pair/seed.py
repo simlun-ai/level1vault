@@ -47,12 +47,13 @@ def release(resources):
 
 
 def seed(build, count):
-    # Verify all image pairs and reserve their final readiness markers.
+    # Check all pair identities and reserve their final readiness markers.
     pairs = [build / 'pairs' / str(pair) for pair in range(1, count + 1)]
     records = []
     occupied = imported_pools()
     for pair, out in enumerate(pairs, 1):
-        command('bash', ROOT / 'stages/03-initialize-pair/verify.sh', out)
+        if not (out / 'READY').is_file() or (out / 'INITIALIZING').exists():
+            raise RuntimeError(f'Use a completed initialized pair: {out}')
         info = dict(line.split('=', 1) for line in (out / 'WORKSPACE-INFO.txt').read_text().splitlines() if '=' in line)
         pool = f'workspace-{pair}'
         if info.get('pair') != str(pair) or info.get('state') != ('active' if pair == 1 else 'replica'):
@@ -95,15 +96,10 @@ def seed(build, count):
         finally:
             release(resources)
 
-    # Publish checksums only after every pool is exported and its loops are detached.
+    # Publish readiness only after all pools are exported and loops detached.
     for out in pairs:
-        try:
-            with (out / 'SHA256SUMS').open('w') as stream:
-                subprocess.run(['sha256sum', 'usb-a.img', 'usb-b.img', 'images.json'], cwd=out, stdout=stream, check=True)
-            (out / 'READY').touch()
-        finally:
-            publish(out / 'SHA256SUMS', out / 'READY')
-        command('bash', ROOT / 'stages/03-initialize-pair/verify.sh', out)
+        (out / 'READY').touch()
+        publish(out / 'READY')
 
 
 if __name__ == '__main__':

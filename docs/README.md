@@ -22,8 +22,8 @@ Start with the [quick start](../README.md) to build and use the first pair. Thes
 | [Build](BUILD.md) | Linux host prerequisites, Docker boundary, initialization, artifacts, failed builds and reproducibility |
 | [BuildKit](BUILDKIT.md) | Dockerfile stages, artifact export, privileges, cache, identities and storage |
 | [OS upgrades](UPGRADES.md) | In-place updates, release reuse, retries and testing |
-| [Writing USB drives](../stages/05-write-usb/README.md) | Device selection, checksums, flashing and GPT relocation |
-| [QEMU testing](QEMU.md) | Firmware setup, guest checks, persistent writes and checksum refresh |
+| [Writing USB drives](../stages/05-write-usb/README.md) | Device selection, flashing, USB readback and GPT relocation |
+| [QEMU testing](QEMU.md) | Firmware setup, guest checks and persistent writes |
 | [Shared QEMU checks](../stages/04-test-pair/README.md) | Generated manual commands matching the automated boot, reboot, degraded-write and rejoin scenarios |
 | [Pair operations](PAIRS.md) | Any number of pairs, encrypted replication, rotation, ordered failover and retention |
 | [Recovery and updates](RECOVERY.md) | Safe imports/exports, degraded mirrors, replacement members and OS updates |

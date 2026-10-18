@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write one verified image pair to two explicitly selected whole USB disks."""
+"""Write and read back one initialized image pair to two explicitly selected whole USB disks."""
 import argparse
 import fcntl
 import hashlib
@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 
 # Host helpers must not leave root-owned bytecode in the checkout.
@@ -29,26 +30,53 @@ def require(condition, message):
 
 
 def verify_images(out, pair):
-    # Require a completed pair and verify only its expected checksum entries.
+    # Require completed regular images belonging to the selected pair.
     require((out / 'READY').is_file() and not (out / 'INITIALIZING').exists(), 'Use an initialized pair with READY')
     require(f'pair={pair}' in (out / 'WORKSPACE-INFO.txt').read_text().splitlines(), 'PAIR does not match the initialized images')
-    names = {'usb-a.img', 'usb-b.img', 'images.json'}
-    recorded = {}
-    for line in (out / 'SHA256SUMS').read_text().splitlines():
-        match = re.fullmatch(r'([a-fA-F0-9]{64}) [ *](.+)', line)
-        require(match is not None, 'Malformed SHA256SUMS')
-        checksum, name = match.groups()
-        require(name in names and name not in recorded, 'Unexpected or duplicate checksum entry')
-        recorded[name] = checksum.lower()
-    require(set(recorded) == names, 'Checksums must cover both images and images.json')
-    for name, checksum in recorded.items():
+    for name in ('usb-a.img', 'usb-b.img', 'images.json'):
         image = out / name
         require(image.is_file() and not image.is_symlink(), f'Expected a regular file: {image}')
-        digest = hashlib.sha256()
-        with image.open('rb') as stream:
-            for block in iter(lambda: stream.read(4 * 1024 * 1024), b''):
-                digest.update(block)
-        require(digest.hexdigest() == checksum, f'Checksum mismatch: {image}')
+        require(image.stat().st_size > 0, f'Empty source file: {image}')
+
+
+def readback(disk, size, expected):
+    # Read exactly the written extent after flushing the device cache.
+    subprocess.run(['blockdev', '--flushbufs', str(disk)], check=True)
+    digest = hashlib.sha256()
+    remaining = size
+    with disk.open('rb', buffering=0) as stream:
+        while remaining:
+            block = stream.read(min(4 * 1024 * 1024, remaining))
+            require(bool(block), f'Short USB readback: {disk}')
+            digest.update(block)
+            remaining -= len(block)
+    require(digest.hexdigest() == expected, f'USB readback checksum mismatch: {disk}')
+
+
+def write_image(image, disk):
+    # Hash the bytes being written without a separate source verification pass.
+    size = image.stat().st_size
+    digest = hashlib.sha256()
+    written = 0
+    progress = time.monotonic()
+    with image.open('rb', buffering=0) as source, disk.open('r+b', buffering=0) as target:
+        while written < size:
+            block = source.read(min(4 * 1024 * 1024, size - written))
+            require(bool(block), f'Source image became shorter: {image}')
+            view = memoryview(block)
+            while view:
+                count = target.write(view)
+                require(count is not None and count > 0, f'Short USB write: {disk}')
+                view = view[count:]
+            digest.update(block)
+            written += len(block)
+            if time.monotonic() - progress >= 1:
+                print(f'Writing {disk}: {written}/{size} bytes', flush=True)
+                progress = time.monotonic()
+        require(not source.read(1), f'Source image grew during writing: {image}')
+        os.fsync(target.fileno())
+    print(f'Reading back {disk}: {size} bytes', flush=True)
+    readback(disk, size, digest.hexdigest())
 
 
 def disk_info(path):
@@ -61,7 +89,7 @@ def validate_disk(info, image_size, imported):
 
 
 def write_pair(out, pair, disk_a, disk_b):
-    # Verify source data and reject source image loops before inspecting destinations.
+    # Check readiness and reject source image loops before inspecting destinations.
     verify_images(out, pair)
     images = [out / 'usb-a.img', out / 'usb-b.img']
     loops = json.loads(output('losetup', '--json', '--list', '--output', 'BACK-FILE'))
@@ -81,13 +109,14 @@ def write_pair(out, pair, disk_a, disk_b):
         validate_disk(info, image.stat().st_size, imported)
         print(f"Selected {image} -> {info['name']} (model={info.get('model')}, serial={info.get('serial')})", flush=True)
 
-    # Write each image and relocate its backup GPT to the end of the physical disk.
+    # Verify each write before GPT relocation intentionally changes disk bytes.
     for image, disk in zip(images, paths):
-        subprocess.run(['dd', f'if={image}', f'of={disk}', 'bs=4M', 'conv=fsync', 'status=progress'], check=True)
+        write_image(image, disk)
         subprocess.run(['sgdisk', '-e', str(disk)], check=True)
+        subprocess.run(['sfdisk', '--verify', str(disk)], check=True)
     subprocess.run(['sync'], check=True)
     subprocess.run(['partprobe', *map(str, paths)], check=True)
-    print('Both sticks written. Label them with pair ID and A/B, then test each boots independently.')
+    print('Both sticks written and readback verified. Label them with pair ID and A/B, then test each boots independently.')
 
 
 def main():
@@ -100,7 +129,7 @@ def main():
     args = parser.parse_args()
     require(re.fullmatch(r'[1-9][0-9]*', args.pair), 'PAIR must be a positive integer')
     require(os.geteuid() == 0, 'Run through make write-usb with sudo on the host')
-    for tool in ('lsblk', 'losetup', 'zpool', 'dd', 'sgdisk', 'sync', 'partprobe'):
+    for tool in ('lsblk', 'losetup', 'zpool', 'blockdev', 'sgdisk', 'sfdisk', 'sync', 'partprobe'):
         require(shutil.which(tool) is not None, f'Missing host tool: {tool}')
     with open('/run/lock/level1vault-write-usb.lock', 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

@@ -22,7 +22,7 @@ export SUDO BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A D
 RUN = python3 pipeline/lifecycle.py shared
 
 # Expose the supported project lifecycle commands.
-.PHONY: help prepare-pairs build builder assemble initialize verify lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
+.PHONY: help prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
@@ -33,7 +33,6 @@ help:
 	  'make initialize PAIR=2            Initialize an empty replica' \
 	  'make write-usb DISK_A=/dev/sda DISK_B=/dev/sdb  Write the selected USB pair (destructive)' \
 	  'make upgrade-os PAIR=2 DISK_A=/dev/sda DISK_B=/dev/sdb  Replace the existing OS only' \
-	  'make verify [OUT=...]             Check READY and final image checksums' \
 	  'make test                        Run local lint and unit/behavior tests' \
 	  'make test-container              Test real assembly and login in Trixie' \
 	  'make test-qemu                    Test pair 1 in QEMU; choose writable results automatically' \
@@ -65,11 +64,6 @@ initialize:
 	@[[ "$$PAIR" =~ ^[1-9][0-9]*$$ ]] || { echo 'Set PAIR to a positive integer, e.g. PAIR=1' >&2; exit 1; }
 	@[[ "$$ACTIVE" == 0 || "$$ACTIVE" == 1 ]] || { echo 'ACTIVE must be 0 or 1' >&2; exit 1; }
 	$(RUN) $(SUDO) ./stages/03-initialize-pair/initialize.sh "$$OUT" "$$PAIR" $$( [[ "$$ACTIVE" == 1 ]] && printf '%s' --active || : )
-
-# Verify the initialized image artifacts.
-verify:
-	@test -f "$$OUT/READY" || { echo "Not ready: $$OUT/READY is missing" >&2; exit 1; }
-	bash stages/03-initialize-pair/verify.sh "$$OUT"
 
 # Write an initialized pair to two explicitly identified whole USB disks.
 write-usb:
