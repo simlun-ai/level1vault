@@ -23,9 +23,9 @@ udevadm settle
 # Select one complete connected mirror when no number was supplied.
 if [ -z "$PAIR" ]; then
     PAIR=$(python3 "$(dirname -- "$0")/workspace-discover")
-    printf 'Selected workspace-%s (both mirror members available).\n' "$PAIR"
+    printf 'Selected level1-workspace-%s (both mirror members available).\n' "$PAIR"
 fi
-POOL=workspace-$PAIR
+POOL=level1-workspace-$PAIR
 DATASET=$POOL/data
 
 if ! zpool list -H -o name "$POOL" >/dev/null 2>&1; then
@@ -56,7 +56,7 @@ if [ "$STATE" = active ]; then
     pools=$(zpool list -H -o name)
     for other in $pools; do
         case "$other" in
-            workspace-*)
+            level1-workspace-*)
                 [ "$other" != "$POOL" ] || continue
                 other_state=$(zfs get -H -o value org.level1vault:state "$other")
                 case "$other_state" in

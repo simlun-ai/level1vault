@@ -21,7 +21,7 @@ docker info
 docker buildx version
 ```
 
-Keep your host distribution's own ZFS packages and kernel. Do not replace them with Debian packages. If the workstation already has an imported pool named `workspace-1`, initialization refuses to proceed; use another host or resolve that name conflict deliberately. Other existing host pools are left alone.
+Keep your host distribution's own ZFS packages and kernel. Do not replace them with Debian packages. If the workstation already has an imported pool named `level1-workspace-1`, initialization refuses to proceed; use another host or resolve that name conflict deliberately. Other existing host pools are left alone.
 
 The [BuildKit pipeline](BUILDKIT.md) confines the required privileged RUN to live-build. It exports artifacts from scratch stages; ZFS initialization stays on the host. Use trusted source: the live-build entitlement grants privileges equivalent to the previous privileged container.
 
@@ -51,7 +51,7 @@ make write-usb PAIR=1 DISK_A=/dev/sda DISK_B=/dev/sdb
 # Repeat with PAIR=2, PAIR=3, etc., identifying new destination disks each time.
 ```
 
-No initial sync is needed after flashing. The batch starts with an empty workspace; it does not copy data from an existing deployment. Disconnect other copies of these pool identities and resolve any imported `workspace-1` through `workspace-N` before starting. For adding replicas to an existing deployment, use [additional pairs](../README.md#add-more-pairs) instead.
+No initial sync is needed after flashing. The batch starts with an empty workspace; it does not copy data from an existing deployment. Disconnect other copies of these pool identities and resolve any imported `level1-workspace-1` through `level1-workspace-N` before starting. For adding replicas to an existing deployment, use [additional pairs](../README.md#add-more-pairs) instead.
 
 The output defaults to `build/default/pairs/ID/`. Existing build directories are refused; use `BUILD_DIR=build-next` for a new batch and pass that same setting when writing. `FRESH=1`, `DEBIAN_IMAGE`, and `BUILDX_BUILDER` retain their usual meanings. Budget up to 24 GiB per pair plus build workspace. This command does not run QEMU or write physical disks.
 
@@ -112,11 +112,11 @@ cat build/default/pairs/1/WORKSPACE-INFO.txt
 
 This validates prepared metadata, refuses attached/previously initialized images, attaches both files using loop devices, verifies their data PARTUUIDs and blank signatures, and creates **one pool across both partitions**. Nothing is created on physical USBs at this stage.
 
-The pool has `ashift=12`, `cachefile=none`, an unmountable root dataset, and an AES-256-GCM encrypted `workspace-1/data` with `keyformat=passphrase`, `keylocation=prompt`, `canmount=noauto`, LZ4 compression and the expected mountpoint. It briefly mounts the new dataset beneath a private temporary altroot to set the filesystem root to `1000:1000`, mode `0750`, without covering a host mountpoint. The passphrase is read directly by ZFS from stdin and is never saved in the image or manifest. The script exports the pool and detaches loops before writing `READY`. It never imports/exports unrelated host pools.
+The pool has `ashift=12`, `cachefile=none`, an unmountable root dataset, and an AES-256-GCM encrypted `level1-workspace-1/data` with `keyformat=passphrase`, `keylocation=prompt`, `canmount=noauto`, LZ4 compression and the expected mountpoint. It briefly mounts the new dataset beneath a private temporary altroot to set the filesystem root to `1000:1000`, mode `0750`, without covering a host mountpoint. The passphrase is read directly by ZFS from stdin and is never saved in the image or manifest. The script exports the pool and detaches loops before writing `READY`. It never imports/exports unrelated host pools.
 
 To support Ubuntu 22.04's OpenZFS 2.1 and Debian 13's newer ZFS, creation uses `zpool create -d` and enables **`lz4_compress`, `encryption` and encryption's required dependencies** (including `extensible_dataset` for resumable receives). These features are supported by OpenZFS 2.1. This omits newer optional pool features. `zpool status` may report that supported features are disabled; that message is expected. **Do not run `zpool upgrade`** if you need continued access from hosts using OpenZFS 2.1. Exact host/live-system package equality is not required.
 
-If initialization fails, `INITIALIZING` remains and reruns are refused. Check `sudo zpool status workspace-1` and `sudo losetup -j /absolute/path/to/usb-a.img` (and B). Failed export retains loops rather than detaching an active pool. Resolve/export the pool and detach only this build's loops before removing incomplete artifacts. For an unused, failed initial build, reassemble from the ISO into a **new** output directory. Never discard images containing data you need.
+If initialization fails, `INITIALIZING` remains and reruns are refused. Check `sudo zpool status level1-workspace-1` and `sudo losetup -j /absolute/path/to/usb-a.img` (and B). Failed export retains loops rather than detaching an active pool. Resolve/export the pool and detach only this build's loops before removing incomplete artifacts. For an unused, failed initial build, reassemble from the ISO into a **new** output directory. Never discard images containing data you need.
 
 ## Reproducibility
 

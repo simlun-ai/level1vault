@@ -39,7 +39,7 @@ class ScriptTests(unittest.TestCase):
                 self.tool('zpool', f'echo "zpool $*" >> "$LOG"\nexit {export_rc}')
                 self.tool('losetup', 'echo "losetup $*" >> "$LOG"')
                 script = self.base / 'cleanup.sh'
-                script.write_text('#!/bin/bash\nA=/dev/mock-a B=/dev/mock-b POOL_CREATED=1 POOL=workspace-1\n'
+                script.write_text('#!/bin/bash\nA=/dev/mock-a B=/dev/mock-b POOL_CREATED=1 POOL=level1-workspace-1\n'
                                   'OUT_DIR="$PWD"\ncleanup() {' + cleanup + '\ntrue\ncleanup\n')
                 result = subprocess.run(['bash', str(script)], env=self.env, cwd=self.base,
                                         capture_output=True, text=True)

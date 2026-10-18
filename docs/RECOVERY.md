@@ -16,7 +16,7 @@ sudo poweroff
 
 The mount helper serializes calls, creates a per-boot hostid if absent, imports without mounting by scanning PARTUUIDs, validates the pair and encryption properties, loads the key through stdin if needed, then explicitly mounts only the selected data filesystem. `workspace-mount` without an ID requires exactly one complete connected pair with both distinct members; it reads labels without importing candidates. `workspace-mount PAIR_ID` selects that pair and uses its active/replica state; only one dataset can use `/mnt/workspace` at a time. It does not force imports. It may import a valid single member in degraded mode. A random hostid means an unclean shutdown may require a deliberate, fenced force import on the next boot.
 
-Never write independently to separated members and expect a merge. After writes to A while B was missing, B is stale; reconnect to the authoritative pool owner, resilver, and confirm **both members ONLINE with no errors** before using B independently. `zpool wait -t resilver workspace-1` alone is insufficient: it also returns when no resilver is running.
+Never write independently to separated members and expect a merge. After writes to A while B was missing, B is stale; reconnect to the authoritative pool owner, resilver, and confirm **both members ONLINE with no errors** before using B independently. `zpool wait -t resilver level1-workspace-1` alone is insufficient: it also returns when no resilver is running.
 
 If import reports a potentially active pool, establish that no other machine/VM owns either member, then inspect the pool GUID from `WORKSPACE-INFO.txt` and the import listing. Only after resolving ownership/history may you manually use:
 
@@ -39,7 +39,7 @@ Before every recovery: stop all other pool owners, disconnect duplicate image/ph
 For a formerly disconnected **original member**, reattach both devices on the authoritative host and import with the mount helper. Inspect:
 
 ```bash
-sudo zpool status -gP workspace-1
+sudo zpool status -gP level1-workspace-1
 lsblk -o PATH,SIZE,FSTYPE,PARTUUID,UUID,MODEL,SERIAL
 ls -l /dev/disk/by-partuuid/
 ```
@@ -47,9 +47,9 @@ ls -l /dev/disk/by-partuuid/
 If a known member remains unavailable, identify its numeric vdev GUID in status and its matching PARTUUID from images.json. After confirming they are the same original member, try bringing it online:
 
 ```bash
-sudo zpool online workspace-1 EXISTING_MEMBER_GUID
-sudo zpool wait -t resilver workspace-1
-sudo zpool status -gP workspace-1
+sudo zpool online level1-workspace-1 EXISTING_MEMBER_GUID
+sudo zpool wait -t resilver level1-workspace-1
+sudo zpool status -gP level1-workspace-1
 ```
 
 If its path cannot be resolved, do not blindly replace it with a stale copy. Inspect labels with `sudo zdb -l /dev/disk/by-partuuid/VERIFIED_PARTUUID`; zdb is supplied by zfsutils-linux. A normal replacement is for a genuinely failed/lost device, not an attempt to reconcile independently written members.
@@ -58,9 +58,9 @@ For a **new replacement USB**, first prepare its boot environment without creati
 
 ```bash
 # MUTATES the selected replacement partition; double-check serial and PARTUUID.
-sudo zpool replace workspace-1 FAILED_MEMBER_GUID /dev/disk/by-partuuid/NEW_PARTUUID
-sudo zpool wait -t resilver workspace-1
-sudo zpool status -gP workspace-1
+sudo zpool replace level1-workspace-1 FAILED_MEMBER_GUID /dev/disk/by-partuuid/NEW_PARTUUID
+sudo zpool wait -t resilver level1-workspace-1
+sudo zpool status -gP level1-workspace-1
 ```
 
 Do not use `zpool create`, do not dd an initialized old workspace image over a new member, and do not add a top-level vdev (`zpool add`). Require both ONLINE and a clean final status before independent use. Save the new member's identities and test its boot environment alone.
@@ -141,8 +141,8 @@ With pair 2 active and pair 3 successfully rebound, replace the lost pair with a
 
    ```bash
    sudo workspace-sync 2 3 4
-   sudo zpool status workspace-3
-   sudo zpool status workspace-4
+   sudo zpool status level1-workspace-3
+   sudo zpool status level1-workspace-4
    ```
 
    Require successful sync and both members of each mirror ONLINE with no errors. Pair 4 receives its encrypted filesystem and passphrase from pair 2; it needs no `--rebind` because it is new.

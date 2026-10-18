@@ -94,7 +94,7 @@ def inspect_pair(pair, disk_a, disk_b):
     imported = imported_devices(output)
     disks = [inspect_disk(path, imported) for path in (disk_a, disk_b)]
     require(disks[0]['device_id'] != disks[1]['device_id'], 'DISK_A and DISK_B must be different disks')
-    require(all(disk['pool'] == f'workspace-{pair}' for disk in disks), 'Disks do not belong to the requested PAIR')
+    require(all(disk['pool'] == f'level1-workspace-{pair}' for disk in disks), 'Disks do not belong to the requested PAIR')
     require(disks[0]['pool_guid'] == disks[1]['pool_guid'], 'Disks belong to different ZFS pools')
     require(disks[0]['leaf_guid'] != disks[1]['leaf_guid'], 'Disks are copies of the same mirror member')
     require(disks[0]['esp_uuid'] != disks[1]['esp_uuid'], 'Duplicate EFI filesystem UUIDs')

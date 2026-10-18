@@ -1,12 +1,12 @@
 # Ordered pairs: provisioning, rotation and failover
 
-A deployment has **N independent pairs**, with two independently bootable USBs per pair. Assign positive integer IDs without leading zeros: `1`, `2`, …, `10`, … . IDs are permanent identities and define numeric failover order. They do not encode a primary/backup role; `workspace-10` sorts after `workspace-2` numerically (`sort -V`). There is no configured pair-count limit in the helpers.
+A deployment has **N independent pairs**, with two independently bootable USBs per pair. Assign positive integer IDs without leading zeros: `1`, `2`, …, `10`, … . IDs are permanent identities and define numeric failover order. They do not encode a primary/backup role; `level1-workspace-10` sorts after `level1-workspace-2` numerically (`sort -V`). There is no configured pair-count limit in the helpers.
 
 | Identity | Pool | Dataset | Possible state |
 | --- | --- | --- | --- |
-| Pair 1, sticks A/B | `workspace-1` | `workspace-1/data` | Active or replica |
-| Pair 2, sticks A/B | `workspace-2` | `workspace-2/data` | Active or replica |
-| Pair N, sticks A/B | `workspace-N` | `workspace-N/data` | Active or replica |
+| Pair 1, sticks A/B | `level1-workspace-1` | `level1-workspace-1/data` | Active or replica |
+| Pair 2, sticks A/B | `level1-workspace-2` | `level1-workspace-2/data` | Active or replica |
+| Pair N, sticks A/B | `level1-workspace-N` | `level1-workspace-N/data` | Active or replica |
 
 Exactly one pair is the writable working copy. Others are read-only replicas. `org.level1vault:pair` and `org.level1vault:state` on each pool's root dataset record its identity and current state. Failover changes state and write permission **in place**; pool names, IDs, encryption keys and existing files remain the same. `zfs promote` is not used: it changes clone ancestry, not these operational states.
 
@@ -57,7 +57,7 @@ For separate offsite rotations, connect one replica at a time and run, for examp
 
 ```bash
 sudo workspace-sync 1 2
-sudo zpool status workspace-2       # both mirror members ONLINE, no errors
+sudo zpool status level1-workspace-2       # both mirror members ONLINE, no errors
 cd /
 sudo workspace-umount 2
 ```
@@ -65,7 +65,7 @@ sudo workspace-umount 2
 Keep another verified copy offsite while one returns for updating. Record each completed checkpoint/date and location. A replica is current only through its last completed checkpoint. To reuse a named checkpoint when different pairs return separately:
 
 ```bash
-sudo zfs list -t snapshot -o name,creation -s creation -r workspace-1/data
+sudo zfs list -t snapshot -o name,creation -s creation -r level1-workspace-1/data
 sudo workspace-sync --snapshot EXACT_CHECKPOINT_NAME 1 3
 ```
 
@@ -125,9 +125,9 @@ sudo workspace-umount 1
 sudo workspace-mount 2
 stat -c '%u:%g %a' /mnt/workspace   # 1000:1000 750 for a new workspace root
 # Read expected files and compare checksums. Writes to a replica should fail.
-sudo zpool scrub workspace-2
-sudo zpool wait -t scrub workspace-2
-sudo zpool status workspace-2
+sudo zpool scrub level1-workspace-2
+sudo zpool wait -t scrub level1-workspace-2
+sudo zpool status level1-workspace-2
 sudo workspace-umount 2
 ```
 

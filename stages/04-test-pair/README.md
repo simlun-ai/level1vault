@@ -35,7 +35,7 @@ PAIR=${2:?Pair ID required}
 RUN=${3:?Run ID required}
 VALUE=${4:-}
 [[ $PAIR =~ ^[1-9][0-9]*$ && $RUN =~ ^[a-f0-9]{16}$ ]] || exit 2
-POOL=workspace-$PAIR
+POOL=level1-workspace-$PAIR
 DATASET=$POOL/data
 CHECK=/mnt/workspace/.level1vault-qemu-$RUN
 RESET=/etc/.level1vault-qemu-$RUN

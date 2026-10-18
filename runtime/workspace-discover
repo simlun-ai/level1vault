@@ -11,7 +11,7 @@ def identity(text):
     # Require all readable label copies to agree on the mirror and this member.
     records = set()
     for label in re.split(r'LABEL\s+[0-9]+', text):
-        name = re.search(r"^\s*name:\s*'(workspace-[1-9][0-9]*)'", label, re.M)
+        name = re.search(r"^\s*name:\s*'(level1-workspace-[1-9][0-9]*)'", label, re.M)
         pool = re.search(r'^\s*pool_guid:\s*([0-9]+)', label, re.M)
         leaf = re.search(r'^\s*guid:\s*([0-9]+)', label, re.M)
         children = frozenset(re.findall(r"children\[[0-9]+\]:\s+type:\s*'disk'\s+id:\s*[0-9]+\s+guid:\s*([0-9]+)", label))
@@ -35,7 +35,7 @@ def select(devices):
         leaves = {leaf for _, leaf, _ in members}
         if (len(names[name]) == 1 and len(members) == 2 and len(leaves) == 2
                 and all(children == leaves for _, _, children in members)):
-            candidates.append(name.removeprefix('workspace-'))
+            candidates.append(name.removeprefix('level1-workspace-'))
     if len(candidates) != 1:
         available = ', '.join(sorted(candidates, key=int)) or 'none'
         raise ValueError(f'Expected exactly one complete workspace pair; complete pairs: {available}. Connect both members or run sudo workspace-mount PAIR_ID explicitly.')

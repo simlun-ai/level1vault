@@ -5,7 +5,7 @@ set -euo pipefail
 [[ $# -ge 2 && $# -le 3 ]] || { echo "Usage: $0 PREPARED_OUTPUT_DIRECTORY PAIR_ID [--active]" >&2; exit 2; }
 PAIR=$2
 [[ $PAIR =~ ^[1-9][0-9]*$ ]] || { echo 'PAIR_ID must be a positive integer without leading zeros' >&2; exit 2; }
-POOL=workspace-$PAIR
+POOL=level1-workspace-$PAIR
 ACTIVE=${3:-}
 [[ -z $ACTIVE || $ACTIVE == --active ]] || { echo 'Expected --active or no flag' >&2; exit 2; }
 PAIR_STATE=replica

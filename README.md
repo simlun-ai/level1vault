@@ -70,7 +70,7 @@ Connect the current active pair and both new sticks to one live computer, leavin
 
 ```bash
 sudo workspace-sync 1 2
-sudo zpool status workspace-2     # require both members ONLINE, no errors
+sudo zpool status level1-workspace-2     # require both members ONLINE, no errors
 cd /
 sudo workspace-umount 2
 ```

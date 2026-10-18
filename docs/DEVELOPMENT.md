@@ -58,7 +58,7 @@ make test-container
 
 This builds the same Debian toolchain used by CI. Test stages use copied allowlisted source and no insecure RUN entitlement, host ZFS or loop devices. Login tests modify accounts only inside their disposable build stage. Two actual local exports verify fresh disk identities even with a cached ISO.
 
-The real ZFS suite needs root, loop devices, the native ZFS module/tools, `gdisk`, Python and udev. It creates test pools named `workspace-1`, `workspace-2`, `workspace-3` and `workspace-10` and exercises failure recovery. **Run it in a disposable Linux amd64 VM with working ZFS, not your ZFS workstation. Ubuntu 22.04 is the tested CI environment.** It refuses conflicting imported test pools, but that is not a substitute for isolation.
+The real ZFS suite needs root, loop devices, the native ZFS module/tools, `gdisk`, Python and udev. It creates test pools named `level1-workspace-1`, `level1-workspace-2`, `level1-workspace-3` and `level1-workspace-10` and exercises failure recovery. **Run it in a disposable Linux amd64 VM with working ZFS, not your ZFS workstation. Ubuntu 22.04 is the tested CI environment.** It refuses conflicting imported test pools, but that is not a substitute for isolation.
 
 ```bash
 # Example setup inside a disposable Ubuntu VM:

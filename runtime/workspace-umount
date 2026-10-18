@@ -20,9 +20,9 @@ modprobe zfs
 pools=$(zpool list -H -o name)
 if [ "$PAIR" = all ]; then
     # Numeric order, with no fixed number of configured pairs. No imports.
-    POOLS=$(printf '%s\n' "$pools" | grep -E '^workspace-[1-9][0-9]*$' | sort -t- -k2,2n)
+    POOLS=$(printf '%s\n' "$pools" | grep -E '^level1-workspace-[1-9][0-9]*$' | sort -t- -k3,3n)
 else
-    POOLS=workspace-$PAIR
+    POOLS=level1-workspace-$PAIR
 fi
 
 # Validate, sync, and export each selected pool.
@@ -30,7 +30,7 @@ for POOL in $POOLS; do
     if ! printf '%s\n' "$pools" | grep -Fxq "$POOL"; then
         continue
     fi
-    [ "$(zfs get -H -o value org.level1vault:pair "$POOL")" = "${POOL#workspace-}" ] || {
+    [ "$(zfs get -H -o value org.level1vault:pair "$POOL")" = "${POOL#level1-workspace-}" ] || {
         echo "Pair identity mismatch for $POOL; refusing export" >&2; exit 1;
     }
     # Release the live home before exporting its underlying dataset.

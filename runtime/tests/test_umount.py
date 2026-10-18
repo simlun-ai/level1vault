@@ -25,7 +25,7 @@ class UmountTests(unittest.TestCase):
             self.tool(name, ':')
         self.tool('zpool', '''case "$1" in
 list) if [ "${LIST_FAIL:-0}" = 1 ]; then exit 1; fi
-      if [ "${IMPORTED:-1}" = 1 ]; then echo workspace-1; fi;;
+      if [ "${IMPORTED:-1}" = 1 ]; then echo level1-workspace-1; fi;;
 sync) exit "${SYNC_FAIL:-0}";;
 export) exit "${EXPORT_FAIL:-0}";;
 esac''')
@@ -44,7 +44,7 @@ esac''')
     def test_sync_precedes_nonforced_export(self):
         self.assertEqual(self.run_helper().returncode, 0)
         calls = self.calls()
-        self.assertLess(calls.index('zpool sync workspace-1'), calls.index('zpool export workspace-1'))
+        self.assertLess(calls.index('zpool sync level1-workspace-1'), calls.index('zpool export level1-workspace-1'))
         self.assertNotIn(' -f', calls)
         self.assertNotIn('poweroff', calls)
         self.assertNotIn('zpool import', calls)
@@ -53,6 +53,16 @@ esac''')
         self.env['IMPORTED'] = '0'
         self.assertEqual(self.run_helper().returncode, 0)
         self.assertNotIn('zpool export', self.calls())
+
+    def test_exports_numbered_pairs_in_numeric_order_and_ignores_other_pools(self):
+        self.tool('zpool', '''if [ "$1" = list ]; then
+    printf '%s\\n' level1-workspace-10 unrelated level1-workspace-2 level1-workspace-backup1
+fi''')
+        self.tool('zfs', 'pool=$6; echo "${pool##*-}"')
+        result = self.run_helper()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        exports = [line for line in self.calls().splitlines() if line.startswith('zpool export')]
+        self.assertEqual(exports, ['zpool export level1-workspace-2', 'zpool export level1-workspace-10'])
 
     def test_sync_failure_stops_export(self):
         self.env['SYNC_FAIL'] = '1'
@@ -78,7 +88,7 @@ esac''')
             "import os,sys; open(os.environ['LOG'], 'a').write('home ' + ' '.join(sys.argv[1:]) + '\\n'); "
             "sys.exit(int(os.environ.get('HOME_FAIL', '0')))\n")
         self.assertEqual(self.run_helper().returncode, 0)
-        self.assertLess(self.calls().index('home detach workspace-1'), self.calls().index('zpool export'))
+        self.assertLess(self.calls().index('home detach level1-workspace-1'), self.calls().index('zpool export'))
         self.log.unlink()
         self.env['HOME_FAIL'] = '1'
         self.assertNotEqual(self.run_helper().returncode, 0)

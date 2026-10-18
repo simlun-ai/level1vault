@@ -104,7 +104,7 @@ def check():
     # Only launch a working session on the active writable pair with its home attached.
     current = mounted(WORKSPACE)
     dataset = current['source'] if current else ''
-    if not re.fullmatch(r'workspace-[1-9][0-9]*/data', dataset):
+    if not re.fullmatch(r'level1-workspace-[1-9][0-9]*/data', dataset):
         raise RuntimeError('Mount an active workspace before starting simlun')
     verify_mount(current, dataset, '/')
     verify_mount(mounted(HOME), dataset, '/home/simlun')
@@ -120,9 +120,9 @@ def main():
     if os.geteuid() != 0:
         raise RuntimeError('Run from the root console')
     args = sys.argv[1:]
-    if len(args) == 2 and args[0] == 'attach' and re.fullmatch(r'workspace-[1-9][0-9]*/data', args[1]):
+    if len(args) == 2 and args[0] == 'attach' and re.fullmatch(r'level1-workspace-[1-9][0-9]*/data', args[1]):
         attach(args[1])
-    elif len(args) == 2 and args[0] == 'detach' and re.fullmatch(r'workspace-[1-9][0-9]*', args[1]):
+    elif len(args) == 2 and args[0] == 'detach' and re.fullmatch(r'level1-workspace-[1-9][0-9]*', args[1]):
         detach(args[1])
     elif args == ['check']:
         check()

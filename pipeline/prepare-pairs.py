@@ -39,7 +39,7 @@ def preflight(build, count):
     command(sys.executable, ROOT / 'pipeline/lifecycle.py', 'user', 'docker', 'info', stdout=subprocess.DEVNULL)
     command('modprobe', 'zfs')
     pools = subprocess.check_output(['zpool', 'list', '-H', '-o', 'name'], text=True).splitlines()
-    if any(f'workspace-{pair}' in pools for pair in range(1, int(count) + 1)):
+    if any(f'level1-workspace-{pair}' in pools for pair in range(1, int(count) + 1)):
         raise ValueError('A requested workspace pool is already imported; resolve ownership first')
 
 

@@ -19,7 +19,7 @@ def pair_id(value):
 
 
 def pool_name(pair):
-    return 'workspace-' + pair_id(pair)
+    return 'level1-workspace-' + pair_id(pair)
 
 
 
@@ -256,9 +256,9 @@ def discover_pairs():
     # host protection and never forces ambiguous/foreign ownership.
     listing = subprocess.check_output(['zpool', 'import', '-d', '/dev/disk/by-partuuid'],
                                       text=True, env=dict(os.environ, LC_ALL='C'))
-    names += re.findall(r'^\s*pool: (workspace-[1-9][0-9]*)\s*$', listing, re.MULTILINE)
-    return sorted({name[len('workspace-'):] for name in names
-                   if re.fullmatch(r'workspace-[1-9][0-9]*', name)}, key=int)
+    names += re.findall(r'^\s*pool: (level1-workspace-[1-9][0-9]*)\s*$', listing, re.MULTILINE)
+    return sorted({name[len('level1-workspace-'):] for name in names
+                   if re.fullmatch(r'level1-workspace-[1-9][0-9]*', name)}, key=int)
 
 
 
@@ -270,7 +270,7 @@ def activate(pair, fenced=False):
 
     # Refuse an observable split brain even when the fencing flag was supplied.
     for other in run('zpool', 'list', '-H', '-o', 'name').splitlines():
-        if other != pool and re.fullmatch(r'workspace-[1-9][0-9]*', other):
+        if other != pool and re.fullmatch(r'level1-workspace-[1-9][0-9]*', other):
             require(prop(other, PROPERTY + 'state') not in ('active', 'activating'),
                     f'{other} is still active/imported; export and fence it first')
 

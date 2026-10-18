@@ -70,7 +70,7 @@ sudo modprobe zfs
 sudo zpool list                    # workspace should not be imported yet
 sudo workspace-mount 1              # enter the workspace passphrase
 stat -c '%u:%g %a' /mnt/workspace # 1000:1000 750
-sudo zpool status workspace-1        # ONLINE with both members present
+sudo zpool status level1-workspace-1        # ONLINE with both members present
 sudo -iu simlun sh -c 'printf "persistent\n" > ~/home-check.txt'
 sudo -iu simlun sh -c 'printf "persistent\n" > /mnt/workspace/check.txt'
 printf 'ephemeral\n' | sudo tee /etc/reset-check

@@ -43,7 +43,7 @@ class SeedTests(unittest.TestCase):
 
             with patch.object(seed, 'output', side_effect=output), \
                     patch.object(seed, 'command', side_effect=command), \
-                    patch.object(seed, 'imported_pools', side_effect=[{}, {'workspace-1': '100', 'workspace-2': '200'}]):
+                    patch.object(seed, 'imported_pools', side_effect=[{}, {'level1-workspace-1': '100', 'level1-workspace-2': '200'}]):
                 seed.seed(build, 2)
             imports = [args for args in calls if args[:2] == ('zpool', 'import')]
             self.assertEqual([args[-1] for args in imports], ['100', '200'])
@@ -55,15 +55,15 @@ class SeedTests(unittest.TestCase):
                 self.assertFalse((build / 'pairs' / str(pair) / 'SHA256SUMS').exists())
 
     def test_failed_export_retains_its_loops_and_never_touches_unrelated_pool(self):
-        with patch.object(seed, 'imported_pools', return_value={'workspace-1': '100', 'unrelated': '999'}), \
+        with patch.object(seed, 'imported_pools', return_value={'level1-workspace-1': '100', 'unrelated': '999'}), \
                 patch.object(seed, 'command', side_effect=subprocess.CalledProcessError(1, 'export')) as command:
             with self.assertRaisesRegex(RuntimeError, 'retained loops'):
-                seed.release([('workspace-1', '100', ['/dev/loop1', '/dev/loop2'])])
-        command.assert_called_once_with('zpool', 'export', 'workspace-1')
+                seed.release([('level1-workspace-1', '100', ['/dev/loop1', '/dev/loop2'])])
+        command.assert_called_once_with('zpool', 'export', 'level1-workspace-1')
 
     def test_foreign_pool_guid_is_not_exported_and_its_loops_are_retained(self):
-        with patch.object(seed, 'imported_pools', return_value={'workspace-1': 'foreign'}), \
+        with patch.object(seed, 'imported_pools', return_value={'level1-workspace-1': 'foreign'}), \
                 patch.object(seed, 'command') as command:
             with self.assertRaisesRegex(RuntimeError, 'Unexpected pool GUID'):
-                seed.release([('workspace-1', '100', ['/dev/loop1'])])
+                seed.release([('level1-workspace-1', '100', ['/dev/loop1'])])
         command.assert_not_called()

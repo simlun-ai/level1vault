@@ -21,9 +21,9 @@ class TransferTests(unittest.TestCase):
                 with patch.object(sync.subprocess, 'Popen', side_effect=[sender, receiver]) as spawn:
                     if send_rc or receive_rc:
                         with self.assertRaisesRegex(RuntimeError, 'Transfer failed'):
-                            sync.transfer(['zfs', 'send', '-w', 'workspace-1/data@snap'], 'workspace-2/data', 'on')
+                            sync.transfer(['zfs', 'send', '-w', 'level1-workspace-1/data@snap'], 'level1-workspace-2/data', 'on')
                     else:
-                        sync.transfer(['zfs', 'send', '-w', 'workspace-1/data@snap'], 'workspace-2/data', 'on')
+                        sync.transfer(['zfs', 'send', '-w', 'level1-workspace-1/data@snap'], 'level1-workspace-2/data', 'on')
                     args = spawn.call_args_list[1].args[0]
                     self.assertIn('-s', args)
                     self.assertIn('-u', args)
@@ -38,7 +38,7 @@ class TransferTests(unittest.TestCase):
         receiver.wait.side_effect = [KeyboardInterrupt, 1]
         with patch.object(sync.subprocess, 'Popen', side_effect=[sender, receiver]):
             with self.assertRaises(KeyboardInterrupt):
-                sync.transfer(['zfs', 'send', '-w', 'workspace-1/data@snap'], 'workspace-2/data', 'on')
+                sync.transfer(['zfs', 'send', '-w', 'level1-workspace-1/data@snap'], 'level1-workspace-2/data', 'on')
         sender.terminate.assert_called_once()
         receiver.terminate.assert_called_once()
         sender.wait.assert_called_once()
@@ -49,7 +49,7 @@ class TransferTests(unittest.TestCase):
         sender.poll.return_value = None
         with patch.object(sync.subprocess, 'Popen', side_effect=[sender, OSError('spawn failed')]):
             with self.assertRaises(OSError):
-                sync.transfer(['zfs', 'send', '-w', 'workspace-1/data@snap'], 'workspace-2/data', 'on')
+                sync.transfer(['zfs', 'send', '-w', 'level1-workspace-1/data@snap'], 'level1-workspace-2/data', 'on')
         sender.stdout.close.assert_called_once()
         sender.terminate.assert_called_once()
         sender.wait.assert_called_once()
@@ -57,14 +57,14 @@ class TransferTests(unittest.TestCase):
 
 class PairTests(unittest.TestCase):
     def test_pair_ids_are_unbounded_canonical_positive_numbers(self):
-        self.assertEqual(sync.pool_name('12345'), 'workspace-12345')
+        self.assertEqual(sync.pool_name('12345'), 'level1-workspace-12345')
         for bad in ['0', '01', '-1', 'backup1', '1/data', ' 2', '2.0']:
             with self.subTest(bad=bad), self.assertRaises(Exception):
                 sync.pair_id(bad)
 
     def test_discovery_sorts_numbers_and_deduplicates_imported_pairs(self):
-        with patch.object(sync, 'run', return_value='workspace-10\nworkspace-2\nother'), patch.object(
-                sync.subprocess, 'check_output', return_value='  pool: workspace-3\n  pool: workspace-2\n  pool: workspace-backup1\n'):
+        with patch.object(sync, 'run', return_value='level1-workspace-10\nlevel1-workspace-2\nother'), patch.object(
+                sync.subprocess, 'check_output', return_value='  pool: level1-workspace-3\n  pool: level1-workspace-2\n  pool: level1-workspace-backup1\n'):
             self.assertEqual(sync.discover_pairs(), ['2', '3', '10'])
 
     def test_activation_requires_fencing_before_import(self):
@@ -74,8 +74,8 @@ class PairTests(unittest.TestCase):
             imp.assert_not_called()
 
     def test_activation_refuses_another_observable_active_pair(self):
-        with patch.object(sync, 'import_pair', return_value='workspace-2'), patch.object(
-                sync, 'run', return_value='workspace-1\nworkspace-2'), patch.object(
+        with patch.object(sync, 'import_pair', return_value='level1-workspace-2'), patch.object(
+                sync, 'run', return_value='level1-workspace-1\nlevel1-workspace-2'), patch.object(
                 sync, 'prop', return_value='active'), patch.object(sync, 'command') as command:
             with self.assertRaisesRegex(RuntimeError, 'still active'):
                 sync.activate('2', fenced=True)

@@ -33,7 +33,7 @@ The operator verified the [QEMU procedure](QEMU.md), including the normal guest 
 3. Inspect SquashFS: matching module under /lib/modules/<Debian-kernel>, no build-host hostid/cache, masked import/mount services and generator, executable workspace-mount, no zfs-initramfs package.
 4. Inspect initramfs with lsinitramfs: live-boot and required USB/FAT drivers present. ZFS is data only, not a root-boot dependency.
 5. File assembly leaves IMAGES-PREPARED, with distinct ESP UUIDs/data PARTUUIDs in images.json. Neither data partition has a ZFS signature yet; no host loop devices were needed.
-6. On the host, run stages/03-initialize-pair/initialize.sh. Verify one mirror is created, LZ4 plus encryption and its required dependencies are enabled, workspace-1/data is noauto, the pool is exported, loops detached, and READY/WORKSPACE-INFO.txt exist.
+6. On the host, run stages/03-initialize-pair/initialize.sh. Verify one mirror is created, LZ4 plus encryption and its required dependencies are enabled, level1-workspace-1/data is noauto, the pool is exported, loops detached, and READY/WORKSPACE-INFO.txt exist.
 7. Check completion markers before VM tests. Before USB writing, stop VMs, export the pool and detach loops. USB writes are verified by reading back the written data.
 
 ## Verify the new account and helpers after rebuilding
@@ -60,7 +60,7 @@ Keep the raw images on only one machine/VM owner. Export before shutting down. U
 | --- | --- |
 | A alone, clean firmware vars | Boots to usable console without importing ZFS; running root is overlay with SquashFS lower layer. |
 | B alone, clean firmware vars | Same, independently of A's ESP. |
-| Both disks | No workspace pool imported before manual command; helper imports ONLINE mirror, mounts only workspace-1/data. |
+| Both disks | No workspace pool imported before manual command; helper imports ONLINE mirror, mounts only level1-workspace-1/data. |
 | Repeat helper | No second import, correct existing mount reported. |
 | Reboot | /etc/reset-check disappears; workspace test data survives clean export/import. |
 | A alone, read-only degraded import | Reads previously committed test data; pool is DEGRADED; does not modify its history. |
@@ -76,12 +76,12 @@ Read-only test (after confirming no other owner, substitute numeric pool GUID fr
 sudo modprobe zfs
 [ -s /etc/hostid ] || sudo zgenhostid
 sudo zpool import -N -d /dev/disk/by-partuuid -o cachefile=none -o readonly=on POOL_GUID
-sudo zfs load-key -L prompt workspace-1/data
-sudo zfs mount workspace-1/data
+sudo zfs load-key -L prompt level1-workspace-1/data
+sudo zfs mount level1-workspace-1/data
 cat /mnt/workspace/check.txt
-sudo zpool status -gP workspace-1
+sudo zpool status -gP level1-workspace-1
 cd /
-sudo zpool export workspace-1
+sudo zpool export level1-workspace-1
 ```
 
 If active-host protection refuses an import, investigate first; only use -f after establishing exclusive ownership and authoritative history.
@@ -101,8 +101,8 @@ ip -br link
 ip -br addr
 sudo zpool list
 sudo /usr/local/sbin/workspace-mount 1
-sudo zfs get mountpoint,canmount,mounted,encryption,keyformat,keystatus,org.openzfs.systemd:ignore workspace-1/data
-sudo zpool status -gP workspace-1
+sudo zfs get mountpoint,canmount,mounted,encryption,keyformat,keystatus,org.openzfs.systemd:ignore level1-workspace-1/data
+sudo zpool status -gP level1-workspace-1
 ```
 
 To test USB presentation, replace each `-drive if=virtio,...` in the [QEMU command](QEMU.md) with:

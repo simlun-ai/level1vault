@@ -18,7 +18,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 KEY = 'integration-test-passphrase'
 PAIRS = ['1', '2', '3', '10']
-POOLS = ['workspace-' + pair for pair in PAIRS]
+POOLS = ['level1-workspace-' + pair for pair in PAIRS]
 
 
 def run(*args, **kwargs):
@@ -224,7 +224,7 @@ def main():
             for pair in ['1', '2']:
                 assert (base/'pairs'/pair/'READY').is_file()
             for pair in PAIRS:
-                pool = 'workspace-' + pair
+                pool = 'level1-workspace-' + pair
                 out = base/'pairs'/pair
                 for side in ['a', 'b']:
                     loops.append(run('losetup', '--find', '--show', '--partscan', str(out/f'usb-{side}.img')))
@@ -237,10 +237,10 @@ def main():
                     # Exercise real offline label discovery and mounting before any other pair is attached.
                     assert helper('workspace-discover').stdout.strip() == '1'
                     helper('workspace-mount', input=KEY + '\n')
-                    assert get('workspace-1/data', 'mounted') == 'yes'
+                    assert get('level1-workspace-1/data', 'mounted') == 'yes'
                     assert helper('workspace-discover').stdout.strip() == '1'  # already imported
-                    command('zfs', 'unmount', 'workspace-1/data')
-                    command('zfs', 'unload-key', 'workspace-1/data')
+                    command('zfs', 'unmount', 'level1-workspace-1/data')
+                    command('zfs', 'unload-key', 'level1-workspace-1/data')
                 else:
                     helper('workspace-mount', ok=False)  # several complete pairs require a number
                     assert not os.path.ismount('/mnt/workspace')
@@ -250,18 +250,18 @@ def main():
             helper('workspace-mount', '1', input='incorrect-passphrase\n', ok=False)
             assert not os.path.ismount('/mnt/workspace')
             helper('workspace-mount', '1', input=KEY + '\n')
-            verify_live_home(base, 'workspace-1/data')
+            verify_live_home(base, 'level1-workspace-1/data')
             stat = os.stat('/mnt/workspace')
             assert (stat.st_uid, stat.st_gid, stat.st_mode & 0o777) == (1000, 1000, 0o750)
             command('setpriv', '--reuid=1000', '--regid=1000', '--clear-groups',
                     'sh', '-c', 'printf first > /mnt/workspace/user-file')
-            command('zfs', 'unmount', 'workspace-1/data')
-            command('zfs', 'unload-key', 'workspace-1/data')
+            command('zfs', 'unmount', 'level1-workspace-1/data')
+            command('zfs', 'unload-key', 'level1-workspace-1/data')
 
             # Verify full and incremental encrypted replication.
             helper('workspace-sync', '1', '2', '10')  # shared full checkpoint, source key unloaded
-            assert get('workspace-2/data', 'readonly') == 'on'
-            assert get('workspace-2/data', 'keystatus') == 'unavailable'
+            assert get('level1-workspace-2/data', 'readonly') == 'on'
+            assert get('level1-workspace-2/data', 'keystatus') == 'unavailable'
             helper('workspace-mount', '1', input=KEY + '\n')
             Path('/mnt/workspace/user-file').write_text('second')
             helper('workspace-sync', '1', '2')
@@ -279,7 +279,7 @@ def main():
             finally:
                 sync.transfer = real_transfer
             helper('workspace-sync', '1', '3')
-            assert get('workspace-3/data', 'receive_resume_token') == '-'
+            assert get('level1-workspace-3/data', 'receive_resume_token') == '-'
 
             # A later incremental receive resumes independently.
             sync.transfer = interrupted_transfer
@@ -293,16 +293,16 @@ def main():
             helper('workspace-sync', '1', '2')
 
             # Reject child datasets and verify a shared checkpoint across replicas.
-            command('zfs', 'create', '-u', '-o', 'canmount=off', '-o', 'mountpoint=none', 'workspace-1/data/child')
+            command('zfs', 'create', '-u', '-o', 'canmount=off', '-o', 'mountpoint=none', 'level1-workspace-1/data/child')
             helper('workspace-sync', '1', '2', ok=False)
-            command('zfs', 'destroy', 'workspace-1/data/child')
+            command('zfs', 'destroy', 'level1-workspace-1/data/child')
             Path('/mnt/workspace/user-file').write_text('third')
             helper('workspace-sync', '1', '2', '3', '10')
-            checkpoint = sync.snapshots('workspace-1/data')[-1]
+            checkpoint = sync.snapshots('level1-workspace-1/data')[-1]
             for pair in PAIRS[1:]:
-                latest = sync.snapshots('workspace-' + pair + '/data')[-1]
+                latest = sync.snapshots('level1-workspace-' + pair + '/data')[-1]
                 assert latest[1] == checkpoint[1], (pair, latest, checkpoint)
-            held = run('zfs', 'holds', '-H', '-r', *[name for name, _ in sync.snapshots('workspace-1/data')])
+            held = run('zfs', 'holds', '-H', '-r', *[name for name, _ in sync.snapshots('level1-workspace-1/data')])
             for pool in POOLS[1:]:
                 assert 'level1vault-' + run('zpool', 'get', '-H', '-o', 'value', 'guid', pool) in held
 
@@ -312,37 +312,37 @@ def main():
             helper('workspace-activate', '2', ok=False)  # no fencing acknowledgement
             helper('workspace-activate', '--next', '1', '--fenced', ok=False)  # old active still imported
             Path('/mnt/workspace/former-only').write_text('preserve on fenced owner')
-            command('zfs', 'unmount', 'workspace-1/data')
+            command('zfs', 'unmount', 'level1-workspace-1/data')
             helper('workspace-mount', '2', input=KEY + '\n')
             assert Path('/mnt/workspace/user-file').read_text() == 'third'
             assert subprocess.run(['touch', '/mnt/workspace/should-fail']).returncode != 0
-            command('zfs', 'unmount', 'workspace-2/data')
+            command('zfs', 'unmount', 'level1-workspace-2/data')
 
             # Fence the former active owner. Names/identities are never changed.
-            command('zpool', 'export', 'workspace-1')
+            command('zpool', 'export', 'level1-workspace-1')
             helper('workspace-activate', '--next', '1', '--fenced')
-            assert get('workspace-2', 'org.level1vault:state') == 'active'
-            assert get('workspace-10', 'org.level1vault:state') == 'replica'
+            assert get('level1-workspace-2', 'org.level1vault:state') == 'active'
+            assert get('level1-workspace-10', 'org.level1vault:state') == 'replica'
             helper('workspace-activate', '2', '--fenced')  # idempotent
             helper('workspace-mount', '2', input=KEY + '\n')
             command('setpriv', '--reuid=1000', '--regid=1000', '--clear-groups',
                     'sh', '-c', 'printf fourth > /mnt/workspace/user-file')
 
-            verify_live_home(base, 'workspace-2/data', existing=True)
+            verify_live_home(base, 'level1-workspace-2/data', existing=True)
 
             # Binding changes are explicit; verified common history allows
             # incrementals from the newly active pair without destroying replicas.
             helper('workspace-sync', '2', '3', ok=False)
-            dataset_guid = get('workspace-3/data', 'guid')
+            dataset_guid = get('level1-workspace-3/data', 'guid')
             helper('workspace-sync', '--rebind', '2', '3', '10')
-            assert get('workspace-3/data', 'guid') == dataset_guid
-            assert get('workspace-3', 'org.level1vault:source-pool-guid') == run('zpool', 'get', '-H', '-o', 'value', 'guid', 'workspace-2')
-            command('zfs', 'unmount', 'workspace-2/data')
-            command('zpool', 'export', 'workspace-2')
+            assert get('level1-workspace-3/data', 'guid') == dataset_guid
+            assert get('level1-workspace-3', 'org.level1vault:source-pool-guid') == run('zpool', 'get', '-H', '-o', 'value', 'guid', 'level1-workspace-2')
+            command('zfs', 'unmount', 'level1-workspace-2/data')
+            command('zpool', 'export', 'level1-workspace-2')
 
             # A second ordered failover selects 3 rather than lexicographic 10.
             helper('workspace-activate', '--next', '2', '--fenced')
-            assert get('workspace-3', 'org.level1vault:state') == 'active'
+            assert get('level1-workspace-3', 'org.level1vault:state') == 'active'
             helper('workspace-mount', '3', input=KEY + '\n')
             assert Path('/mnt/workspace/user-file').read_text() == 'fourth'
             assert os.stat('/mnt/workspace').st_uid == 1000
@@ -350,24 +350,24 @@ def main():
             helper('workspace-sync', '--rebind', '3', '10')
 
             # A mounted destination or divergent local snapshot is never forced.
-            command('zfs', 'unmount', 'workspace-3/data')
+            command('zfs', 'unmount', 'level1-workspace-3/data')
             helper('workspace-mount', '10', input=KEY + '\n')
             helper('workspace-sync', '3', '10', ok=False)
-            command('zfs', 'unmount', 'workspace-10/data')
-            command('zfs', 'snapshot', 'workspace-10/data@unexpected-local')
+            command('zfs', 'unmount', 'level1-workspace-10/data')
+            command('zfs', 'snapshot', 'level1-workspace-10/data@unexpected-local')
             helper('workspace-sync', '3', '10', ok=False)
-            command('zfs', 'destroy', 'workspace-10/data@unexpected-local')
+            command('zfs', 'destroy', 'level1-workspace-10/data@unexpected-local')
             helper('workspace-sync', '3', '10')
 
             # A returning former owner can contain newer unsnapshotted writes.
             # Even after manual demotion those must never be overwritten.
-            command('zpool', 'import', '-N', '-d', '/dev', '-o', 'cachefile=none', 'workspace-1')
+            command('zpool', 'import', '-N', '-d', '/dev', '-o', 'cachefile=none', 'level1-workspace-1')
             helper('workspace-mount', '3', ok=False)  # two observable active owners
-            command('zfs', 'set', 'readonly=on', 'workspace-1/data')
-            command('zfs', 'set', 'org.level1vault:state=replica', 'workspace-1')
-            old_guid = get('workspace-1/data', 'guid')
+            command('zfs', 'set', 'readonly=on', 'level1-workspace-1/data')
+            command('zfs', 'set', 'org.level1vault:state=replica', 'level1-workspace-1')
+            old_guid = get('level1-workspace-1/data', 'guid')
             helper('workspace-sync', '--rebind', '3', '1', ok=False)
-            assert get('workspace-1/data', 'guid') == old_guid
+            assert get('level1-workspace-1/data', 'guid') == old_guid
             helper('workspace-mount', '1', input=KEY + '\n')
             assert Path('/mnt/workspace/user-file').read_text() == 'third'
             assert Path('/mnt/workspace/former-only').read_text() == 'preserve on fenced owner'

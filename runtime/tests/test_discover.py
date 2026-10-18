@@ -16,7 +16,7 @@ def label(pair='1', pool='100', leaf='11', children=('11', '12')):
 LABEL 0
 ------------------------------------
     version: 5000
-    name: 'workspace-{pair}'
+    name: 'level1-workspace-{pair}'
     state: 1
     txg: 20
     pool_guid: {pool}

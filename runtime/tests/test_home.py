@@ -29,7 +29,7 @@ class HomeTests(unittest.TestCase):
         (self.defaults / '.zshrc').write_text('image defaults')
         (self.defaults / 'level1vault').mkdir()
         (self.defaults / 'level1vault/README.md').write_text('offline checkout')
-        self.dataset = 'workspace-1/data'
+        self.dataset = 'level1-workspace-1/data'
         self.mounts = {str(self.workspace): self.record('/')}
         self.calls = []
         self.process_status = 1
@@ -47,7 +47,7 @@ class HomeTests(unittest.TestCase):
         context.start()
         self.addCleanup(context.stop)
 
-    def record(self, root, dataset='workspace-1/data'):
+    def record(self, root, dataset='level1-workspace-1/data'):
         return dict(source=dataset, fstype='zfs', fsroot=root)
 
     def command(self, args, **kwargs):
@@ -73,7 +73,7 @@ class HomeTests(unittest.TestCase):
         self.assertEqual(persistent.stat().st_mode & 0o777, 0o700)
         (persistent / '.zshrc').write_text('my configuration')
         (self.defaults / '.zshrc').write_text('new image defaults')
-        home.detach('workspace-1')
+        home.detach('level1-workspace-1')
         home.attach(self.dataset)
         self.assertEqual((persistent / '.zshrc').read_text(), 'my configuration')
         self.assertEqual(len([c for c in self.calls if c[0] == 'chown']), 1)
@@ -92,7 +92,7 @@ class HomeTests(unittest.TestCase):
         self.assertFalse(any(c[0] in ('mount', 'chown') for c in self.calls))
 
     def test_foreign_mount_is_never_covered(self):
-        self.mounts[str(self.home)] = self.record('/home/simlun', 'workspace-2/data')
+        self.mounts[str(self.home)] = self.record('/home/simlun', 'level1-workspace-2/data')
         with self.assertRaisesRegex(RuntimeError, 'Unexpected'):
             home.attach(self.dataset)
         self.assertFalse(any(c[0] == 'mount' for c in self.calls))
@@ -112,25 +112,25 @@ class HomeTests(unittest.TestCase):
         home.attach(self.dataset)
         self.process_status = 0
         with self.assertRaisesRegex(RuntimeError, 'running processes'):
-            home.detach('workspace-1')
+            home.detach('level1-workspace-1')
         self.assertFalse(any(c[0] == 'umount' for c in self.calls))
 
     def test_process_inspection_failure_blocks_detach(self):
         home.attach(self.dataset)
         self.process_status = 2
         with self.assertRaisesRegex(RuntimeError, 'Cannot check'):
-            home.detach('workspace-1')
+            home.detach('level1-workspace-1')
 
     def test_busy_home_never_uses_forced_or_lazy_unmount(self):
         home.attach(self.dataset)
         self.umount_status = 1
         with self.assertRaisesRegex(RuntimeError, 'busy'):
-            home.detach('workspace-1')
+            home.detach('level1-workspace-1')
         self.assertIn(['umount', str(self.home)], self.calls)
 
     def test_exporting_another_pool_keeps_active_home_attached(self):
         home.attach(self.dataset)
-        home.detach('workspace-2')
+        home.detach('level1-workspace-2')
         self.assertIn(str(self.home), self.mounts)
         self.assertFalse(any(c[0] == 'umount' for c in self.calls))
 

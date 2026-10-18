@@ -29,7 +29,7 @@ class ScriptTests(unittest.TestCase):
         return subprocess.run(['sh', str(script), '1'], env=self.env, capture_output=True, text=True)
 
 
-    def workspace(self, *, imported=False, mounted=False, source='workspace-1/data',
+    def workspace(self, *, imported=False, mounted=False, source='level1-workspace-1/data',
                   mountpoint=None, canmount='noauto', import_fails=False, encrypted=True, key_fails=False, replica=False):
         mp = self.base / 'workspace'
         mp.mkdir()
@@ -46,7 +46,7 @@ class ScriptTests(unittest.TestCase):
         self.tool('id', 'echo 0')
         self.tool('zpool', f'''echo "zpool $*" >> "$LOG"
 case "$1" in
-list) if [ "$*" = 'list -H -o name' ]; then echo workspace-1; exit 0; fi
+list) if [ "$*" = 'list -H -o name' ]; then echo level1-workspace-1; exit 0; fi
       exit {0 if imported else 1};;
 import) exit {1 if import_fails else 0};;
 status) exit 0;;
@@ -61,7 +61,7 @@ org.level1vault:pair) echo 1;;
 org.level1vault:state) echo {'replica' if replica else 'active'};;
 readonly) echo {'on' if replica else 'off'};;
 encryption) echo {'aes-256-gcm' if encrypted else 'off'};;
-encryptionroot) echo workspace-1/data;;
+encryptionroot) echo level1-workspace-1/data;;
 keyformat) echo passphrase;;
 keystatus) echo unavailable;;
 esac;;
@@ -80,15 +80,15 @@ esac''')
     def test_manual_import_and_mount(self):
         result = self.run_script(self.workspace())
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('zpool import -N -d /dev/disk/by-partuuid -o cachefile=none workspace-1', self.calls())
-        self.assertIn('zfs mount workspace-1/data', self.calls())
+        self.assertIn('zpool import -N -d /dev/disk/by-partuuid -o cachefile=none level1-workspace-1', self.calls())
+        self.assertIn('zfs mount level1-workspace-1/data', self.calls())
         self.assertNotIn('import -f', self.calls())
 
 
     def test_key_failure_never_mounts(self):
         result = self.run_script(self.workspace(key_fails=True))
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('zfs load-key -L prompt workspace-1/data', self.calls())
+        self.assertIn('zfs load-key -L prompt level1-workspace-1/data', self.calls())
         self.assertNotIn('zfs mount ', self.calls())
 
 
@@ -152,7 +152,7 @@ esac''')
         helper.write_text("print('1')\n")
         result = subprocess.run(['sh', str(script)], env=self.env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('Selected workspace-1', result.stdout)
+        self.assertIn('Selected level1-workspace-1', result.stdout)
         self.assertIn('zpool import -N', self.calls())
 
     def test_failed_discovery_never_imports_or_mounts(self):
@@ -176,4 +176,4 @@ esac''')
                 self.log.unlink(missing_ok=True)
                 result = self.run_script(script)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual('home attach workspace-1/data' in self.calls(), not replica)
+                self.assertEqual('home attach level1-workspace-1/data' in self.calls(), not replica)

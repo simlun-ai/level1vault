@@ -18,14 +18,14 @@ upgrade = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(upgrade)
 
 LABEL = """LABEL 0
-    name: 'workspace-2'
+    name: 'level1-workspace-2'
     pool_guid: 200
     guid: 21
     vdev_tree:
         type: 'mirror'
         guid: 999
 LABEL 1
-    name: 'workspace-2'
+    name: 'level1-workspace-2'
     pool_guid: 200
     guid: 21
     vdev_tree:
@@ -99,19 +99,19 @@ class UpgradeTests(unittest.TestCase):
             upgrade.load_release(self.release)
 
     def test_labels_require_consistent_pool_and_distinct_leaf_identity(self):
-        self.assertEqual(upgrade.label_identity(LABEL), ('workspace-2', '200', '21'))
+        self.assertEqual(upgrade.label_identity(LABEL), ('level1-workspace-2', '200', '21'))
         for text in ('missing', LABEL.replace("type: 'mirror'", "type: 'disk'"),
                      LABEL.replace('LABEL 1\n    name:', "LABEL 1\n    name:").replace('pool_guid: 200', 'pool_guid: 201', 1)):
             with self.assertRaises(ValueError):
                 upgrade.label_identity(text)
-        base = dict(device_id=1, pool='workspace-2', pool_guid='200', leaf_guid='21', esp_uuid='A',
+        base = dict(device_id=1, pool='level1-workspace-2', pool_guid='200', leaf_guid='21', esp_uuid='A',
                     table={'partitions': [{'uuid': 'a1'}, {'uuid': 'a2'}]})
         other = dict(base, device_id=2, leaf_guid='22', esp_uuid='B',
                      table={'partitions': [{'uuid': 'b1'}, {'uuid': 'b2'}]})
         with patch.object(upgrade, 'imported_devices', return_value=set()):
             with patch.object(upgrade, 'inspect_disk', side_effect=[base, other]):
                 self.assertEqual(len(upgrade.inspect_pair('2', Path('/a'), Path('/b'))), 2)
-            for change in ({'pool': 'workspace-3'}, {'pool_guid': 'foreign'}, {'device_id': 1}, {'leaf_guid': '21'}):
+            for change in ({'pool': 'level1-workspace-3'}, {'pool_guid': 'foreign'}, {'device_id': 1}, {'leaf_guid': '21'}):
                 with patch.object(upgrade, 'inspect_disk', side_effect=[base, dict(other, **change)]):
                     with self.assertRaises(ValueError):
                         upgrade.inspect_pair('2', Path('/a'), Path('/b'))

@@ -55,7 +55,7 @@ def seed(build, count):
         if not (out / 'READY').is_file() or (out / 'INITIALIZING').exists():
             raise RuntimeError(f'Use a completed initialized pair: {out}')
         info = dict(line.split('=', 1) for line in (out / 'WORKSPACE-INFO.txt').read_text().splitlines() if '=' in line)
-        pool = f'workspace-{pair}'
+        pool = f'level1-workspace-{pair}'
         if info.get('pair') != str(pair) or info.get('state') != ('active' if pair == 1 else 'replica'):
             raise RuntimeError(f'Unexpected identity/state in {out}')
         if pool in occupied:
