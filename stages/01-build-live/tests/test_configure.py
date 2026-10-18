@@ -42,6 +42,8 @@ class ScriptTests(unittest.TestCase):
         target = self.base / 'config/includes.chroot/usr/local/sbin/workspace-mount'
         self.assertEqual(target.read_bytes(), (ROOT / 'runtime/workspace-mount').read_bytes())
         self.assertEqual(target.stat().st_mode & 0o777, 0o755)
+        helper = target.parent / 'workspace-discover'
+        self.assertEqual(helper.read_bytes(), (ROOT / 'runtime/workspace-discover').read_bytes())
         installed = self.base / 'config/includes.chroot/usr/local/lib/level1vault/build/repository'
         self.assertEqual((installed / 'source.bundle').read_text(), 'fixture')
         self.assertTrue((self.base / 'config/hooks/live/60-repository.hook.chroot').is_file())

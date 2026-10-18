@@ -46,6 +46,7 @@ cp "$SOURCE_DIR/stages/01-build-live/build-packages.list" config/includes.chroot
 cp "$SOURCE_DIR/stages/01-build-live/package-zfs.py" config/includes.chroot/usr/local/lib/level1vault/build/
 cp "$SOURCE_DIR/stages/01-build-live/prune-build-packages.py" config/includes.chroot/usr/local/lib/level1vault/build/
 cp -a "$SOURCE_DIR/stages/01-build-live/user-config" config/includes.chroot/usr/local/lib/level1vault/build/
+install -m 0755 "$SOURCE_DIR/runtime/workspace-discover" config/includes.chroot/usr/local/sbin/workspace-discover
 install -m 0755 "$SOURCE_DIR/runtime/workspace-mount" config/includes.chroot/usr/local/sbin/workspace-mount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-umount" config/includes.chroot/usr/local/sbin/workspace-umount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-activate" config/includes.chroot/usr/local/sbin/workspace-activate

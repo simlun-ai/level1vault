@@ -7,6 +7,7 @@ SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)
 install -d /usr/local/lib/level1vault/build
 cp -a "$SOURCE_DIR/stages/01-build-live/user-config" /usr/local/lib/level1vault/build/
 "$SOURCE_DIR/stages/01-build-live/hooks/50-account.hook.chroot"
+install -m 0755 "$SOURCE_DIR/runtime/workspace-discover" /usr/local/sbin/workspace-discover
 install -m 0755 "$SOURCE_DIR/runtime/workspace-mount" /usr/local/sbin/workspace-mount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-umount" /usr/local/sbin/workspace-umount
 

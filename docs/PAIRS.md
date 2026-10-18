@@ -10,28 +10,31 @@ A deployment has **N independent pairs**, with two independently bootable USBs p
 
 Exactly one pair is the writable working copy. Others are read-only replicas. `org.level1vault:pair` and `org.level1vault:state` on each pool's root dataset record its identity and current state. Failover changes state and write permission **in place**; pool names, IDs, encryption keys and existing files remain the same. `zfs promote` is not used: it changes clone ancestry, not these operational states.
 
+`sudo workspace-mount` without an ID selects the only complete connected mirror after reading its offline labels; zero or several complete pairs require an explicit ID. Both distinct members must be available for automatic selection, including for an already imported pool. Explicit IDs retain degraded mounting with one member. Discovery never imports a pool or changes its active/replica state.
+
 Every pair uses `/mnt/workspace`, so only one dataset is mounted there at a time. `sudo workspace-mount 2` selects pair 2 explicitly and asks for the passphrase if its key is unloaded. It is writable only when pair 2 is active. Booting a replica's stick does not automatically activate it.
 
 ## Provision N fresh pairs
 
-Build the OS once using the [quick start](../README.md#build). The build's `build/default/pairs/1/` is the first prepared pair. Initialize it as pair 1, the initial active copy:
+For a new deployment, build and initialize all pairs together:
 
 ```bash
-make initialize PAIR=1 ACTIVE=1
+make prepare-pairs N=4
 ```
 
-Enter/confirm the encryption passphrase through ZFS's own stdin prompt. This creates AES-256-GCM encrypted `workspace-1/data`, owned by `2000:2000`, mode `0750`. The passphrase is not stored in images or manifests.
+Pair 1 starts active; the other pairs are already populated replicas and need no initial sync. Choose `N=1` for only the active pair. The passphrase is collected before building and is never saved in images or manifests. Use the same `BUILD_DIR=...` throughout if overriding the default.
 
-Choose any desired pair count. This example adds pairs 2 through 4; changing the count requires no source/configuration change:
+For an existing deployment, add empty replicas from its original ISO using unused IDs:
 
 ```bash
-PAIR_COUNT=4
-for pair in $(seq 2 "$PAIR_COUNT"); do
-  make assemble PAIR="$pair"
-  make initialize PAIR="$pair"
+make add-pair PAIR=5
+# Or prepare several additional empty replicas:
+for pair in 6 7 8; do
+  make add-pair PAIR="$pair"
 done
 ```
 
+After flashing each additional pair, populate it from the current active pair with `workspace-sync` below.
 Each new assembly must use a new output directory: it generates unique GPT, PARTUUID and ESP identities. Each initialization creates a separate mirror and pool GUID. Without `--active`, initialization creates an empty receive target in `replica` state. The first raw receive creates its encrypted data filesystem using the source's encryption key; do not independently create/encrypt that filesystem. A `READY` marker means the pair can be flashed, **not that it contains a completed replica**.
 
 Follow [Writing USB drives](../stages/05-write-usb/README.md) for each pair, choosing its output directory and verified physical USB devices. Label both sticks with numeric pair ID and A/B identity. Keep each `WORKSPACE-INFO.txt` and a record of physical serials/location outside the pools. Never create another pair by cloning initialized images. Do not connect image loops and flashed physical copies of the same pair concurrently.

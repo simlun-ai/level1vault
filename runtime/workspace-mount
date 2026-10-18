@@ -2,13 +2,12 @@
 set -eu
 
 # Validate the requested pair and root access.
-[ "$#" -eq 1 ] || { echo 'Usage: sudo workspace-mount PAIR_ID' >&2; exit 2; }
-PAIR=$1
+[ "$#" -le 1 ] || { echo 'Usage: sudo workspace-mount [PAIR_ID]' >&2; exit 2; }
+PAIR=${1:-}
 case "$PAIR" in
-    ''|0*|*[!0-9]*) echo 'PAIR_ID must be a positive integer without leading zeros' >&2; exit 2;;
+    '') ;;
+    0*|*[!0-9]*) echo 'PAIR_ID must be a positive integer without leading zeros' >&2; exit 2;;
 esac
-POOL=workspace-$PAIR
-DATASET=$POOL/data
 MOUNTPOINT=/mnt/workspace
 [ "$(id -u)" -eq 0 ] || { echo 'Run: sudo /usr/local/sbin/workspace-mount' >&2; exit 1; }
 
@@ -20,6 +19,15 @@ flock -x 9
 modprobe zfs
 [ -s /etc/hostid ] || zgenhostid
 udevadm settle
+
+# Select one complete connected mirror when no number was supplied.
+if [ -z "$PAIR" ]; then
+    PAIR=$(python3 "$(dirname -- "$0")/workspace-discover")
+    printf 'Selected workspace-%s (both mirror members available).\n' "$PAIR"
+fi
+POOL=workspace-$PAIR
+DATASET=$POOL/data
+
 if ! zpool list -H -o name "$POOL" >/dev/null 2>&1; then
     # Name conflicts and active-host protection intentionally cause failure.
     zpool import -N -d /dev/disk/by-partuuid -o cachefile=none "$POOL"

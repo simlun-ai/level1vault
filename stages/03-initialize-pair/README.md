@@ -16,3 +16,5 @@ make initialize PAIR=2            # empty replica prepared by stage 2
 On failure, `INITIALIZING` remains. Inspect the pool, loops, and logs before recovery; failed exports retain loop devices. Do not rerun over a partially initialized pair. See [build troubleshooting](../../docs/BUILD.md#initialize-a-pair).
 
 `tests/` covers mocked initialization, identity checks, and cleanup failures through `make test`. Cross-stage real ZFS tests live in `../../integration-tests/zfs/` and require the explicit disposable-environment flag. See [pair operations](../../docs/PAIRS.md).
+
+For the common additional-replica workflow, `make add-pair PAIR=2` combines assembly and this initialization from the existing ISO. For a complete initial deployment, use `make prepare-pairs N=1` (one active pair) or `N=3` (active plus two populated replicas). Individual stage targets remain available for troubleshooting.

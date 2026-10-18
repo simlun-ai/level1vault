@@ -2,7 +2,10 @@
 
 The root Makefile is the public command interface. This directory owns the shared BuildKit graph, builder lifecycle, safe cleanup, and collection of stage-owned test suites.
 
-- `upgrade-os.py` validates a selected existing pair, builds/reuses an ISO-only upgrade release, and invokes the stage 6 updater.
+- `check-host.py` reports build, USB and testing dependencies with apt installation advice and separate Docker/ZFS readiness checks.
+- `add-pair.py` assembles and initializes a new empty replica from an existing ISO (`make add-pair PAIR=2`).
+- `prepare-upgrade.py` builds an ISO-only inspected release in a new `BUILD_DIR` without accessing USBs (`make prepare-upgrade`).
+- `upgrade-os.py` requires an explicit completed `UPGRADE_DIR`, validates the selected existing pair, and invokes the stage 6 updater without building.
 - `prepare-pairs.py` collects the passphrase up front and orchestrates one OS build, inspection, N initializations, replica seeding and final verification (`make prepare-pairs N=3`).
 - `Dockerfile` connects live-build, assembly, inspection, test, and scratch-export targets.
 - `buildkit.sh` manages the dedicated builder and exports; stage implementations stay under `../stages/`.

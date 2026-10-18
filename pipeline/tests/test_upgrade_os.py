@@ -1,7 +1,6 @@
-"""Verify OS release reuse and build failure behavior without USB or Docker access."""
+"""Verify that applying a release never invokes a build or accepts partial outputs."""
 import importlib.util
 from pathlib import Path
-import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -13,36 +12,39 @@ spec.loader.exec_module(workflow)
 
 
 class UpgradePipelineTests(unittest.TestCase):
-    def test_ready_release_is_reused_and_original_disk_identities_are_passed_to_updater(self):
+    def test_ready_release_is_applied_without_building(self):
         with tempfile.TemporaryDirectory() as tmp:
             release = Path(tmp)
             (release / 'UPGRADE-READY').touch()
             with patch.object(workflow.upgrade, 'prerequisites'), \
+                    patch.object(workflow.upgrade, 'load_release') as load, \
                     patch.object(workflow.upgrade, 'inspect_pair', return_value=['observed identities']), \
-                    patch.object(workflow, 'release_directory', return_value=release), \
                     patch.object(workflow, 'open'), patch.object(workflow.fcntl, 'flock'), \
                     patch.object(workflow.subprocess, 'run') as run, \
                     patch.object(workflow.upgrade, 'apply_release') as apply:
-                workflow.execute('2', Path('/a'), Path('/b'))
+                workflow.execute('2', Path('/a'), Path('/b'), str(release))
             run.assert_not_called()
+            load.assert_called_once_with(release)
             apply.assert_called_once_with(release, '2', Path('/a'), Path('/b'), expected=['observed identities'])
 
-    def test_failed_build_never_calls_usb_updater(self):
+    def test_missing_or_partial_release_never_accesses_disks_or_builds(self):
         with tempfile.TemporaryDirectory() as tmp:
-            release = Path(tmp) / 'new'
-            with patch.object(workflow.upgrade, 'prerequisites'), \
-                    patch.object(workflow.upgrade, 'inspect_pair'), \
-                    patch.object(workflow, 'release_directory', return_value=release), \
-                    patch.object(workflow, 'open'), patch.object(workflow.fcntl, 'flock'), \
-                    patch.object(workflow.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'build')), \
-                    patch.object(workflow.upgrade, 'apply_release') as apply:
-                with self.assertRaises(subprocess.CalledProcessError):
-                    workflow.execute('2', Path('/a'), Path('/b'))
-            apply.assert_not_called()
-            self.assertFalse((release / 'UPGRADE-READY').exists())
+            for release in ('', str(Path(tmp) / 'missing'), tmp):
+                with self.subTest(release=release), \
+                        patch.object(workflow.upgrade, 'inspect_pair') as inspect, \
+                        patch.object(workflow.subprocess, 'run') as run, \
+                        patch.object(workflow.upgrade, 'apply_release') as apply:
+                    with self.assertRaises(ValueError):
+                        workflow.execute('2', Path('/a'), Path('/b'), release)
+                    inspect.assert_not_called()
+                    run.assert_not_called()
+                    apply.assert_not_called()
 
-    def test_dirty_tracked_source_is_rejected_for_new_builds(self):
-        with patch.object(workflow, 'git', return_value=' M packages.list'):
-            with self.assertRaisesRegex(ValueError, 'Commit tracked changes'):
-                workflow.release_directory(None)
-        self.assertEqual(workflow.release_directory('/chosen/release'), Path('/chosen/release'))
+    def test_invalid_release_never_inspects_disks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'UPGRADE-READY').touch()
+            with patch.object(workflow.upgrade, 'load_release', side_effect=ValueError('Invalid payload')), \
+                    patch.object(workflow.upgrade, 'inspect_pair') as inspect:
+                with self.assertRaisesRegex(ValueError, 'Invalid payload'):
+                    workflow.execute('2', Path('/a'), Path('/b'), tmp)
+                inspect.assert_not_called()

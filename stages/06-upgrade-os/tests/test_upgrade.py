@@ -189,7 +189,7 @@ class UpgradeTests(unittest.TestCase):
         env = dict(os.environ)
         env.pop('PAIR', None)
         for args in ([], ['PAIR=2'], ['PAIR=2', 'DISK_A=/dev/a'], ['DISK_A=/dev/a', 'DISK_B=/dev/b']):
-            result = subprocess.run(['make', 'upgrade-os', 'SUDO=false', 'DISK_A=', 'DISK_B=', *args],
+            result = subprocess.run(['make', 'upgrade-os', 'UPGRADE_DIR=/prepared', 'SUDO=false', 'DISK_A=', 'DISK_B=', *args],
                                     cwd=ROOT, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn('python3 pipeline/upgrade-os.py', result.stdout)

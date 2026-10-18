@@ -25,11 +25,17 @@ Keep your host distribution's own ZFS packages and kernel. Do not replace them w
 
 The [BuildKit pipeline](BUILDKIT.md) confines the required privileged RUN to live-build. It exports artifacts from scratch stages; ZFS initialization stays on the host. Use trusted source: the live-build entitlement grants privileges equivalent to the previous privileged container.
 
+## Check host prerequisites
+
+Run `make check-host` after cloning. It checks utilities for building, initialization, USB writing/upgrades, local tests, container tests, QEMU (including mtools, Python pexpect and OVMF), and disposable-VM ZFS integration. Missing tools are grouped by workflow with a combined `sudo apt install -y ...` command. It also checks Docker/Buildx access and ZFS readiness, without installing packages, loading modules, running tests or importing pools. A failure means a dependency or readiness problem remains; Docker access/kernel problems have separate instructions. Docker CE uses `docker-ce`/`docker-buildx-plugin`; distribution Docker uses `docker.io`/`docker-buildx`. For custom firmware paths, use `python3 pipeline/check-host.py --ovmf-code PATH --ovmf-vars PATH` and pass the same files to QEMU acceptance with `QEMU_ARGS='--code PATH --vars PATH'`.
+
 ## Prepare N complete pairs in one command
 
 From a fresh full Git checkout on the prepared workstation:
 
 ```bash
+make prepare-pairs N=1            # one complete active pair
+# Or, for one active pair and two populated replicas:
 make prepare-pairs N=3
 ```
 
@@ -50,6 +56,20 @@ No initial sync is needed after flashing. The batch starts with an empty workspa
 The output defaults to `build/default/pairs/ID/`. Existing build directories are refused; use `BUILD_DIR=build-next` for a new batch and pass that same setting when writing. `FRESH=1`, `DEBIAN_IMAGE`, and `BUILDX_BUILDER` retain their usual meanings. Budget up to 24 GiB per pair plus build workspace. This command does not run QEMU or write physical disks.
 
 If any step fails, preparation stops, leaves partial artifacts for inspection, and retains `PREPARING-PAIRS` once the ISO build has finished. Do not flash incomplete batches. Failed exports retain the associated loops; inspect pool GUIDs and loop backing files before recovery. Never blindly delete partial outputs or rerun initialization over them. Start a replacement batch in a new directory only after resolving leftover resources. Removing a marker does not repair a failed run.
+
+## Select a build directory and add a pair
+
+`BUILD_DIR` defaults to `build/default`. Each run holds its ISO under `live/`, images under `pairs/ID/`, and acceptance reports under `validation/`. Use a different directory to preserve older images and to separate batches or OS releases. Use the same setting when writing, testing or adding pairs from that run:
+
+```bash
+make prepare-pairs N=1 BUILD_DIR=build/initial
+make add-pair PAIR=2 BUILD_DIR=build/initial
+lsblk -o NAME,PATH,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINTS
+# Identify the two destination whole disks before this destructive write.
+make write-usb PAIR=2 BUILD_DIR=build/initial DISK_A=/dev/sda DISK_B=/dev/sdb
+```
+
+`add-pair` reuses the existing ISO, authenticates with sudo before assembly, creates fresh image identities and initializes an empty replica in one command. `PAIR` must be explicit and unused; `ACTIVE=1` is refused. Initialization still refuses partial or previously initialized output. A failure preserves diagnostics and any initialization markers for inspection. Populate the new replica with `workspace-sync` after flashing, as described in [additional pairs](../README.md#add-more-pairs). The original ISO does not incorporate later source changes; prepare a new OS release for those changes using [the two-step upgrade workflow](UPGRADES.md).
 
 ## Build the live system and boot images
 

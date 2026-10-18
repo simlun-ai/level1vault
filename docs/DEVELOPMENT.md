@@ -8,7 +8,10 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 
 | Command | Result |
 | --- | --- |
-| `make upgrade-os PAIR=2 DISK_A=... DISK_B=...` | Rebuild/reuse an OS release and upgrade an existing pair in place |
+| `make check-host` | Check all build, USB and testing prerequisites and print apt fixes |
+| `make prepare-upgrade BUILD_DIR=build/YYYY-MM-DD` | Build and inspect an OS-only release without USB disks |
+| `make upgrade-os UPGRADE_DIR=... PAIR=2 DISK_A=... DISK_B=...` | Apply a prepared release to an existing pair; never build |
+| `make add-pair PAIR=2` | Assemble and initialize an empty replica using the existing ISO |
 | `make prepare-pairs N=3` | Build once and prepare N complete pairs with prompts up front |
 | `make build` | Build the Trixie toolchain, live ISO and first prepared image pair in a new `build/default/` |
 | `make initialize PAIR=1 ACTIVE=1` | Initialize the first writable encrypted mirror on the host; prompt for its passphrase |
@@ -27,8 +30,8 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 `BUILD_DIR` defaults to `build/default`; `PAIR` defaults to `1`, and `OUT` defaults to `$(BUILD_DIR)/pairs/$(PAIR)`. Relative paths are relative to the repository root. Override them consistently:
 
 ```bash
-make build BUILD_DIR=build-next
-make initialize BUILD_DIR=build-next PAIR=5 ACTIVE=1
+make prepare-pairs N=1 BUILD_DIR=build-next
+make add-pair BUILD_DIR=build-next PAIR=5
 ```
 
 Only set `ACTIVE=1` when provisioning the initial writable pair for a deployment. Additional pairs default to replicas. Do not provision a second independent active pair as a failover shortcut; follow [pair operations](PAIRS.md).
@@ -37,11 +40,13 @@ Assembly requires an existing ISO; BuildKit builds or reuses its toolchain stage
 
 ## Local tests on Linux
 
-Install Make, Python 3 and ShellCheck using your distribution’s package manager. For example, on Ubuntu:
+Run `make check-host` to report missing dependencies for every workflow, including package-building unit tests, QEMU firmware/Python modules and disposable ZFS integration. The checker does not run tests or enable privileged integration.
+
+Install Make, Python 3, Debian package tools (`dpkg-deb`) and ShellCheck using your distribution’s package manager. For example, on Ubuntu:
 
 ```bash
 sudo apt update
-sudo apt install -y make python3 shellcheck
+sudo apt install -y git make python3 shellcheck dpkg
 make test
 ```
 

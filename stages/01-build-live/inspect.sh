@@ -62,6 +62,7 @@ rm "$ROOT/tmp/level1vault-user-config.zsh"
 
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"
+test -x "$ROOT/usr/local/sbin/workspace-discover"
 test -x "$ROOT/usr/local/sbin/workspace-umount"
 test -x "$ROOT/usr/local/sbin/workspace-sync"
 test -x "$ROOT/usr/local/sbin/workspace-activate"

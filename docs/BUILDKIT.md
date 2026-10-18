@@ -27,13 +27,13 @@ Install Docker Engine with the Buildx plugin; verify `docker buildx version` as 
 ```bash
 make builder                       # create/bootstrap the dedicated builder
 make build                         # local export into a fresh build/default/
-make assemble PAIR=2      # fresh identities from the existing ISO
+make add-pair PAIR=2                # assemble fresh identities and initialize an empty replica
 make test-container                # real BuildKit tests, including two exports
 make check-build                   # before host ZFS initialization
 make cache-clean                   # prune unused cache on this builder only
 ```
 
-`BUILDX_BUILDER=level1vault-dev` selects another dedicated instance. Names must begin with `level1vault`; existing instances must use the `docker-container` driver and must have been configured with the insecure entitlement for full builds. The wrapper never changes the globally selected builder. Buildx always runs as the invoking user, including when called by the privileged batch/upgrade coordinators; that user needs access to the local rootful Docker daemon. `SUDO=` is for running host stages when already root. Exports belong to the client user running Buildx. Builder ownership records and a checkout-wide lifecycle lock live in Git metadata, outside the committed source. The default builder is unique to the checkout path; custom names must also be dedicated to one checkout. Existing externally created builders can be used but are never claimed or removed automatically.
+`BUILDX_BUILDER=level1vault-dev` selects another dedicated instance. Names must begin with `level1vault`; existing instances must use the `docker-container` driver and must have been configured with the insecure entitlement for full builds. The wrapper never changes the globally selected builder. Buildx always runs as the invoking user, including when called by the privileged batch coordinator; that user needs access to the local rootful Docker daemon. `SUDO=` is for running host stages when already root. Exports belong to the client user running Buildx. Builder ownership records and a checkout-wide lifecycle lock live in Git metadata, outside the committed source. The default builder is unique to the checkout path; custom names must also be dedicated to one checkout. Existing externally created builders can be used but are never claimed or removed automatically.
 
 ## Cache, identities and updates
 

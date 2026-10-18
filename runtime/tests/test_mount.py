@@ -143,3 +143,21 @@ esac''')
         result = self.run_script(script)
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('zpool ', self.calls())
+
+
+    def test_omitted_pair_uses_discovery_before_import(self):
+        script = self.workspace()
+        helper = self.base / 'workspace-discover'
+        helper.write_text("print('1')\n")
+        result = subprocess.run(['sh', str(script)], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Selected workspace-1', result.stdout)
+        self.assertIn('zpool import -N', self.calls())
+
+    def test_failed_discovery_never_imports_or_mounts(self):
+        script = self.workspace()
+        (self.base / 'workspace-discover').write_text("raise SystemExit('Connect both members or specify a pair')\n")
+        result = subprocess.run(['sh', str(script)], env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('zpool import', self.calls())
+        self.assertNotIn('zfs mount', self.calls())

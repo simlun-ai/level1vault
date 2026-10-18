@@ -3,11 +3,14 @@
 Input: an inspected OS release, an explicit pair ID, and two identified existing whole USB disks. Output: replaced `/live/` and `/.disk/` files on their FAT/EFI partitions, installed `live/release.json`, and a host-side per-stick completion report. Run on the Linux workstation with the pair exported and both sticks idle.
 
 ```bash
+release="build/$(date +%F)"
+make prepare-upgrade BUILD_DIR="$release"
+# Preparation finishes without USB devices; now identify the existing pair.
 lsblk -o NAME,PATH,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINTS
-make upgrade-os PAIR=2 DISK_A=/dev/sda DISK_B=/dev/sdb
+make upgrade-os UPGRADE_DIR="$release" PAIR=2 DISK_A=/dev/sda DISK_B=/dev/sdb
 ```
 
-`pipeline/upgrade-os.py` builds or reuses a complete release and calls this stage. `build-release.sh` inspects the ISO and uses `../../common/live_payload.py` to export the same live payload as fresh assembly. `upgrade.py` validates the release, both disks' GPT/USB identities and offline ZFS labels, then mounts only EFI partitions and replaces OS files A then B. The existing FAT UUID, EFI loader, GRUB configuration, GPT, and ZFS partition are preserved. It does not import, unlock, initialize, resize, or upgrade a ZFS pool.
+`pipeline/prepare-upgrade.py` builds and inspects a release without USB access. The separate `pipeline/upgrade-os.py` requires that completed release and calls this stage; it never builds. `build-release.sh` inspects the ISO and uses `../../common/live_payload.py` to export the same live payload as fresh assembly. `upgrade.py` validates the release, both disks' GPT/USB identities and offline ZFS labels, then mounts only EFI partitions and replaces OS files A then B. The existing FAT UUID, EFI loader, GRUB configuration, GPT, and ZFS partition are preserved. It does not import, unlock, initialize, resize, or upgrade a ZFS pool.
 
 Both OS directories are replaced in place; there is no old OS copy or rollback menu. The installed release record is copied with the payload. After flushing and unmounting, the updater invalidates the partition read cache and verifies the installed files once from a read-only mount against the release hashes. Source files are checked for valid paths, types and sizes without hashing them again. A failed copy is repairable by rerunning the same release. A filesystem error may require deliberate FAT repair first. A failed unmount retains its mountpoint for inspection. If A fails, B is not updated; if B fails, the report records A's completion. No successful physical boot is inferred from file verification.
 

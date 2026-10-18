@@ -14,7 +14,7 @@ sudo workspace-umount
 sudo poweroff
 ```
 
-The mount helper serializes calls, creates a per-boot hostid if absent, imports without mounting by scanning PARTUUIDs, validates the pair and encryption properties, loads the key through stdin if needed, then explicitly mounts only the selected data filesystem. `workspace-mount PAIR_ID` selects that pair and uses its active/replica state; only one dataset can use `/mnt/workspace` at a time. It does not force imports. It may import a valid single member in degraded mode. A random hostid means an unclean shutdown may require a deliberate, fenced force import on the next boot.
+The mount helper serializes calls, creates a per-boot hostid if absent, imports without mounting by scanning PARTUUIDs, validates the pair and encryption properties, loads the key through stdin if needed, then explicitly mounts only the selected data filesystem. `workspace-mount` without an ID requires exactly one complete connected pair with both distinct members; it reads labels without importing candidates. `workspace-mount PAIR_ID` selects that pair and uses its active/replica state; only one dataset can use `/mnt/workspace` at a time. It does not force imports. It may import a valid single member in degraded mode. A random hostid means an unclean shutdown may require a deliberate, fenced force import on the next boot.
 
 Never write independently to separated members and expect a merge. After writes to A while B was missing, B is stale; reconnect to the authoritative pool owner, resilver, and confirm **both members ONLINE with no errors** before using B independently. `zpool wait -t resilver workspace-1` alone is insufficient: it also returns when no resilver is running.
 
@@ -69,7 +69,7 @@ When only inspecting a potentially stale original member, first fence every othe
 
 ## OS updates and limitations
 
-**Use `make upgrade-os PAIR=N DISK_A=... DISK_B=...` for existing pairs.** It rebuilds/inspects the OS and replaces only the FAT live payload and live-media markers, preserving disk-specific boot files, filesystem/partition identities, and the ZFS partitions. It updates A then B in place, without retaining an old OS copy. An interrupted copy can be repaired by rerunning the same verified release. See [OS upgrades](UPGRADES.md) for requirements, reports, release reuse and recovery. Whole-image `write-usb` remains for new pairs and overwrites workspace data.
+**Use `make prepare-upgrade BUILD_DIR=build/YYYY-MM-DD` on the host, then `make upgrade-os UPGRADE_DIR=build/YYYY-MM-DD PAIR=N DISK_A=... DISK_B=...` for existing pairs.** Preparation builds/inspects the OS without USB disks; the separate writing step replaces only the FAT live payload and live-media markers, preserving disk-specific boot files, filesystem/partition identities, and the ZFS partitions. It updates A then B in place, without retaining an old OS copy. An interrupted copy can be repaired by rerunning the same verified release. See [OS upgrades](UPGRADES.md) for requirements, reports, release reuse and recovery. Whole-image `write-usb` remains for new pairs and overwrites workspace data.
 
 - The running root resets; FAT/SquashFS stored on USB are not physically write-protected or cryptographically verified.
 - Live changes and the ZFS ARC consume RAM; test the minimum hardware configuration.

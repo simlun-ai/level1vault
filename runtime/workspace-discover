@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Select a unique complete workspace mirror from offline labels, without importing."""
+from collections import defaultdict
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+
+def identity(text):
+    # Require all readable label copies to agree on the mirror and this member.
+    records = set()
+    for label in re.split(r'LABEL\s+[0-9]+', text):
+        name = re.search(r"^\s*name:\s*'(workspace-[1-9][0-9]*)'", label, re.M)
+        pool = re.search(r'^\s*pool_guid:\s*([0-9]+)', label, re.M)
+        leaf = re.search(r'^\s*guid:\s*([0-9]+)', label, re.M)
+        children = frozenset(re.findall(r"children\[[0-9]+\]:\s+type:\s*'disk'\s+id:\s*[0-9]+\s+guid:\s*([0-9]+)", label))
+        if name and pool and leaf and re.search(r"type:\s*'mirror'", label) and len(children) == 2:
+            records.add((name[1], pool[1], leaf[1], children))
+    return next(iter(records)) if len(records) == 1 else None
+
+
+def select(devices):
+    # Count physical partitions once and reject duplicate member or pool identities.
+    groups = defaultdict(list)
+    names = defaultdict(set)
+    for device, text in devices:
+        record = identity(text)
+        if record:
+            name, pool, leaf, children = record
+            groups[name, pool].append((device, leaf, children))
+            names[name].add(pool)
+    candidates = []
+    for (name, pool), members in groups.items():
+        leaves = {leaf for _, leaf, _ in members}
+        if (len(names[name]) == 1 and len(members) == 2 and len(leaves) == 2
+                and all(children == leaves for _, _, children in members)):
+            candidates.append(name.removeprefix('workspace-'))
+    if len(candidates) != 1:
+        available = ', '.join(sorted(candidates, key=int)) or 'none'
+        raise ValueError(f'Expected exactly one complete workspace pair; complete pairs: {available}. Connect both members or run sudo workspace-mount PAIR_ID explicitly.')
+    return candidates[0]
+
+
+def discover():
+    # Scan PARTUUID aliases as the mount helper does; label reads never import pools.
+    devices = []
+    paths = sorted({path.resolve() for path in Path('/dev/disk/by-partuuid').glob('*')})
+    for path in paths:
+        result = subprocess.run(['zdb', '-l', str(path)], capture_output=True, text=True)
+        # zdb may return nonzero when only some label slots are readable.
+        if result.stdout:
+            devices.append((path, result.stdout))
+    return select(devices)
+
+
+if __name__ == '__main__':
+    try:
+        print(discover())
+    except (ValueError, OSError) as error:
+        sys.exit(str(error))

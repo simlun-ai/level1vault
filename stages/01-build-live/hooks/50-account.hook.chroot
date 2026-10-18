@@ -67,7 +67,8 @@ cat > /etc/motd <<'MOTD'
 level1vault workspace quick guide
 
 Pair IDs below are examples; use the IDs printed on your USB pairs.
-  sudo workspace-mount 1         Unlock pair 1 at /mnt/workspace.
+  sudo workspace-mount           Unlock the only complete connected pair.
+  sudo workspace-mount 1         Select pair 1 explicitly (also for degraded use).
                                  Active: writable. Replica: read-only.
   sudo workspace-sync 1 2        Copy active pair 1 to unmounted replica pair 2.
                                  Add more replica IDs to update them too; rerun to resume.

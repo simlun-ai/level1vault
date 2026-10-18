@@ -187,8 +187,23 @@ def main():
                 out = base/'pairs'/pair
                 for side in ['a', 'b']:
                     loops.append(run('losetup', '--find', '--show', '--partscan', str(out/f'usb-{side}.img')))
+                    if pair == '1' and side == 'a':
+                        command('udevadm', 'settle')
+                        helper('workspace-mount', ok=False)  # one member is insufficient for automatic selection
+                        assert pool not in run('zpool', 'list', '-H', '-o', 'name').splitlines()
                 command('udevadm', 'settle')
-                command('zpool', 'import', '-N', '-d', '/dev', '-o', 'cachefile=none', pool)
+                if pair == '1':
+                    # Exercise real offline label discovery and mounting before any other pair is attached.
+                    assert helper('workspace-discover').stdout.strip() == '1'
+                    helper('workspace-mount', input=KEY + '\n')
+                    assert get('workspace-1/data', 'mounted') == 'yes'
+                    assert helper('workspace-discover').stdout.strip() == '1'  # already imported
+                    command('zfs', 'unmount', 'workspace-1/data')
+                    command('zfs', 'unload-key', 'workspace-1/data')
+                else:
+                    helper('workspace-mount', ok=False)  # several complete pairs require a number
+                    assert not os.path.ismount('/mnt/workspace')
+                    command('zpool', 'import', '-N', '-d', '/dev', '-o', 'cachefile=none', pool)
 
             # Verify passphrase unlock and workspace ownership.
             helper('workspace-mount', '1', input='incorrect-passphrase\n', ok=False)
