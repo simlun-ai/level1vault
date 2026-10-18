@@ -33,6 +33,10 @@ for POOL in $POOLS; do
     [ "$(zfs get -H -o value org.level1vault:pair "$POOL")" = "${POOL#workspace-}" ] || {
         echo "Pair identity mismatch for $POOL; refusing export" >&2; exit 1;
     }
+    # Release the live home before exporting its underlying dataset.
+    if [ -f /usr/local/share/level1vault/source-commit ]; then
+        python3 "$(dirname -- "$0")/workspace-home" detach "$POOL"
+    fi
     zpool sync "$POOL"
     # Never force a busy pool or power off on failure.
     if ! zpool export "$POOL"; then
@@ -43,3 +47,4 @@ done
 
 # Report that the selected pairs can be disconnected.
 echo 'Selected workspace pools synced and exported; safe to disconnect those pairs.'
+

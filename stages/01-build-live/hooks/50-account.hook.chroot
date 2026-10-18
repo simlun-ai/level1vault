@@ -56,16 +56,36 @@ PROFILE
 
 # Preserve the configured account during live boot.
 cat > /etc/live/config.conf.d/level1vault.conf <<'CONFIG'
-LIVE_USERNAME=simlun
+LIVE_USERNAME=root
 LIVE_CONFIG_NOCOMPONENTS=user-setup,sudo
 CONFIG
 [ "$(id -u simlun)" -eq 2000 ]
 [ "$(id -g simlun)" -eq 2000 ]
 
+# Autologin locally as root even when an upgraded USB retains username=simlun in GRUB.
+# The late drop-in overrides live-config's generated autologin configuration.
+for unit in getty@ serial-getty@; do
+    install -d -m 0755 "/etc/systemd/system/$unit.service.d"
+    cat > "/etc/systemd/system/$unit.service.d/zz-level1vault-root.conf" <<'GETTY'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
+GETTY
+done
+sed -i 's/--noclear/--keep-baud --noclear/' /etc/systemd/system/serial-getty@.service.d/zz-level1vault-root.conf
+
 # Show the workspace quick guide at console login.
 cat > /etc/motd <<'MOTD'
 level1vault workspace quick guide
 
+Run start to unlock your workspace and work as simlun in tmux.
+  start                         Select the only complete connected pair.
+  start 1                       Select pair 1 explicitly (also for degraded use).
+Exit all tmux panes to return to root and choose export, then poweroff.
+Detaching leaves tmux running; run start to reattach before exporting.
+Root's home and OS changes are temporary. simlun's mounted home persists.
+
+Manual operations (sudo is optional at the root console):
 Pair IDs below are examples; use the IDs printed on your USB pairs.
   sudo workspace-mount           Unlock the only complete connected pair.
   sudo workspace-mount 1         Select pair 1 explicitly (also for degraded use).
@@ -76,8 +96,9 @@ Pair IDs below are examples; use the IDs printed on your USB pairs.
                                  Promote the next connected pair after pair 1.
                                  Fence/disconnect the old active pair FIRST.
                                  Then mount the promoted pair using its own ID.
+  sudo -iu simlun                Open a login shell after mounting the active pair.
   cd /; sudo workspace-umount    Sync and export all imported workspace pairs.
-                                 Close files; leave the workspace in every shell first.
+                                 Exit simlun sessions, tmux and background jobs first.
 
 Export successfully before removing workspace drives; keep the boot USB
 connected until shutdown. OS changes reset on reboot; workspace data persists.
@@ -85,3 +106,4 @@ More options: workspace-sync --help or workspace-activate --help
 
 Passphrase hint: Ho.
 MOTD
+

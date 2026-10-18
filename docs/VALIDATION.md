@@ -45,12 +45,12 @@ command -v workspace-mount workspace-umount workspace-sync
 cat /etc/motd                     # workspace command quick guide
 sudo workspace-mount 1             # enter the encryption passphrase
 stat -c '%u:%g %a' /mnt/workspace # 2000:2000 750
-printf 'owned by simlun\n' > /mnt/workspace/simlun-write-test
+sudo -iu simlun sh -c 'printf "owned by simlun\n" > /mnt/workspace/simlun-write-test'
 cd /
 sudo workspace-umount
 ```
 
-The login password is `password`. Confirm the existing console autologin selects simlun. On an already-booted older image the old account and helper names persist until its OS payload is updated and rebooted.
+Confirm console autologin selects root and `start` opens tmux as simlun with the mounted persistent home. Test exiting and detaching separately, refusal to export with remaining sessions, and both Y/n prompts. Verify home changes survive reboot; new image defaults must not overwrite an existing home. The simlun account retains password `password` and passwordless sudo. On an already-booted older image the old account and helper names persist until its OS payload is updated and rebooted.
 
 ## VM matrix
 
@@ -130,3 +130,4 @@ Follow [PAIRS.md](PAIRS.md) to provision unique numbered pairs. Exercise at leas
 ## BuildKit refactor acceptance
 
 The historical runs above validated the earlier Docker-run pipeline. The BuildKit PR must additionally pass sandboxed test stages, two scratch/local exports with distinct identities, and a complete privileged live-build plus exported-ISO inspection. No boot/runtime code changes are intended. Operator boot tests of the new output and measured disk usage remain acceptance checks.
+

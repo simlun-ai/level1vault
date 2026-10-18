@@ -79,26 +79,20 @@ Repeat for IDs 3, 4, and so on, using the current active ID after a failover. An
 
 ## Use the live system
 
-Disable Secure Boot and boot either stick through UEFI; connect both for mirror redundancy. The console logs in as `simlun` (password `password`, passwordless sudo).
+Disable Secure Boot and boot either stick through UEFI; connect both for mirror redundancy. The local console automatically logs in as **root**, whose home remains temporary. Begin your working session with:
 
 ```bash
-sudo workspace-mount             # select the only complete connected pair; enter passphrase
-cd /mnt/workspace                # your persistent files; owned by simlun
+start                           # select the only complete connected pair; enter passphrase
+# Or: start 1                    # explicitly select pair 1, including degraded use
 ```
 
-With no number, mounting requires exactly one complete pair with both distinct mirror members available. If several complete pairs are connected, select one explicitly: `sudo workspace-mount 1`. An explicit number also allows deliberate degraded use with one member. Active workspaces are writable; replicas remain read-only. Mounting never promotes a replica.
+`start` mounts the active workspace, attaches its encrypted persistent home at `/home/simlun`, and opens or reattaches the `workspace` tmux session as `simlun` (UID/GID 2000). Your home, shell settings, history and files survive reboot and replicate with the workspace. Zsh is the working shell; `vim` aliases Neovim. The full repository and Git history are initially available at `~/level1vault`.
 
-The login shell is Zsh; `vim` is an alias for Neovim (`nvim`). The full repository and Git history are available offline at `/home/simlun/level1vault`. Edits there reset on reboot; keep lasting changes in `/mnt/workspace`. Kernel messages below error severity are hidden from the console but remain available through `journalctl -k` or `dmesg`.
+Exit every tmux pane to return to root. You will be asked `Run workspace-umount? [Y/n]`, then, after a successful export, `Power off? [Y/n]`. Enter accepts each prompt. Detaching leaves tmux running; run `start` to reattach and finish before exporting. Stop other `simlun` sessions and background jobs too.
 
-Before poweroff or moving sticks, close files and leave the workspace in every shell:
+For manual mounting, replication and recovery, use the `workspace-*` commands shown in the MOTD and [pair operations](docs/PAIRS.md). Mounting a replica remains read-only and does not attach its home; `start` requires a writable active pair. With several complete pairs connected, specify an ID. Mounting never promotes a replica.
 
-```bash
-cd /
-sudo workspace-umount            # sync and export all imported workspace pairs
-sudo poweroff
-```
-
-If export fails, resolve the busy filesystem and retry before removing drives. Keep the boot stick connected until shutdown. Never write independently to separated mirror members.
+Export successfully before removing workspace drives; keep the boot stick connected until shutdown. Never write independently to separated mirror members. See [persistent home and session details](docs/HOME.md), including first-use defaults and OS upgrades. Kernel messages remain available through `journalctl -k` or `dmesg`.
 
 ## Prepare and apply an OS upgrade
 
@@ -131,3 +125,4 @@ make cache-clean                # prune unused BuildKit cache
 ```
 
 [Documentation index →](docs/README.md) · [Development and tests →](docs/DEVELOPMENT.md) · [Recovery →](docs/RECOVERY.md) · [Tested status →](docs/VALIDATION.md)
+

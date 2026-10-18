@@ -17,7 +17,7 @@ changing the attached drives, and start each scenario with a fresh copy of OVMF
 variables. Run every scenario in order; each consumes the preceding writes.
 Use a disposable initialized **active** pair, not a replica or physical disks.
 
-At each login (including after reboot), save the following script as
+At each automatic root login (including after reboot), save the following script as
 `/tmp/level1vault-qemu-check.sh` in the guest. The live root is ephemeral, so the
 script and shell variables must be recreated after every boot. Set `PAIR` to
 your pair ID and reuse the **same** 16-character hexadecimal `RUN` in every boot:
@@ -43,9 +43,10 @@ RESET=/etc/.level1vault-qemu-$RUN
 case $PHASE in
   boot)
     # Verify the stateless live system and manual-only workspace policy.
-    [[ $(id -un) == simlun && $(id -u) == 2000 && $(id -g) == 2000 ]]
+    [[ $(id -un) == root && $(id -u) == 0 ]]
+    [[ $(id -u simlun) == 2000 && $(id -g simlun) == 2000 ]]
     [[ $(getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
-    zsh -lic '[[ ${aliases[vim]} == nvim ]] && command -v workspace-mount'
+    sudo -iu simlun zsh -lic '[[ ${aliases[vim]} == nvim ]] && command -v workspace-mount'
     [[ $(sudo -n id -u) == 0 ]]
     sudo -n sh -c 'command -v workspace-mount && command -v workspace-umount'
     for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
@@ -68,15 +69,19 @@ case $PHASE in
     if [[ $VALUE != rejoining ]]; then
       [[ $(sudo zpool list -H -o health "$POOL") == "$VALUE" ]]
     fi
+    [[ $(findmnt -n -o FSROOT --mountpoint /home/simlun) == /home/simlun ]]
+    [[ $(stat -c '%u:%g %a' /home/simlun) == '2000:2000 700' ]]
     ;;
   write)
     # Write workspace data and a marker that must disappear after reboot.
     printf '%s\n' "$VALUE" > "$CHECK"
+    sudo -iu simlun sh -c 'printf "%s\n" "$1" > "$HOME/.level1vault-home-check"' sh "$VALUE"
     printf 'ephemeral\n' | sudo tee "$RESET" >/dev/null
     ;;
   verify)
     # Verify that the previous workspace write survived.
     [[ $(cat "$CHECK") == "$VALUE" ]]
+    [[ $(cat /home/simlun/.level1vault-home-check) == "$VALUE" ]]
     ;;
   rejoin)
     # Verify mirror recovery and a clean scrub with both members present.

@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+
+# Require the live root console and an optional explicit pair number.
+[ "$#" -le 1 ] || { echo 'Usage: start [PAIR_ID]' >&2; exit 2; }
+[ "$(id -u)" -eq 0 ] || { echo 'Run start from the root console' >&2; exit 1; }
+[ -f /usr/local/share/level1vault/source-commit ] || { echo 'start is for the level1vault live OS' >&2; exit 1; }
+HELPERS=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+cd /
+
+# Unlock the workspace and enter a fresh simlun login environment inside tmux.
+"$HELPERS/workspace-mount" "$@"
+python3 "$HELPERS/workspace-home" check
+if ! sudo -iu simlun tmux new-session -A -s workspace -c /home/simlun; then
+    echo 'tmux failed; workspace remains mounted. Run start to retry or workspace-umount to export.' >&2
+    exit 1
+fi
+
+# Offer export after the tmux client returns, including after a detach.
+echo 'Back at root. Detached tmux sessions must be exited before exporting; run start to reattach.'
+printf 'Run workspace-umount? [Y/n] '
+IFS= read -r answer || exit 0
+case "$answer" in
+    ''|y|Y|yes|YES) ;;
+    *) exit 0;;
+esac
+if ! "$HELPERS/workspace-umount"; then
+    echo 'Workspace export failed. Resolve busy sessions and retry workspace-umount before poweroff.' >&2
+    exit 1
+fi
+
+# Offer shutdown only after all imported workspace pairs were exported successfully.
+printf 'Power off? [Y/n] '
+IFS= read -r answer || exit 0
+case "$answer" in
+    ''|y|Y|yes|YES) poweroff;;
+esac

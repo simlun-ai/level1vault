@@ -59,7 +59,7 @@ qemu-system-x86_64 \
   -drive if=virtio,format=raw,file=./usb-b.img
 ```
 
-Firmware paths vary by distribution. On installations that supply `OVMF_CODE.fd` and `OVMF_VARS.fd` instead of the `_4M` files, replace both paths with that matching pair. Check `ls /usr/share/OVMF` first. Run QEMU as your desktop user, without sudo, to avoid GTK authorization errors. KVM access was already available on the tested workstation; group changes are only necessary if /dev/kvm access is denied. Use `accel=tcg` and omit `-cpu host` if KVM is unavailable. Secure Boot must be disabled. The live console autologs in as `simlun` (UID 2000, primary GID 2000), with password `password` and passwordless sudo. `/usr/local/sbin` is included in the login PATH and sudo secure_path. The login MOTD displays a short workspace command guide from `/etc/motd`. No SSH server or remote authentication is configured.
+Firmware paths vary by distribution. On installations that supply `OVMF_CODE.fd` and `OVMF_VARS.fd` instead of the `_4M` files, replace both paths with that matching pair. Check `ls /usr/share/OVMF` first. Run QEMU as your desktop user, without sudo, to avoid GTK authorization errors. KVM access was already available on the tested workstation; group changes are only necessary if /dev/kvm access is denied. Use `accel=tcg` and omit `-cpu host` if KVM is unavailable. Secure Boot must be disabled. The live console autologs in as root. Run `start` for an encrypted persistent-home tmux session as `simlun` (UID/GID 2000, passwordless sudo); see [home and sessions](HOME.md). `/usr/local/sbin` is included in the login PATH and sudo secure_path. The login MOTD displays a short workspace command guide from `/etc/motd`. No SSH server or remote authentication is configured.
 
 For a short interactive smoke test, run the commands below inside the guest. For the **full acceptance sequence**, follow [Shared QEMU checks](../stages/04-test-pair/README.md): it contains the exact guest script and ordered commands used by automation, including each-drive-only degraded writes and rejoin scrubs. Use disposable images for those tests and keep the same copies throughout the sequence.
 
@@ -71,13 +71,15 @@ sudo zpool list                    # workspace should not be imported yet
 sudo workspace-mount 1              # enter the workspace passphrase
 stat -c '%u:%g %a' /mnt/workspace # 2000:2000 750
 sudo zpool status workspace-1        # ONLINE with both members present
-printf 'persistent\n' > /mnt/workspace/check.txt # writable as simlun
+sudo -iu simlun sh -c 'printf "persistent\n" > ~/home-check.txt'
+sudo -iu simlun sh -c 'printf "persistent\n" > /mnt/workspace/check.txt'
 printf 'ephemeral\n' | sudo tee /etc/reset-check
 cd /
 sudo workspace-umount
 sudo reboot
 ```
 
-After reboot `/etc/reset-check` must be absent; manually mount the workspace and confirm `check.txt` survives. Run `cd /` then `sudo workspace-umount` before shutting down. Also boot **A alone and B alone**, using fresh OVMF variables, and perform the degraded/rejoin tests in [validation checklist](VALIDATION.md). Virtio tests do not replace USB transport/hardware tests.
+After reboot `/etc/reset-check` must be absent; manually mount the workspace and confirm both `/mnt/workspace/check.txt` and `/home/simlun/home-check.txt` survive. Exercise `start`, exit all tmux panes, and check both Y/n prompts; also detach, reattach, and confirm busy-session export refusal. Run `cd /` then `sudo workspace-umount` before shutting down. Also boot **A alone and B alone**, using fresh OVMF variables, and perform the degraded/rejoin tests in [validation checklist](VALIDATION.md). Virtio tests do not replace USB transport/hardware tests.
 
 After manual tests, export the pool, stop the VM and detach host loops before writing USB drives. The writer verifies the bytes read back from each physical stick; no image checksum refresh is needed.
+

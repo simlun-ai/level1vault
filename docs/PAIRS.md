@@ -14,6 +14,8 @@ Exactly one pair is the writable working copy. Others are read-only replicas. `o
 
 Every pair uses `/mnt/workspace`, so only one dataset is mounted there at a time. `sudo workspace-mount 2` selects pair 2 explicitly and asks for the passphrase if its key is unloaded. It is writable only when pair 2 is active. Booting a replica's stick does not automatically activate it.
 
+On the live OS, mounting an active pair also attaches `/mnt/workspace/home/simlun` at `/home/simlun`. The home is part of the same encrypted `data` dataset and is included in every normal checkpoint and replication. Read-only replica inspection leaves the temporary home untouched. Exit all simlun sessions and tmux/background processes before exporting an active home; run export from root in `/`. See [home and sessions](HOME.md).
+
 ## Provision N fresh pairs
 
 For a new deployment, build and initialize all pairs together:
@@ -159,3 +161,4 @@ Encryption is native ZFS AES-256-GCM on each data filesystem, not whole-device e
 Pools enable LZ4, encryption and encryption's required dependencies under `zpool create -d`, all supported by OpenZFS 2.1 on Ubuntu 22.04. Do not enable all newer Debian features if interoperability with OpenZFS 2.1 hosts is required. Raw replicas retain the encryption keys; avoid independent replica passphrase changes. After a deliberate active-pair passphrase change, sync and unlock-test every offsite copy, retaining old passphrases until those copies are updated.
 
 Upstream references: [send](https://openzfs.github.io/openzfs-docs/man/v2.1/8/zfs-send.8.html), [receive](https://openzfs.github.io/openzfs-docs/man/v2.1/8/zfs-receive.8.html), [key handling](https://openzfs.github.io/openzfs-docs/man/v2.1/8/zfs-load-key.8.html).
+

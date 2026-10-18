@@ -4,6 +4,8 @@ Any number of numbered pairs of independently bootable, stateless Debian 13 Live
 
 Each default 12 GiB image has a GPT, a 4 GiB FAT32 ESP holding GRUB and the live payload, and an approximately 8 GiB data partition. SquashFS provides the read-only base; a nonpersistent RAM overlay holds OS changes. The `workspace-1/data` dataset mounts at `/mnt/workspace` only after `sudo workspace-mount 1` and passphrase entry. New workspaces use native AES-256-GCM encryption and belong to simlun (`2000:2000`, mode `0750`). Pairs have neutral numeric identities (`workspace-1`, `workspace-2`, …). After fencing a failed active pair, activate the next surviving ID in place. See the [N-pair runbook](PAIRS.md) for provisioning, shared-checkpoint send/receive, rotation and ordered failover. This workflow provisions fresh encrypted pairs.
 
+The live console autologs in as root. `start` explicitly unlocks the active workspace, bind-mounts its `home/simlun` directory at `/home/simlun`, and enters a simlun login environment in tmux. Home data shares the encrypted dataset and replication history; root and OS changes stay temporary. See [home and session lifecycle](HOME.md).
+
 | Work | Where | Entry point |
 | --- | --- | --- |
 | Install build tools | Trixie Docker image | `pipeline/Dockerfile` toolchain stage |
@@ -64,3 +66,4 @@ Live-build selects only `grub-efi`; the build toolchain does not install Syslinu
 - [Pool feature compatibility](https://manpages.debian.org/trixie/zfsutils-linux/zpool-features.7.en.html)
 
 The current [BuildKit pipeline](BUILDKIT.md) exports artifacts from scratch stages. The table of design findings above records the original review; host/container ZFS separation still applies.
+

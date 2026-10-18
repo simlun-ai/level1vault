@@ -30,7 +30,7 @@ class ScriptTests(unittest.TestCase):
 
 
     def workspace(self, *, imported=False, mounted=False, source='workspace-1/data',
-                  mountpoint=None, canmount='noauto', import_fails=False, encrypted=True, key_fails=False):
+                  mountpoint=None, canmount='noauto', import_fails=False, encrypted=True, key_fails=False, replica=False):
         mp = self.base / 'workspace'
         mp.mkdir()
         lock = self.base / 'lock'
@@ -39,6 +39,7 @@ class ScriptTests(unittest.TestCase):
         script = self.base / 'workspace-mount'
         text = (ROOT / 'runtime/workspace-mount').read_text()
         text = text.replace('/mnt/workspace', str(mp)).replace('/run/lock/level1vault-workspace.lock', str(lock)).replace('/etc/hostid', str(hostid))
+        text = text.replace('/usr/local/share/level1vault/source-commit', str(self.base / 'live-marker'))
         script.write_text(text)
         for name in ('flock', 'modprobe', 'udevadm', 'zgenhostid'):
             self.tool(name, f'echo "{name} $*" >> "$LOG"')
@@ -57,8 +58,8 @@ mountpoint) echo '{mountpoint or mp}';;
 canmount) echo '{canmount}';;
 mounted) echo no;;
 org.level1vault:pair) echo 1;;
-org.level1vault:state) echo active;;
-readonly) echo off;;
+org.level1vault:state) echo {'replica' if replica else 'active'};;
+readonly) echo {'on' if replica else 'off'};;
 encryption) echo {'aes-256-gcm' if encrypted else 'off'};;
 encryptionroot) echo workspace-1/data;;
 keyformat) echo passphrase;;
@@ -161,3 +162,18 @@ esac''')
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('zpool import', self.calls())
         self.assertNotIn('zfs mount', self.calls())
+
+
+    def test_live_active_mount_attaches_home_but_replica_does_not(self):
+        for replica in (False, True):
+            with self.subTest(replica=replica):
+                if (self.base / 'workspace').exists():
+                    (self.base / 'workspace').rmdir()
+                script = self.workspace(replica=replica)
+                (self.base / 'live-marker').touch()
+                (self.base / 'workspace-home').write_text(
+                    "import os,sys; open(os.environ['LOG'], 'a').write('home ' + ' '.join(sys.argv[1:]) + '\\n')\n")
+                self.log.unlink(missing_ok=True)
+                result = self.run_script(script)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual('home attach workspace-1/data' in self.calls(), not replica)

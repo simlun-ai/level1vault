@@ -60,6 +60,16 @@ cp "$(dirname -- "${BASH_SOURCE[0]}")/tests/test_user_config.zsh" "$ROOT/tmp/lev
 chroot "$ROOT" su - simlun -c 'zsh -il /tmp/level1vault-user-config.zsh --no-tmux'
 rm "$ROOT/tmp/level1vault-user-config.zsh"
 
+# Verify root console autologin and immutable first-use home defaults.
+for unit in getty@ serial-getty@; do
+    grep -Fq -- '--autologin root' "$ROOT/etc/systemd/system/$unit.service.d/zz-level1vault-root.conf"
+done
+grep -Fq 'Run start' "$ROOT/etc/motd"
+test -r "$ROOT/usr/local/share/level1vault/home-default/.zshrc"
+test -d "$ROOT/usr/local/share/level1vault/home-default/level1vault/.git"
+test -x "$ROOT/usr/local/sbin/start"
+test -x "$ROOT/usr/local/sbin/workspace-home"
+
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-discover"
@@ -107,3 +117,4 @@ if [[ ${2:-} != --iso-only ]]; then
   test ! -e "$BUILD_DIR/out/READY"
 fi
 printf 'Full Debian Live build inspected successfully: kernel=%s\n' "$KERNEL"
+
