@@ -42,7 +42,7 @@ help:
 	  'make test-qemu                    Test pair 1 in QEMU; choose writable results automatically' \
 	  'make test-zfs                     Real ZFS tests; disposable VM only (see docs)' \
 	  'make check-build                 Inspect an already-built live system' \
-	  'make clean                       Remove temporary work and checkout BuildKit state; preserve artifacts' \
+	  'make clean                       Remove checkout BuildKit state; preserve all host artifacts' \
 	  'make cache-clean                 Prune unused cache on the dedicated builder' \
 	  'Options: BUILD_DIR=build-next, OUT=..., SUDO= (when already root)'
 
@@ -94,7 +94,7 @@ upgrade-os:
 	@[[ -n "$$UPGRADE_DIR" ]] || { echo 'Set UPGRADE_DIR to a completed make prepare-upgrade release' >&2; exit 2; }
 	@[[ '$(origin PAIR)' == 'command line' || '$(origin PAIR)' == environment ]] || { echo 'Set PAIR explicitly for an OS upgrade' >&2; exit 2; }
 	@[[ "$$PAIR" =~ ^[1-9][0-9]*$$ && -n "$$DISK_A" && -n "$$DISK_B" ]] || { echo 'Set PAIR, DISK_A and DISK_B; identify disks with lsblk first' >&2; exit 2; }
-	$(RUN) $(SUDO) python3 pipeline/upgrade-os.py --pair "$$PAIR" --disk-a "$$DISK_A" --disk-b "$$DISK_B" --release "$$UPGRADE_DIR"
+	$(RUN) $(SUDO) python3 stages/06-upgrade-os/upgrade.py --pair "$$PAIR" --disk-a "$$DISK_A" --disk-b "$$DISK_B" --release "$$UPGRADE_DIR"
 
 # Check shell scripts for syntax and lint errors.
 lint:
@@ -124,7 +124,7 @@ test-zfs:
 check-build:
 	$(RUN) env PAIR="$$PAIR" BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" bash pipeline/buildkit.sh check "$$BUILD_DIR" "$$OUT"
 
-# Remove temporary local and Docker-managed state while preserving artifacts.
+# Remove checkout-owned Docker state while preserving all host artifacts.
 clean:
 	python3 pipeline/lifecycle.py clean "$$BUILD_DIR"
 

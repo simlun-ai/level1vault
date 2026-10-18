@@ -85,6 +85,14 @@ if args[:2] == ['buildx', 'build']:
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((destination/'pairs/7/usb-a.img').read_bytes(), b'prepared image')
         self.assertTrue((destination/'pairs/7/IMAGES-PREPARED').is_file())
+        args = self.builds()[0]
+        self.assertIn('security.insecure', args)
+        self.assertTrue(any(arg.startswith('ASSEMBLY_ID=') for arg in args))
+        calls = self.log.read_text()
+        for forbidden in ('docker run', '/lib/modules', '/run/udev', 'zpool'):
+            self.assertNotIn(forbidden, calls)
+        self.assertNotEqual(self.run_task('build', destination).returncode, 0)
+        self.assertEqual(len(self.builds()), 1)
         self.assertFalse((destination/'pairs/7.tar').exists())
 
     def test_failed_export_is_not_success_and_config_arguments_preserve_boundaries(self):

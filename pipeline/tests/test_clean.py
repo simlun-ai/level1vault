@@ -11,53 +11,6 @@ spec.loader.exec_module(cleaner)
 
 
 class CleanupTests(unittest.TestCase):
-    def test_retains_artifacts_and_initialized_data(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            build = Path(tmp).resolve()
-            (build/'builder-image.json').write_text('[]')
-            for name in cleaner.TRANSIENT:
-                (build/name).mkdir()
-                (build/name/'work').write_text('generated')
-            for name in ['out', 'pair-2']:
-                (build/name).mkdir()
-                (build/name/'usb-a.img').write_text('valuable workspace')
-                (build/name/'READY').touch()
-            (build/'live-image-amd64.hybrid.iso').write_text('iso')
-            (build/'build.log').write_text('diagnostics')
-            with patch.object(cleaner, 'output', side_effect=['', json.dumps({'loopdevices': []})]), \
-                    patch.object(cleaner, 'mountinfo', return_value=''):
-                cleaner.clean(build)
-            self.assertFalse((build/'chroot').exists())
-            self.assertEqual((build/'out/usb-a.img').read_text(), 'valuable workspace')
-            self.assertTrue((build/'pair-2/READY').exists())
-            self.assertTrue((build/'build.log').exists())
-            self.assertTrue((build/'live-image-amd64.hybrid.iso').exists())
-
-    def test_default_cleanup_includes_legacy_binary_and_preserves_current_images(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            legacy = root / 'build'
-            current = legacy / 'default'
-            current.mkdir(parents=True)
-            (legacy / 'builder-image.json').write_text('[]')
-            (legacy / 'binary').mkdir()
-            (legacy / 'binary/work').write_text('temporary')
-            (current / 'builder-info.txt').write_text('builder')
-            (current / 'usb-a.img').write_text('keep')
-            with patch.object(cleaner, 'ROOT', root), \
-                    patch.object(cleaner, 'output', side_effect=['', json.dumps({'loopdevices': []})]), \
-                    patch.object(cleaner, 'mountinfo', return_value=''):
-                cleaner.clean_selected(current)
-            self.assertFalse((legacy / 'binary').exists())
-            self.assertEqual((current / 'usb-a.img').read_text(), 'keep')
-
-    def test_custom_cleanup_does_not_select_other_builds(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            build = Path(tmp).resolve() / 'custom'
-            with patch.object(cleaner, 'clean') as clean:
-                cleaner.clean_selected(build)
-            clean.assert_called_once_with(build)
-
     def test_refuses_mount_container_and_loop(self):
         build = Path('/build-test')
         cases = [
@@ -71,24 +24,16 @@ class CleanupTests(unittest.TestCase):
                 cleaner.check_idle(build, *state)
         cleaner.check_idle(build, '', [], {'loopdevices': [{'name': '/dev/loop1', 'back-file': '/unrelated/file'}]})
 
-    def test_refuses_unknown_path_symlink_and_repository(self):
+    def test_host_checks_preserve_all_build_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:
             build = Path(tmp).resolve()
-            with self.assertRaises(ValueError):
-                cleaner.clean(build)
-            (build/'builder-image.json').write_text('[]')
-            (build/'chroot').symlink_to(build, target_is_directory=True)
-            with self.assertRaises(ValueError):
-                cleaner.clean(build)
-        with self.assertRaises(ValueError):
-            cleaner.clean(cleaner.ROOT)
-
-    def test_failed_host_inspection_preserves_work(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            build = Path(tmp).resolve()
-            (build/'builder-image.json').write_text('[]')
-            (build/'chroot').mkdir()
+            image = build / 'usb-a.img'
+            image.write_text('valuable workspace')
+            with patch.object(cleaner, 'output', side_effect=['', json.dumps({'loopdevices': []})]), \
+                    patch.object(cleaner, 'mountinfo', return_value=''):
+                cleaner.check_checkout_idle(build)
+            self.assertEqual(image.read_text(), 'valuable workspace')
             with patch.object(cleaner, 'output', side_effect=OSError('Docker unavailable')):
                 with self.assertRaises(OSError):
-                    cleaner.clean(build)
-            self.assertTrue((build/'chroot').is_dir())
+                    cleaner.check_checkout_idle(build)
+            self.assertEqual(image.read_text(), 'valuable workspace')

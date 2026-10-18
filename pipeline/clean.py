@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Remove only expendable live-build directories, never image/data artifacts."""
+"""Refuse BuildKit cleanup while checkout or selected-build resources are in use."""
 import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 
-TRANSIENT = ('chroot', 'cache', 'config', 'binary')
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -44,42 +42,6 @@ def check_idle(build, mountinfo, containers, loops):
             raise ValueError(f'Loop device still attached: {device["name"]}')
 
 
-def clean(build):
-
-    # Refuse root, the checkout, its ancestors, and symlink aliases.
-    if build.is_symlink() or build.absolute() != build.resolve():
-        raise ValueError('Use the real build directory path, without symlinks or ..')
-    build = build.resolve()
-    if inside(ROOT, build):
-        raise ValueError('Refusing repository directory or its ancestors')
-    if not build.exists():
-        print(f'Nothing to clean: {build}')
-        return
-
-    # Identify the expendable directories in a recognized build.
-    if not any((build/name).is_file() for name in ('builder-image.json', 'builder-info.txt')):
-        raise ValueError('Missing builder identity; not a recognized build directory')
-    targets = [build/name for name in TRANSIENT if (build/name).exists() or (build/name).is_symlink()]
-    if not targets:
-        print('No transient build directories remain. Images and records retained.')
-        return
-    if any(path.is_symlink() or not path.is_dir() for path in targets):
-        raise ValueError('Unexpected file/symlink in transient directories; inspect manually')
-
-    # Docker access is required: mounts in a running builder namespace may be
-    # invisible in this process's mountinfo. A failed query must stop cleanup.
-    ids = output('docker', 'ps', '-q').split()
-    containers = json.loads(output('docker', 'inspect', *ids)) if ids else []
-    loops = json.loads(output('losetup', '--json', '--list', '--output', 'NAME,BACK-FILE'))
-    check_idle(build, mountinfo(), containers, loops)
-
-    # Remove only the verified temporary directories.
-    for path in targets:
-        print(f'Removing {path}')
-        shutil.rmtree(path)
-    print('Retained ISO, image pairs, manifests and logs. Use a fresh BUILD_DIR for the next build.')
-
-
 def check_checkout_idle(build):
     ids = output('docker', 'ps', '-q').split()
     containers = json.loads(output('docker', 'inspect', *ids)) if ids else []
@@ -89,22 +51,8 @@ def check_checkout_idle(build):
     check_idle(build.resolve(), mounts, containers, loops)
 
 
-def clean_selected(build):
-    # Reject aliases before selecting any legacy cleanup destinations.
-    if build.is_symlink() or build.absolute() != build.resolve():
-        raise ValueError('Use the real build directory path, without symlinks or ..')
-
-    # Include recognized legacy work when cleaning the default build run.
-    if build.resolve() == ROOT / 'build/default':
-        legacy = ROOT / 'build'
-        if any((legacy / name).exists() or (legacy / name).is_symlink() for name in TRANSIENT):
-            clean(legacy)
-    clean(build)
-
-
 if __name__ == '__main__':
     try:
         check_checkout_idle(Path(sys.argv[1]))
-        clean_selected(Path(sys.argv[1]))
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         sys.exit(f'Cleanup refused: {error}')

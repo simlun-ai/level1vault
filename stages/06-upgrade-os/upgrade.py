@@ -187,12 +187,12 @@ def update_esp(esp, esp_uuid, release, manifest, boot):
         require(boot_identity(root, esp_uuid) == boot, 'Boot files changed after update')
 
 
-def apply_release(release, pair, disk_a, disk_b, expected=None):
+def apply_release(release, pair, disk_a, disk_b):
     # Validate the release and both destinations before replacing either payload.
+    require((release / 'UPGRADE-READY').is_file(),
+            'Use a complete release from make prepare-upgrade')
     manifest = load_release(release)
     disks = inspect_pair(pair, disk_a, disk_b)
-    if expected is not None:
-        require(disks == expected, 'Selected disks changed during the build; inspect and retry')
     boots = []
     for disk in disks:
         command('fsck.vfat', '-n', disk['esp'])
@@ -233,18 +233,27 @@ def prerequisites():
         require(shutil.which(tool) is not None, f'Missing host tool: {tool}')
 
 
-if __name__ == '__main__':
+def main(argv=None):
+    # Share one readiness, locking and error-handling path for direct and Make use.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--release', required=True, type=Path)
     parser.add_argument('--pair', required=True)
     parser.add_argument('--disk-a', required=True, type=Path)
     parser.add_argument('--disk-b', required=True, type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    require(re.fullmatch(r'[1-9][0-9]*', args.pair), 'PAIR must be a positive integer')
+    prerequisites()
+    with open('/run/lock/level1vault-write-usb.lock', 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        release = args.release.resolve()
+        print(f'OS release: {release}', flush=True)
+        apply_release(release, args.pair, args.disk_a, args.disk_b)
+
+
+if __name__ == '__main__':
     try:
-        require(re.fullmatch(r'[1-9][0-9]*', args.pair), 'PAIR must be a positive integer')
-        prerequisites()
-        with open('/run/lock/level1vault-write-usb.lock', 'w') as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            apply_release(args.release.resolve(), args.pair, args.disk_a, args.disk_b)
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        main()
+    except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         sys.exit(f'OS upgrade stopped: {error}. Keep both sticks connected until mounts are resolved; rerun the same release to repair incomplete OS copies.')
+    except KeyboardInterrupt:
+        sys.exit('OS upgrade interrupted. Inspect any retained mounts and rerun the same release to complete the OS copy.')
