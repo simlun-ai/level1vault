@@ -24,7 +24,7 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 | `make test-qemu PAIR=1` | Boot disposable copies of an initialized active pair and verify reboot, degraded writes, and rejoin; see [QEMU](QEMU.md) |
 | `make check-build` | Inspect an existing full build's SquashFS, module, initramfs and prepared artifacts |
 | `make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1` | Real ZFS integration, **only on a disposable VM** |
-| `make clean` | Remove temporary work and checkout BuildKit state while preserving artifacts |
+| `make clean` | Remove checkout-owned BuildKit builders and cache; preserve exported artifacts |
 | `make cache-clean` | Prune unused cache on the dedicated BuildKit builder |
 
 `BUILD_DIR` defaults to `build/default`; `PAIR` defaults to `1`, and `OUT` defaults to `$(BUILD_DIR)/pairs/$(PAIR)`. Relative paths are relative to the repository root. Override them consistently:
@@ -88,7 +88,9 @@ make clean                       # default build directory
 make clean BUILD_DIR=build-next  # a selected build directory
 ```
 
-Current builds export artifacts only; their working state is in BuildKit. Use `make cache-clean` to prune its unused cache. The default `make clean` also checks recognized legacy work directly under `build/`, including `build/binary/`. Selecting another `BUILD_DIR` selects its local transient work; Docker cleanup still removes all builders recorded for this checkout. `make clean` removes those builders and their state/cache volumes; a subsequent build recreates them. For legacy builds, cleanup removes only `chroot/`, `cache/`, `config/` and `binary/` inside a recognized build directory. It retains the ISO, every image pair (including initialized workspaces), manifests, logs and state markers. It never exports pools, detaches loops or deletes Docker images. Docker must be available for cleanup checks. A checkout-wide lifecycle lock rejects cleanup during supported operations, even if no legacy transient directories exist. Cleanup refuses active container binds, mounted filesystems and loop-backed files under the checkout or selected build, as well as unexpected paths or symlinks.
+Build working state lives in BuildKit. `make clean` removes only builders recorded as created by this checkout, including their state/cache volumes. It leaves every host artifact untouched: ISOs, initialized images, releases, manifests, logs and markers. The next build recreates its builder. `BUILD_DIR` selects the additional directory checked for in-use resources; it is not a deletion destination.
+
+A checkout-wide exclusive lock rejects cleanup during supported operations. Host checks refuse active container binds, mounted filesystems and loop-backed files under the checkout or selected build. Failed inspection stops cleanup. Docker must be available; cleanup never exports pools, detaches loops, deletes Docker images or runs a global prune. `make cache-clean` instead prunes unused cache on the selected dedicated builder.
 
 The retained build is an archive of artifacts, not a reusable live-build working directory. The builder still refuses an existing directory, so rebuild with a fresh name:
 
@@ -111,7 +113,7 @@ There is intentionally no target that deletes initialized image pairs. They can 
 | `stages/04-test-pair/` | Workstation QEMU runner, shared guest checks, generated manual and tests |
 | `stages/05-write-usb/` | Physical USB writer, safety checks, procedure and tests |
 | `stages/06-upgrade-os/` | In-place OS updater, release export and refusal/retry tests |
-| `common/` | Live payload extraction and USB inspection shared by multiple stages |
+| `common/` | Boot parameters, payload extraction, artifact ownership and USB inspection shared across owners |
 | `runtime/` | Shipped workspace commands and behavior tests |
 | `integration-tests/zfs/` | Native cross-stage pool integration on explicitly disposable environments |
 | `docs/` | Cross-cutting operator and technical references |

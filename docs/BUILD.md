@@ -4,7 +4,7 @@
 
 ## Workstation requirements
 
-Use a Linux amd64 workstation with working ZFS and local, rootful Docker Engine with the Buildx plugin. Ubuntu 22.04 is the tested host example; it is not a distribution requirement. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. The previous container workflow took about 17 minutes in CI; BuildKit timings and storage use need validation. Have at least 80 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
+Use a Linux amd64 workstation with working ZFS and local, rootful Docker Engine with the Buildx plugin. Ubuntu 22.04 is the tested host example; it is not a distribution requirement. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. Have at least 80 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.
 
 Install [Docker Engine with Buildx](https://docs.docker.com/engine/install/) and verify `docker buildx version`. Your normal user must be able to access the local Docker daemon (for example, using Docker's documented Linux post-installation setup). Run `make` without sudo; individual host stages request it. Install the remaining host utilities using your distribution’s packages. For example, on Ubuntu 22.04:
 
@@ -23,7 +23,7 @@ docker buildx version
 
 Keep your host distribution's own ZFS packages and kernel. Do not replace them with Debian packages. If the workstation already has an imported pool named `level1-workspace-1`, initialization refuses to proceed; use another host or resolve that name conflict deliberately. Other existing host pools are left alone.
 
-The [BuildKit pipeline](BUILDKIT.md) confines the required privileged RUN to live-build. It exports artifacts from scratch stages; ZFS initialization stays on the host. Use trusted source: the live-build entitlement grants privileges equivalent to the previous privileged container.
+The [BuildKit pipeline](BUILDKIT.md) confines the required privileged RUN to live-build. It exports artifacts from scratch stages; ZFS initialization stays on the host. Use trusted source: live-build runs with elevated container privileges.
 
 ## Check host prerequisites
 
@@ -95,7 +95,7 @@ Successful output:
 | `build/default/validation/<test-run>/` | Optional workstation acceptance reports |
 
 
-`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts, build logs, and initialization metadata belong to the invoking user; ownership inside the OS and encrypted workspace images remains unchanged. Existing root-owned archives are not migrated or recursively chowned. Use a fresh user-writable `BUILD_DIR` for new runs. To report a build failure, include the final 100 lines of `build/default/build.log` and the complete error printed by the wrapper. The chroot stays inside BuildKit; failed-stage output is available in the streamed host build.log.
+`IMAGES-PREPARED` means the OS and bootloader are present, but both data partitions are **empty**. It is not the final ready-to-flash marker. Artifacts, build logs, and initialization metadata belong to the invoking user; ownership inside the OS and encrypted workspace images remains unchanged. Use a fresh user-writable `BUILD_DIR` for each run. To report a build failure, include the final 100 lines of `build/default/build.log` and the complete error printed by the wrapper. The chroot stays inside BuildKit; failed-stage output is available in the streamed host build.log.
 
 For configuration customization, pass extra `lb config` options after the build directory. Do not override kernel flavour, architecture or boot layout without updating the associated checks. For frozen package inputs and base image digest selection, see [reproducibility](#reproducibility).
 
@@ -112,9 +112,7 @@ cat build/default/pairs/1/WORKSPACE-INFO.txt
 
 This validates prepared metadata, refuses attached/previously initialized images, attaches both files using loop devices, verifies their data PARTUUIDs and blank signatures, and creates **one pool across both partitions**. Nothing is created on physical USBs at this stage.
 
-The pool has `ashift=12`, `cachefile=none`, an unmountable root dataset, and an AES-256-GCM encrypted `level1-workspace-1/data` with `keyformat=passphrase`, `keylocation=prompt`, `canmount=noauto`, LZ4 compression and the expected mountpoint. It briefly mounts the new dataset beneath a private temporary altroot to set the filesystem root to `1000:1000`, mode `0750`, without covering a host mountpoint. The passphrase is read directly by ZFS from stdin and is never saved in the image or manifest. The script exports the pool and detaches loops before writing `READY`. It never imports/exports unrelated host pools.
-
-To support Ubuntu 22.04's OpenZFS 2.1 and Debian 13's newer ZFS, creation uses `zpool create -d` and enables **`lz4_compress`, `encryption` and encryption's required dependencies** (including `extensible_dataset` for resumable receives). These features are supported by OpenZFS 2.1. This omits newer optional pool features. `zpool status` may report that supported features are disabled; that message is expected. **Do not run `zpool upgrade`** if you need continued access from hosts using OpenZFS 2.1. Exact host/live-system package equality is not required.
+The [initialization stage](../stages/03-initialize-pair/README.md) defines the encrypted dataset, ownership and completion markers. The [pool feature policy](PAIRS.md#encryption-and-compatibility) preserves interoperability with Ubuntu 22.04/OpenZFS 2.1; do not enable newer pool features merely to dismiss a status warning.
 
 If initialization fails, `INITIALIZING` remains and reruns are refused. Check `sudo zpool status level1-workspace-1` and `sudo losetup -j /absolute/path/to/usb-a.img` (and B). Failed export retains loops rather than detaching an active pool. Resolve/export the pool and detach only this build's loops before removing incomplete artifacts. For an unused, failed initial build, reassemble from the ISO into a **new** output directory. Never discard images containing data you need.
 

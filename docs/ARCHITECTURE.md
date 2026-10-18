@@ -23,7 +23,7 @@ The live image includes one Debian amd64 kernel and a matching `level1vault-zfs-
 
 Assembly uses `xorriso` to extract the ISO, `sgdisk` to partition regular files, `mkfs.vfat`/mtools to populate separate FAT images, and `grub-mkstandalone` to generate each fallback EFI loader. It embeds each FAT image at partition 1's offset. No assembly-time loop devices, udev daemon, mounts, or ZFS are needed.
 
-Live-build selects only `grub-efi`; the build toolchain does not install Syslinux/ISOLINUX. Legacy memtest and the Windows loader are disabled. The intermediate ISO keeps its existing filename for stage compatibility; its El Torito catalog must contain EFI support and no BIOS boot entry. Physical USBs use stage 2's standalone x86_64 EFI loaders and require UEFI firmware with Secure Boot disabled.
+Live-build selects only `grub-efi`; the build toolchain does not install Syslinux/ISOLINUX. Legacy memtest and the Windows loader are disabled. The intermediate ISO is named `live-image-amd64.hybrid.iso`; its El Torito catalog must contain EFI support and no BIOS boot entry. Physical USBs use stage 2's standalone x86_64 EFI loaders and require UEFI firmware with Secure Boot disabled.
 
 ## Design review
 
