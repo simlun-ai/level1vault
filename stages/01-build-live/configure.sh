@@ -29,7 +29,7 @@ lb config \
   --initsystem systemd \
   --linux-flavours amd64 \
   --linux-packages linux-image \
-  --bootappend-live 'boot=live components nopersistence noeject hostname=level1vault username=simlun live-config.nocomponents=user-setup,sudo loglevel=4' \
+  --bootappend-live 'boot=live components nopersistence noeject hostname=level1vault username=root live-config.nocomponents=user-setup,sudo loglevel=4' \
   "$@"
 
 
@@ -47,6 +47,8 @@ cp "$SOURCE_DIR/stages/01-build-live/package-zfs.py" config/includes.chroot/usr/
 cp "$SOURCE_DIR/stages/01-build-live/prune-build-packages.py" config/includes.chroot/usr/local/lib/level1vault/build/
 cp -a "$SOURCE_DIR/stages/01-build-live/user-config" config/includes.chroot/usr/local/lib/level1vault/build/
 install -m 0755 "$SOURCE_DIR/runtime/workspace-discover" config/includes.chroot/usr/local/sbin/workspace-discover
+install -m 0755 "$SOURCE_DIR/runtime/start" config/includes.chroot/usr/local/sbin/start
+install -m 0755 "$SOURCE_DIR/runtime/workspace-home" config/includes.chroot/usr/local/sbin/workspace-home
 install -m 0755 "$SOURCE_DIR/runtime/workspace-mount" config/includes.chroot/usr/local/sbin/workspace-mount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-umount" config/includes.chroot/usr/local/sbin/workspace-umount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-activate" config/includes.chroot/usr/local/sbin/workspace-activate
@@ -55,3 +57,4 @@ install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/50-account.hook.chroot" 
 install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/60-repository.hook.chroot" config/hooks/live/60-repository.hook.chroot
 install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/90-zfs.hook.chroot" config/hooks/live/90-zfs.hook.chroot
 printf 'Configured in %s. Now run: sudo lb build\n' "$PWD"
+

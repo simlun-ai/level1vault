@@ -15,9 +15,10 @@ RESET=/etc/.level1vault-qemu-$RUN
 case $PHASE in
   boot)
     # Verify the stateless live system and manual-only workspace policy.
-    [[ $(id -un) == simlun && $(id -u) == 2000 && $(id -g) == 2000 ]]
+    [[ $(id -un) == root && $(id -u) == 0 ]]
+    [[ $(id -u simlun) == 1000 && $(id -g simlun) == 1000 ]]
     [[ $(getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
-    zsh -lic '[[ ${aliases[vim]} == nvim ]] && command -v workspace-mount'
+    sudo -iu simlun zsh -lic '[[ ${aliases[vim]} == nvim ]] && command -v workspace-mount'
     [[ $(sudo -n id -u) == 0 ]]
     sudo -n sh -c 'command -v workspace-mount && command -v workspace-umount'
     for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
@@ -34,21 +35,25 @@ case $PHASE in
     # Unlock the workspace and verify its identity, ownership, and health.
     sudo workspace-mount "$PAIR"
     [[ $(findmnt -n -o SOURCE --mountpoint /mnt/workspace) == "$DATASET" ]]
-    [[ $(stat -c '%u:%g %a' /mnt/workspace) == '2000:2000 750' ]]
+    [[ $(stat -c '%u:%g %a' /mnt/workspace) == '1000:1000 750' ]]
     [[ $(sudo zfs get -H -o value encryption "$DATASET") == aes-256-gcm ]]
     [[ $(sudo zfs get -H -o value readonly "$DATASET") == off ]]
     if [[ $VALUE != rejoining ]]; then
       [[ $(sudo zpool list -H -o health "$POOL") == "$VALUE" ]]
     fi
+    [[ $(findmnt -n -o FSROOT --mountpoint /home/simlun) == /home/simlun ]]
+    [[ $(stat -c '%u:%g %a' /home/simlun) == '1000:1000 700' ]]
     ;;
   write)
     # Write workspace data and a marker that must disappear after reboot.
     printf '%s\n' "$VALUE" > "$CHECK"
+    sudo -iu simlun sh -c 'printf "%s\n" "$1" > "$HOME/.level1vault-home-check"' sh "$VALUE"
     printf 'ephemeral\n' | sudo tee "$RESET" >/dev/null
     ;;
   verify)
     # Verify that the previous workspace write survived.
     [[ $(cat "$CHECK") == "$VALUE" ]]
+    [[ $(cat /home/simlun/.level1vault-home-check) == "$VALUE" ]]
     ;;
   rejoin)
     # Verify mirror recovery and a clean scrub with both members present.

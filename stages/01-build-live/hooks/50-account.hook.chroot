@@ -2,15 +2,15 @@
 set -eu
 # Create the exact account before SquashFS is generated. Boot-time user-setup
 # and sudo live-config components are disabled so they cannot replace it.
-if getent passwd simlun >/dev/null || getent passwd 2000 >/dev/null || \
-   getent group simlun >/dev/null || getent group 2000 >/dev/null; then
-    echo 'ERROR: account name or numeric ID 2000 is already allocated' >&2
+if getent passwd simlun >/dev/null || getent passwd 1000 >/dev/null || \
+   getent group simlun >/dev/null || getent group 1000 >/dev/null; then
+    echo 'ERROR: account name or numeric ID 1000 is already allocated' >&2
     exit 1
 fi
 
 # Create the live user with the expected identity and password.
-groupadd --gid 2000 simlun
-useradd --uid 2000 --gid 2000 --create-home --shell /usr/bin/zsh --groups sudo simlun
+groupadd --gid 1000 simlun
+useradd --uid 1000 --gid 1000 --create-home --shell /usr/bin/zsh --groups sudo simlun
 printf 'simlun:password\n' | chpasswd
 
 # Provide the requested command and manual-page names for Debian's renamed tools.
@@ -22,10 +22,10 @@ ln -s /usr/share/man/man1/batcat.1.gz /usr/local/share/man/man1/bat.1.gz
 
 # Install the live user's versioned application settings and login command path.
 config=/usr/local/lib/level1vault/build/user-config
-install -d -o 2000 -g 2000 -m 0755 /home/simlun/.config
-install -o 2000 -g 2000 -m 0644 "$config/zshrc" /home/simlun/.zshrc
-install -o 2000 -g 2000 -m 0644 "$config/tmux.conf" /home/simlun/.tmux.conf
-install -o 2000 -g 2000 -m 0644 "$config/starship.toml" /home/simlun/.config/starship.toml
+install -d -o 1000 -g 1000 -m 0755 /home/simlun/.config
+install -o 1000 -g 1000 -m 0644 "$config/zshrc" /home/simlun/.zshrc
+install -o 1000 -g 1000 -m 0644 "$config/tmux.conf" /home/simlun/.tmux.conf
+install -o 1000 -g 1000 -m 0644 "$config/starship.toml" /home/simlun/.config/starship.toml
 cat > /home/simlun/.zprofile <<'ZPROFILE'
 case ":$PATH:" in
     *:/usr/local/sbin:*) ;;
@@ -33,7 +33,7 @@ case ":$PATH:" in
 esac
 export PATH
 ZPROFILE
-chown 2000:2000 /home/simlun/.zprofile
+chown 1000:1000 /home/simlun/.zprofile
 chmod 0644 /home/simlun/.zprofile
 
 # Enable passwordless sudo and the administrative command path.
@@ -56,16 +56,36 @@ PROFILE
 
 # Preserve the configured account during live boot.
 cat > /etc/live/config.conf.d/level1vault.conf <<'CONFIG'
-LIVE_USERNAME=simlun
+LIVE_USERNAME=root
 LIVE_CONFIG_NOCOMPONENTS=user-setup,sudo
 CONFIG
-[ "$(id -u simlun)" -eq 2000 ]
-[ "$(id -g simlun)" -eq 2000 ]
+[ "$(id -u simlun)" -eq 1000 ]
+[ "$(id -g simlun)" -eq 1000 ]
+
+# Autologin locally as root even when an upgraded USB retains username=simlun in GRUB.
+# The late drop-in overrides live-config's generated autologin configuration.
+for unit in getty@ serial-getty@; do
+    install -d -m 0755 "/etc/systemd/system/$unit.service.d"
+    cat > "/etc/systemd/system/$unit.service.d/zz-level1vault-root.conf" <<'GETTY'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
+GETTY
+done
+sed -i 's/--noclear/--keep-baud --noclear/' /etc/systemd/system/serial-getty@.service.d/zz-level1vault-root.conf
 
 # Show the workspace quick guide at console login.
 cat > /etc/motd <<'MOTD'
 level1vault workspace quick guide
 
+Run start to unlock your workspace and work as simlun in tmux.
+  start                         Select the only complete connected pair.
+  start 1                       Select pair 1 explicitly (also for degraded use).
+Exit all tmux panes to return to root and choose export, then poweroff.
+Detaching leaves tmux running; run start to reattach before exporting.
+Root's home and OS changes are temporary. simlun's mounted home persists.
+
+Manual operations (sudo is optional at the root console):
 Pair IDs below are examples; use the IDs printed on your USB pairs.
   sudo workspace-mount           Unlock the only complete connected pair.
   sudo workspace-mount 1         Select pair 1 explicitly (also for degraded use).
@@ -76,8 +96,9 @@ Pair IDs below are examples; use the IDs printed on your USB pairs.
                                  Promote the next connected pair after pair 1.
                                  Fence/disconnect the old active pair FIRST.
                                  Then mount the promoted pair using its own ID.
+  sudo -iu simlun                Open a login shell after mounting the active pair.
   cd /; sudo workspace-umount    Sync and export all imported workspace pairs.
-                                 Close files; leave the workspace in every shell first.
+                                 Exit simlun sessions, tmux and background jobs first.
 
 Export successfully before removing workspace drives; keep the boot USB
 connected until shutdown. OS changes reset on reboot; workspace data persists.
@@ -85,3 +106,4 @@ More options: workspace-sync --help or workspace-activate --help
 
 Passphrase hint: Ho.
 MOTD
+

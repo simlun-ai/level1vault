@@ -93,6 +93,13 @@ else
     zfs mount "$DATASET"
 fi
 
+# Attach the persistent home only on the live OS and only for an active pair.
+if [ -f /usr/local/share/level1vault/source-commit ] && [ "$STATE" = active ]; then
+    python3 "$(dirname -- "$0")/workspace-home" attach "$DATASET"
+    echo 'Persistent home attached. Run start, or sudo -iu simlun for a fresh login shell.'
+fi
+
 # Report the mounted filesystem and mirror health.
 findmnt --mountpoint "$MOUNTPOINT"
 zpool status "$POOL"
+

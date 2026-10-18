@@ -117,15 +117,11 @@ class Guest:
         self.expected_revision = expected_revision
 
     def login(self):
-        # Accept Starship's colored dollar prompt and older Bash/default Zsh images.
-        prompt = r'(?:simlun@[^\r\n]*\$ |level1vault% |\$(?:\x1b\[[0-9;]*m)* )'
+        # Require root autologin, including when upgrading an older GRUB configuration.
+        prompt = r'root@[^\r\n]*# '
         result = self.child.expect([r'login: ', prompt], timeout=self.timeout)
-        if result == 0:
-            self.child.sendline('simlun')
-            self.child.expect('Password:', timeout=self.timeout)
-            self.child.sendline('password')
-            self.child.expect(prompt, timeout=self.timeout)
-        self.run('test "$(id -un)" = simlun')
+        require(result == 1, 'Expected automatic root console login')
+        self.run('test "$(id -un)" = root')
         if self.expected_revision is not None:
             self.run('test "$(cat /usr/local/share/level1vault/source-commit)" = ' + shlex.quote(self.expected_revision))
 

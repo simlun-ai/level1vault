@@ -29,7 +29,7 @@ changing the attached drives, and start each scenario with a fresh copy of OVMF
 variables. Run every scenario in order; each consumes the preceding writes.
 Use a disposable initialized **active** pair, not a replica or physical disks.
 
-At each login (including after reboot), save the following script as
+At each automatic root login (including after reboot), save the following script as
 `/tmp/level1vault-qemu-check.sh` in the guest. The live root is ephemeral, so the
 script and shell variables must be recreated after every boot. Set `PAIR` to
 your pair ID and reuse the **same** 16-character hexadecimal `RUN` in every boot:

@@ -60,6 +60,16 @@ cp "$(dirname -- "${BASH_SOURCE[0]}")/tests/test_user_config.zsh" "$ROOT/tmp/lev
 chroot "$ROOT" su - simlun -c 'zsh -il /tmp/level1vault-user-config.zsh --no-tmux'
 rm "$ROOT/tmp/level1vault-user-config.zsh"
 
+# Verify root console autologin and immutable first-use home defaults.
+for unit in getty@ serial-getty@; do
+    grep -Fq -- '--autologin root' "$ROOT/etc/systemd/system/$unit.service.d/zz-level1vault-root.conf"
+done
+grep -Fq 'Run start' "$ROOT/etc/motd"
+test -r "$ROOT/usr/local/share/level1vault/home-default/.zshrc"
+test -d "$ROOT/usr/local/share/level1vault/home-default/level1vault/.git"
+test -x "$ROOT/usr/local/sbin/start"
+test -x "$ROOT/usr/local/sbin/workspace-home"
+
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-discover"
@@ -71,7 +81,7 @@ chroot "$ROOT" python3 /usr/local/sbin/workspace-sync --help >/dev/null
 for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
   grep -Fq "sudo $command" "$ROOT/etc/motd"
 done
-[[ $(chroot "$ROOT" id -u simlun) == 2000 && $(chroot "$ROOT" id -g simlun) == 2000 ]]
+[[ $(chroot "$ROOT" id -u simlun) == 1000 && $(chroot "$ROOT" id -g simlun) == 1000 ]]
 [[ $(chroot "$ROOT" getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
 chroot "$ROOT" su - simlun -c '[[ -o login ]]'
 chroot "$ROOT" visudo -cf /etc/sudoers
@@ -82,7 +92,7 @@ chroot "$ROOT" su - simlun -c 'sudo -n sh -c "command -v workspace-mount && comm
 # Verify the live user owns a complete, clean checkout of the build revision.
 CHECKOUT="$ROOT/home/simlun/level1vault"
 [[ -d $CHECKOUT/.git ]]
-[[ -z $(find "$CHECKOUT" \( ! -uid 2000 -o ! -gid 2000 \) -print -quit) ]]
+[[ -z $(find "$CHECKOUT" \( ! -uid 1000 -o ! -gid 1000 \) -print -quit) ]]
 chroot "$ROOT" su - simlun -c 'cd /home/simlun/level1vault && git fsck --full'
 [[ $(chroot "$ROOT" su - simlun -c 'git -C /home/simlun/level1vault rev-parse --is-shallow-repository') == false ]]
 [[ $(chroot "$ROOT" su - simlun -c 'git -C /home/simlun/level1vault rev-parse HEAD') == "$(cat "$ROOT/usr/local/share/level1vault/source-commit")" ]]
@@ -107,3 +117,4 @@ if [[ ${2:-} != --iso-only ]]; then
   test ! -e "$BUILD_DIR/out/READY"
 fi
 printf 'Full Debian Live build inspected successfully: kernel=%s\n' "$KERNEL"
+

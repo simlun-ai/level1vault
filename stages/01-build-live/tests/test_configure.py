@@ -50,6 +50,9 @@ class ScriptTests(unittest.TestCase):
         for name in ('zshrc', 'tmux.conf', 'starship.toml'):
             staged = self.base / 'config/includes.chroot/usr/local/lib/level1vault/build/user-config' / name
             self.assertEqual(staged.read_bytes(), (ROOT / 'stages/01-build-live/user-config' / name).read_bytes())
+        for name in ('start', 'workspace-home'):
+            self.assertEqual((target.parent / name).read_bytes(), (ROOT / 'runtime' / name).read_bytes())
+        self.assertIn('username=root', self.calls())
         self.assertIn('linux-image', self.calls())
         self.assertNotIn('linux-headers', self.calls())
         self.assertIn('--bootloaders\ngrub-efi\n', self.calls())
@@ -61,3 +64,4 @@ class ScriptTests(unittest.TestCase):
         again = subprocess.run(['bash', str(ROOT / 'stages/01-build-live/configure.sh')], cwd=self.base,
                                env=self.env, capture_output=True, text=True)
         self.assertNotEqual(again.returncode, 0)
+

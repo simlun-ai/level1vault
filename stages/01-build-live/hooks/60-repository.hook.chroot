@@ -6,4 +6,9 @@ python3 /usr/local/lib/level1vault/build/repository.py install \
     /usr/local/lib/level1vault/build/repository /home/simlun/level1vault
 mkdir -p /usr/local/share/level1vault
 cp /usr/local/lib/level1vault/build/repository/commit /usr/local/share/level1vault/source-commit
-chown -R 2000:2000 /home/simlun/level1vault
+chown -R 1000:1000 /home/simlun/level1vault
+
+# Retain immutable defaults for first-use initialization of the encrypted home.
+cp -a /home/simlun /usr/local/share/level1vault/home-default
+chmod 0700 /usr/local/share/level1vault/home-default
+

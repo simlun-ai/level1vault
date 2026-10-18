@@ -17,6 +17,7 @@ class UmountTests(unittest.TestCase):
         self.env = dict(os.environ, PATH=f'{self.bin}:{os.environ["PATH"]}', LOG=str(self.log))
         text = (ROOT/'runtime/workspace-umount').read_text().replace('/run/lock/level1vault-workspace.lock', str(self.base/'lock'))
         self.script = self.base/'umount'
+        text = text.replace('/usr/local/share/level1vault/source-commit', str(self.base / 'live-marker'))
         self.script.write_text(text)
         self.tool('id', 'echo 0')
         self.tool('zfs', 'echo 1')
@@ -67,5 +68,18 @@ esac''')
 
     def test_list_failure_is_not_reported_as_safe(self):
         self.env['LIST_FAIL'] = '1'
+        self.assertNotEqual(self.run_helper().returncode, 0)
+        self.assertNotIn('zpool export', self.calls())
+
+
+    def test_live_home_detach_precedes_export_and_failure_blocks_it(self):
+        (self.base / 'live-marker').touch()
+        (self.base / 'workspace-home').write_text(
+            "import os,sys; open(os.environ['LOG'], 'a').write('home ' + ' '.join(sys.argv[1:]) + '\\n'); "
+            "sys.exit(int(os.environ.get('HOME_FAIL', '0')))\n")
+        self.assertEqual(self.run_helper().returncode, 0)
+        self.assertLess(self.calls().index('home detach workspace-1'), self.calls().index('zpool export'))
+        self.log.unlink()
+        self.env['HOME_FAIL'] = '1'
         self.assertNotEqual(self.run_helper().returncode, 0)
         self.assertNotIn('zpool export', self.calls())

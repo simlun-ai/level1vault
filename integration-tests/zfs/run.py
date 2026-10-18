@@ -64,6 +64,47 @@ def prepare(base, pair, active=False):
     return out
 
 
+def verify_live_home(base, dataset, existing=False):
+    # Exercise real encrypted bind mounts on test-owned paths, never the runner's home.
+    loader = importlib.machinery.SourceFileLoader('workspace_home', str(ROOT/'runtime/workspace-home'))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    home = importlib.util.module_from_spec(spec)
+    loader.exec_module(home)
+    target = base / ('live-home-' + dataset.split('/')[0])
+    defaults = base / ('home-defaults-' + dataset.split('/')[0])
+    target.mkdir()
+    defaults.mkdir()
+    (defaults/'.zshrc').write_text('image defaults')
+    base.chmod(0o711)
+    with patch.object(home, 'HOME', target), patch.object(home, 'DEFAULTS', defaults):
+        try:
+            home.attach(dataset)
+            assert run('findmnt', '-n', '-o', 'FSROOT', '--mountpoint', str(target)) == '/home/simlun'
+            assert (target/'.zshrc').read_text() == ('saved configuration' if existing else 'image defaults')
+            assert (target.stat().st_uid, target.stat().st_gid, target.stat().st_mode & 0o777) == (1000, 1000, 0o700)
+            command('setpriv', '--reuid=1000', '--regid=1000', '--clear-groups',
+                    'sh', '-c', 'printf "saved configuration" > "$1/.zshrc"', 'sh', str(target))
+            busy = subprocess.Popen(['setpriv', '--reuid=1000', '--regid=1000', '--clear-groups',
+                                     'sh', '-c', 'echo ready; exec sleep 30'], cwd=target, stdout=subprocess.PIPE, text=True)
+            try:
+                assert busy.stdout.readline().strip() == 'ready'
+                try:
+                    home.detach(dataset.split('/')[0])
+                    raise AssertionError('Expected running-user refusal')
+                except RuntimeError as error:
+                    assert 'running processes' in str(error), str(error)
+            finally:
+                busy.terminate()
+                busy.wait()
+            home.detach(dataset.split('/')[0])
+            home.attach(dataset)
+            assert (target/'.zshrc').read_text() == 'saved configuration'
+            home.check()
+        finally:
+            if os.path.ismount(target):
+                command('umount', str(target))
+
+
 def verify_os_upgrade(out, base):
     # Update real disposable FAT partitions and verify ZFS bytes remain unchanged.
     sys.path.insert(0, str(ROOT/'stages/06-upgrade-os'))
@@ -209,9 +250,10 @@ def main():
             helper('workspace-mount', '1', input='incorrect-passphrase\n', ok=False)
             assert not os.path.ismount('/mnt/workspace')
             helper('workspace-mount', '1', input=KEY + '\n')
+            verify_live_home(base, 'workspace-1/data')
             stat = os.stat('/mnt/workspace')
-            assert (stat.st_uid, stat.st_gid, stat.st_mode & 0o777) == (2000, 2000, 0o750)
-            command('setpriv', '--reuid=2000', '--regid=2000', '--clear-groups',
+            assert (stat.st_uid, stat.st_gid, stat.st_mode & 0o777) == (1000, 1000, 0o750)
+            command('setpriv', '--reuid=1000', '--regid=1000', '--clear-groups',
                     'sh', '-c', 'printf first > /mnt/workspace/user-file')
             command('zfs', 'unmount', 'workspace-1/data')
             command('zfs', 'unload-key', 'workspace-1/data')
@@ -283,8 +325,10 @@ def main():
             assert get('workspace-10', 'org.level1vault:state') == 'replica'
             helper('workspace-activate', '2', '--fenced')  # idempotent
             helper('workspace-mount', '2', input=KEY + '\n')
-            command('setpriv', '--reuid=2000', '--regid=2000', '--clear-groups',
+            command('setpriv', '--reuid=1000', '--regid=1000', '--clear-groups',
                     'sh', '-c', 'printf fourth > /mnt/workspace/user-file')
+
+            verify_live_home(base, 'workspace-2/data', existing=True)
 
             # Binding changes are explicit; verified common history allows
             # incrementals from the newly active pair without destroying replicas.
@@ -301,7 +345,7 @@ def main():
             assert get('workspace-3', 'org.level1vault:state') == 'active'
             helper('workspace-mount', '3', input=KEY + '\n')
             assert Path('/mnt/workspace/user-file').read_text() == 'fourth'
-            assert os.stat('/mnt/workspace').st_uid == 2000
+            assert os.stat('/mnt/workspace').st_uid == 1000
             Path('/mnt/workspace/user-file').write_text('fifth')
             helper('workspace-sync', '--rebind', '3', '10')
 
@@ -345,3 +389,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

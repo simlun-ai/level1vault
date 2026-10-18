@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Manage the live user's home inside the existing encrypted workspace dataset."""
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+WORKSPACE = Path('/mnt/workspace')
+HOME = Path('/home/simlun')
+DEFAULTS = Path('/usr/local/share/level1vault/home-default')
+UID = GID = 1000
+
+
+def mounted(path):
+    result = subprocess.run(['findmnt', '--json', '--nofsroot', '--mountpoint', str(path),
+                             '--output', 'SOURCE,FSTYPE,FSROOT'], capture_output=True, text=True)
+    if result.returncode == 1 and not result.stdout.strip():
+        return None
+    if result.returncode:
+        raise RuntimeError(f'Cannot inspect mount at {path}: {result.stderr.strip()}')
+    filesystems = json.loads(result.stdout)['filesystems']
+    if len(filesystems) != 1:
+        raise RuntimeError(f'Expected exactly one mount at {path}')
+    return filesystems[0]
+
+
+def verify_mount(mount, dataset, root):
+    if not mount or (mount['source'], mount['fstype'], mount['fsroot']) != (dataset, 'zfs', root):
+        raise RuntimeError('Unexpected workspace/home mount; inspect before continuing')
+
+
+def directory(path):
+    if path.is_symlink() or not path.is_dir():
+        raise RuntimeError(f'Expected a real directory at {path}')
+
+
+def require_idle():
+    processes = subprocess.run(['pgrep', '-u', str(UID)], capture_output=True, text=True)
+    if processes.returncode == 0:
+        raise RuntimeError('simlun still has running processes (possibly detached tmux). '
+                           'Exit all simlun sessions and jobs before changing the home mount. '
+                           'If home is already attached, run start to reattach to tmux.')
+    if processes.returncode != 1:
+        raise RuntimeError('Cannot check simlun processes; refusing to change the home mount')
+
+
+def attach(dataset):
+    # Verify both mount locations before creating or hiding any home files.
+    verify_mount(mounted(WORKSPACE), dataset, '/')
+    directory(HOME)
+    current = mounted(HOME)
+    if current:
+        verify_mount(current, dataset, '/home/simlun')
+        return
+    require_idle()
+    parent = WORKSPACE / 'home'
+    parent.mkdir(mode=0o755, exist_ok=True)
+    directory(parent)
+    persistent = parent / 'simlun'
+
+    # Publish a complete first-use home atomically without merging image defaults later.
+    if not os.path.lexists(persistent):
+        directory(DEFAULTS)
+        temporary = Path(tempfile.mkdtemp(prefix='.simlun-', dir=parent))
+        try:
+            shutil.copytree(DEFAULTS, temporary, symlinks=True, dirs_exist_ok=True)
+            subprocess.run(['chown', '-hR', f'{UID}:{GID}', str(temporary)], check=True)
+            temporary.chmod(0o700)
+            temporary.rename(persistent)
+        finally:
+            if temporary.exists():
+                shutil.rmtree(temporary)
+    directory(persistent)
+    info = persistent.stat()
+    if (info.st_uid, info.st_gid, info.st_mode & 0o777) != (UID, GID, 0o700):
+        raise RuntimeError(f'{persistent} must be owned by {UID}:{GID} with mode 0700')
+    subprocess.run(['mount', '--bind', str(persistent), str(HOME)], check=True)
+    verify_mount(mounted(HOME), dataset, '/home/simlun')
+
+
+def detach(pool):
+    # Leave homes belonging to other selected pools untouched.
+    current = mounted(HOME)
+    if not current:
+        return
+    if current['source'] != pool + '/data':
+        if current['source'].split('/')[0] == pool:
+            raise RuntimeError('Unexpected home mount for this pool; inspect before export')
+        return
+    verify_mount(current, pool + '/data', '/home/simlun')
+    # Detached tmux and background jobs may still need the home even without open files.
+    require_idle()
+    result = subprocess.run(['umount', str(HOME)])
+    if result.returncode:
+        raise RuntimeError('Home is busy. Exit all simlun sessions and background processes '
+                           '(including tmux), then retry workspace-umount from root in /.')
+
+
+def check():
+    # Only launch a working session on the active writable pair with its home attached.
+    current = mounted(WORKSPACE)
+    dataset = current['source'] if current else ''
+    if not re.fullmatch(r'workspace-[1-9][0-9]*/data', dataset):
+        raise RuntimeError('Mount an active workspace before starting simlun')
+    verify_mount(current, dataset, '/')
+    verify_mount(mounted(HOME), dataset, '/home/simlun')
+    for prop, target, expected in [('readonly', dataset, 'off'),
+                                   ('org.level1vault:state', dataset.split('/')[0], 'active')]:
+        value = subprocess.check_output(['zfs', 'get', '-H', '-o', 'value', prop, target], text=True).strip()
+        if value != expected:
+            raise RuntimeError('start requires a writable active pair; inspect replicas from root')
+
+
+def main():
+    # Dispatch only the internal operations used by the locked workspace helpers.
+    if os.geteuid() != 0:
+        raise RuntimeError('Run from the root console')
+    args = sys.argv[1:]
+    if len(args) == 2 and args[0] == 'attach' and re.fullmatch(r'workspace-[1-9][0-9]*/data', args[1]):
+        attach(args[1])
+    elif len(args) == 2 and args[0] == 'detach' and re.fullmatch(r'workspace-[1-9][0-9]*', args[1]):
+        detach(args[1])
+    elif args == ['check']:
+        check()
+    else:
+        raise RuntimeError('Internal usage: workspace-home attach DATASET | detach POOL | check')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f'ERROR: {error}', file=sys.stderr)
+        sys.exit(1)

@@ -151,22 +151,17 @@ class QemuTests(unittest.TestCase):
         self.assertIsNone(self.verify())
         self.assertIn('console=ttyS0', (work / 'grub-b.cfg').read_text())
 
-    def test_login_accepts_zsh_and_older_bash_prompts(self):
-        for prompt in ('level1vault% ', 'simlun@level1vault:~$ ', '\x1b[1;32m$\x1b[0m ', '$ '):
-            for autologin in (True, False):
-                with self.subTest(prompt=prompt, autologin=autologin):
-                    child = Mock()
-                    child.expect.return_value = 1 if autologin else 0
-                    guest = runner.Guest(child, Mock(), 10)
-                    guest.run = Mock()
-                    guest.login()
-                    patterns = child.expect.call_args_list[0].args[0]
-                    self.assertRegex(prompt, patterns[1])
-                    if not autologin:
-                        self.assertRegex(prompt, child.expect.call_args_list[2].args[0])
-                        self.assertEqual([call.args[0] for call in child.sendline.call_args_list],
-                                         ['simlun', 'password'])
-                    guest.run.assert_any_call('test "$(id -un)" = simlun')
+    def test_login_requires_root_autologin(self):
+        child = Mock()
+        child.expect.return_value = 1
+        guest = runner.Guest(child, Mock(), 10)
+        guest.run = Mock()
+        guest.login()
+        self.assertRegex('root@level1vault:~# ', child.expect.call_args_list[0].args[0][1])
+        guest.run.assert_any_call('test "$(id -un)" = root')
+        child.expect.return_value = 0
+        with self.assertRaisesRegex(RuntimeError, 'automatic root console login'):
+            guest.login()
 
     def test_command_status_accepts_serial_line_endings_and_rejects_failed_checks(self):
         for newline in ('\n', '\r\n', '\r\r\n'):

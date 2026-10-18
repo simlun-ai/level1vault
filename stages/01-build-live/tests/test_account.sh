@@ -7,6 +7,8 @@ SOURCE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)
 install -d /usr/local/lib/level1vault/build
 cp -a "$SOURCE_DIR/stages/01-build-live/user-config" /usr/local/lib/level1vault/build/
 "$SOURCE_DIR/stages/01-build-live/hooks/50-account.hook.chroot"
+install -m 0755 "$SOURCE_DIR/runtime/start" /usr/local/sbin/start
+install -m 0755 "$SOURCE_DIR/runtime/workspace-home" /usr/local/sbin/workspace-home
 install -m 0755 "$SOURCE_DIR/runtime/workspace-discover" /usr/local/sbin/workspace-discover
 install -m 0755 "$SOURCE_DIR/runtime/workspace-mount" /usr/local/sbin/workspace-mount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-umount" /usr/local/sbin/workspace-umount
@@ -21,11 +23,11 @@ mkdir -p /usr/local/lib/level1vault/build
 python3 "$SOURCE_DIR/stages/01-build-live/repository.py" bundle "$fixture/source" /usr/local/lib/level1vault/build/repository
 cp "$SOURCE_DIR/stages/01-build-live/repository.py" /usr/local/lib/level1vault/build/
 "$SOURCE_DIR/stages/01-build-live/hooks/60-repository.hook.chroot"
-[[ $(stat -c '%u:%g' /home/simlun/level1vault/.git) == 2000:2000 ]]
+[[ $(stat -c '%u:%g' /home/simlun/level1vault/.git) == 1000:1000 ]]
 su - simlun -c 'git -C /home/simlun/level1vault fsck --full'
 
 # Verify account identity and sudo configuration.
-[[ $(id -u simlun) == 2000 && $(id -g simlun) == 2000 ]]
+[[ $(id -u simlun) == 1000 && $(id -g simlun) == 1000 ]]
 [[ $(getent passwd simlun | cut -d: -f7) == /usr/bin/zsh ]]
 su - simlun -c '[[ -o login ]]'
 visudo -cf /etc/sudoers
@@ -54,8 +56,18 @@ for page in fd bat nvim; do
 done
 
 # Verify that live boot preserves the account settings.
-grep -qx LIVE_USERNAME=simlun /etc/live/config.conf.d/level1vault.conf
+grep -qx LIVE_USERNAME=root /etc/live/config.conf.d/level1vault.conf
 grep -qx LIVE_CONFIG_NOCOMPONENTS=user-setup,sudo /etc/live/config.conf.d/level1vault.conf
+
+# Verify root console autologin and immutable first-use home defaults.
+for unit in getty@ serial-getty@; do
+    grep -Fq -- '--autologin root' "/etc/systemd/system/$unit.service.d/zz-level1vault-root.conf"
+done
+grep -Fq 'Run start' "/etc/motd"
+test -r "/usr/local/share/level1vault/home-default/.zshrc"
+test -d "/usr/local/share/level1vault/home-default/level1vault/.git"
+test -x "/usr/local/sbin/start"
+test -x "/usr/local/sbin/workspace-home"
 
 # Verify the guide covers every installed workspace command.
 for command in workspace-mount workspace-umount workspace-sync workspace-activate; do
@@ -67,7 +79,7 @@ python3 - <<'PYLOGIN'
 import errno, os, pty, select, signal, time
 pid, fd = pty.fork()
 if pid == 0:
-    os.execvp('login', ['login', '-f', 'simlun'])
+    os.execvp('login', ['login', '-f', 'root'])
 with open('/etc/motd', 'rb') as motd:
     expected = motd.read()
 output = b''
@@ -92,3 +104,4 @@ finally:
     os.waitpid(pid, 0)
     os.close(fd)
 PYLOGIN
+
