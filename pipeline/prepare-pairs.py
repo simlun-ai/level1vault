@@ -30,7 +30,7 @@ def preflight(build, count):
     if os.geteuid() != 0:
         raise ValueError('Run through make prepare-pairs with sudo on the host')
     for tool in ('git', 'docker', 'zpool', 'zfs', 'modprobe', 'losetup', 'udevadm', 'blkid',
-                 'wipefs', 'zgenhostid', 'flock', 'realpath', 'mktemp', 'chown', 'chmod'):
+                 'wipefs', 'sfdisk', 'zgenhostid', 'flock', 'realpath', 'mktemp', 'chown', 'chmod'):
         if shutil.which(tool) is None:
             raise ValueError(f'Missing host tool: {tool}')
     shallow = subprocess.check_output(['git', '-c', 'safe.directory=' + str(ROOT), 'rev-parse', '--is-shallow-repository'], cwd=ROOT, text=True).strip()
@@ -78,6 +78,9 @@ def prepare(build, count, passphrase):
 
     # Populate the replicas and publish readiness after cleanup.
     command(sys.executable, ROOT / 'stages/03-initialize-pair/seed.py', build, str(count), stdin=subprocess.DEVNULL)
+    for pair in range(1, count + 1):
+        command(sys.executable, ROOT / 'pipeline/records.py', 'save', '--out', build / 'pairs' / str(pair),
+                '--pair', str(pair), stdin=subprocess.DEVNULL)
     marker.unlink()
     print(f'All {count} pairs are initialized, replicated and ready under {build / "pairs"}.')
     print('Next: identify USB disks with lsblk, then make write-usb PAIR=N DISK_A=... DISK_B=...')
