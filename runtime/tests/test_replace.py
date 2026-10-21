@@ -101,7 +101,7 @@ class ReplaceTests(unittest.TestCase):
                 commands = [call.args for call in command.call_args_list]
                 replacements = [c for c in commands if c[:2] == ('zpool', 'replace')]
                 self.assertEqual(len(replacements), 0 if resuming else 1)
-                self.assertIn(('zpool', 'wait', '-t', 'resilver', 'level1-workspace-1'), commands)
+                self.assertIn(('zpool', 'wait', '-t', 'resilver,replace', 'level1-workspace-1'), commands)
                 self.assertFalse(any('-f' in c for c in commands))
                 self.assertEqual(empty.call_count, 0 if resuming else 1)
 

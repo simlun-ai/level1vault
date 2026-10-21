@@ -85,7 +85,7 @@ def replace(pair, fenced):
         require(missing[2] == 'ONLINE', 'Unexpected member state; inspect before continuing')
     new_name, new_pool_guid, new_guid = label_identity(output('zdb', '-l', new_path))
     require((new_name, new_pool_guid) == (pool, record['pool_guid']), 'New member labels do not match pool')
-    command('zpool', 'wait', '-t', 'resilver', pool)
+    command('zpool', 'wait', '-t', 'resilver,replace', pool)
     check_complete(pool, survivor_guid, new_guid)
     print(f'Mirror restored. Save zpool status -gP {pool} and the replacement record outside the pool. '
           f'Run workspace-mount {pair} to unlock and read-check files. Export with workspace-umount before shutdown; boot-test each drive alone.')

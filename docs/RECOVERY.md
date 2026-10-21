@@ -102,7 +102,7 @@ sudo workspace-replace 1 --fenced
 
 If normal import reports another owner, follow the fenced import procedure above after resolving ownership, then rerun the command. It never force-imports or force-replaces, creates a pool, adds a top-level vdev, promotes a replica or changes the encryption policy.
 
-The command waits for resilver and requires the expected two leaves **ONLINE**, zero READ/WRITE/CKSUM errors and no known data errors before reporting success. Waiting alone is not accepted as proof. You can rerun it to check a completed replacement; unexpected or interrupted nested replacement trees require inspection rather than another automatic replacement. After an interruption, keep both drives attached and inspect `zpool status -gP level1-workspace-1` before proceeding.
+The command waits for both resilver and replacement completion (including removal of the old leaf), then requires the expected two leaves **ONLINE**, zero READ/WRITE/CKSUM errors and no known data errors before reporting success. Waiting alone is not accepted as proof. You can rerun it to check a completed replacement; unexpected or interrupted nested replacement trees require inspection rather than another automatic replacement. After an interruption, keep both drives attached and inspect `zpool status -gP level1-workspace-1` before proceeding.
 
 Unlock and read-check the workspace using the existing passphrase:
 
