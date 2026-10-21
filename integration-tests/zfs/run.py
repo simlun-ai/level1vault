@@ -230,10 +230,21 @@ def verify_member_replacement(base):
             member_recovery.empty_partition(actual['partitions'][1]['node'])
         return dict(model='disposable-loop', serial='test'), actual
     try:
-        for source in (out/'usb-b.img', image):
-            devices.append(run('losetup', '--find', '--show', '--partscan', str(source)))
+        for side in ('a', 'b'):
+            devices.append(run('losetup', '--find', '--show', '--partscan', str(out/f'usb-{side}.img')))
+        command('udevadm', 'settle')
+        command('zpool', 'import', '-N', '-d', '/dev/disk/by-partuuid', '-o', 'cachefile=none', record['pool_guid'])
+        command('zfs', 'load-key', pool+'/data', input=KEY+'\n', text=True)
+        command('zfs', 'mount', pool+'/data')
+        Path('/mnt/workspace/replacement-check').write_text('surviving encrypted payload')
+        command('zfs', 'unmount', pool+'/data')
+        command('zpool', 'export', pool)
+        command('losetup', '-d', devices.pop(0))
+        devices.append(run('losetup', '--find', '--show', '--partscan', str(image)))
         command('udevadm', 'settle')
         command('mkfs.vfat', '-F', '32', '-i', 'ABCD1234', devices[1]+'p1', stdout=subprocess.DEVNULL)
+        command('udevadm', 'trigger', '--action=change', '--sysname-match='+Path(devices[1]+'p1').name)
+        command('udevadm', 'settle')
         with patch.object(Path, 'read_text', read_text), patch.object(replacement, 'inspect_replacement', side_effect=inspect):
             replacement.replace('99', True)
             replacement.replace('99', True)  # a completed recovery can be checked again
@@ -242,7 +253,7 @@ def verify_member_replacement(base):
         assert get(pool, 'org.level1vault:state') == 'active'
         command('zfs', 'load-key', pool+'/data', input=KEY+'\n', text=True)
         command('zfs', 'mount', pool+'/data')
-        Path('/mnt/workspace/replacement-check').write_text('preserved encryption')
+        assert Path('/mnt/workspace/replacement-check').read_text() == 'surviving encrypted payload'
         command('zfs', 'unmount', pool+'/data')
         command('zpool', 'export', pool)
         print('Real single-member replacement and completed-recovery retry passed.')
