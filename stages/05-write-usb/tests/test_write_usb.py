@@ -1,5 +1,6 @@
 """Verify disk-writing guards and command ordering without opening real devices."""
 import copy
+import sys
 import hashlib
 import io
 import importlib.util
@@ -160,7 +161,7 @@ class WriteUsbTests(unittest.TestCase):
         disk = self.out / 'disk'
         disk.write_bytes(b'x' * 100)
         with patch.object(writer.os, 'fsync', side_effect=OSError('flush failed')), \
-                patch.object(writer, 'readback') as readback:
+                patch.object(sys.modules['usb_io'], 'readback') as readback:
             with self.assertRaisesRegex(OSError, 'flush failed'):
                 writer.write_image(image, disk)
         readback.assert_not_called()
@@ -174,7 +175,7 @@ class WriteUsbTests(unittest.TestCase):
                 target.__enter__.return_value.write.return_value = 0
                 return target
             return original(path, *args, **kwargs)
-        with patch.object(Path, 'open', opened), patch.object(writer, 'readback') as readback:
+        with patch.object(Path, 'open', opened), patch.object(sys.modules['usb_io'], 'readback') as readback:
             with self.assertRaisesRegex(ValueError, 'Short USB write'):
                 writer.write_image(self.out / 'usb-a.img', self.out / 'disk')
         readback.assert_not_called()
@@ -194,7 +195,7 @@ class WriteUsbTests(unittest.TestCase):
         def opened(path, *args, **kwargs):
             return target if path.name == 'disk' else original(path, *args, **kwargs)
         with patch.object(Path, 'open', opened), patch.object(writer.os, 'fsync'), \
-                patch.object(writer, 'readback') as readback:
+                patch.object(sys.modules['usb_io'], 'readback') as readback:
             writer.write_image(image, self.out / 'disk')
         self.assertEqual(target.getvalue(), data)
         readback.assert_called_once_with(self.out / 'disk', len(data), hashlib.sha256(data).hexdigest())

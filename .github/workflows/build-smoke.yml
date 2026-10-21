@@ -10,6 +10,7 @@ on:
       - 'runtime/**'
       - 'common/**'
       - 'stages/06-upgrade-os/**'
+      - 'stages/07-replace-member/**'
       - '.github/workflows/build-smoke.yml'
   workflow_dispatch:
   push:
@@ -23,6 +24,7 @@ on:
       - 'runtime/**'
       - 'common/**'
       - 'stages/06-upgrade-os/**'
+      - 'stages/07-replace-member/**'
       - '.github/workflows/build-smoke.yml'
 permissions:
   contents: read

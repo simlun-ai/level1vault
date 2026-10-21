@@ -19,6 +19,7 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'common'))
 from artifact_owner import publish
+from member_recovery import label_identity
 from live_payload import digest
 from usb_devices import describe_disk, imported_devices, require, validate_idle
 
@@ -55,20 +56,6 @@ def load_release(release):
         require(source.stat().st_size < 4294967296, f'File exceeds FAT32 limit: {name}')
         require(re.fullmatch(r'[0-9a-f]{64}', checksum) is not None, f'Invalid readback checksum: {name}')
     return manifest
-
-
-def label_identity(text):
-    # Read offline ZFS membership without importing or unlocking the workspace.
-    identities = set()
-    for label in re.split(r'LABEL\s+[0-9]+', text):
-        pool = re.search(r"^\s*name:\s*'([^']+)'", label, re.M)
-        guid = re.search(r'^\s*pool_guid:\s*([0-9]+)', label, re.M)
-        leaf = re.search(r'^\s*guid:\s*([0-9]+)', label, re.M)
-        if pool and guid and leaf:
-            require(re.search(r"type:\s*'mirror'", label) is not None, 'Expected a mirrored workspace')
-            identities.add((pool[1], guid[1], leaf[1]))
-    require(len(identities) == 1, 'ZFS labels are missing or disagree about device identity')
-    return next(iter(identities))
 
 
 def inspect_disk(path, imported):

@@ -28,7 +28,7 @@ GROUPS = {
     'Local lint and unit tests': {'shellcheck': 'shellcheck', 'dpkg-deb': 'dpkg'},
     'QEMU and upgrade acceptance tests': {
         'qemu-system-x86_64': 'qemu-system-x86', 'qemu-img': 'qemu-utils',
-        **dict.fromkeys(('mcopy', 'mdir', 'mdeltree'), 'mtools'),
+        **dict.fromkeys(('mcopy', 'mtype', 'mdir', 'mdeltree'), 'mtools'),
     },
     'Disposable-VM ZFS integration tests': {'mkfs.vfat': 'dosfstools', 'setpriv': 'util-linux'},
 }

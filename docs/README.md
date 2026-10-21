@@ -12,6 +12,7 @@ Start with the [quick start](../README.md) to build and use the first pair. Thes
 | [4. Test a pair](../stages/04-test-pair/README.md) | Initialized active pair → acceptance logs/report | Workstation QEMU; optional |
 | [5. Write USB drives](../stages/05-write-usb/README.md) | Initialized images + identified disks → physical sticks | Host; `make write-usb` |
 | [6. Upgrade existing OS](../stages/06-upgrade-os/README.md) | Inspected payload + existing pair → updated OS, preserved ZFS | BuildKit preparation + host; `make prepare-upgrade`, then `make upgrade-os` |
+| [7. Replace one member](../stages/07-replace-member/README.md) | Original membership + blank USB → bootable empty replacement, then restored mirror | BuildKit + workstation + live OS |
 
 [Pipeline orchestration](../pipeline/README.md) connects the stages. [Runtime](../runtime/README.md) contains the installed commands; [ZFS integration](../integration-tests/zfs/README.md) tests their interactions with provisioning.
 

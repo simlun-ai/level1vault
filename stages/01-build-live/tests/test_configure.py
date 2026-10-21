@@ -50,8 +50,10 @@ class ScriptTests(unittest.TestCase):
         for name in ('zshrc', 'tmux.conf', 'starship.toml'):
             staged = self.base / 'config/includes.chroot/usr/local/lib/level1vault/build/user-config' / name
             self.assertEqual(staged.read_bytes(), (ROOT / 'stages/01-build-live/user-config' / name).read_bytes())
-        for name in ('start', 'workspace-home', 'workspace-prune'):
+        for name in ('start', 'workspace-home', 'workspace-prune', 'workspace-replace'):
             self.assertEqual((target.parent / name).read_bytes(), (ROOT / 'runtime' / name).read_bytes())
+        self.assertTrue((target.parent.parent / 'lib/level1vault/member_recovery.py').is_file())
+        self.assertTrue((target.parent.parent / 'lib/level1vault/usb_devices.py').is_file())
         self.assertIn('username=root', self.calls())
         self.assertIn('linux-image', self.calls())
         self.assertNotIn('linux-headers', self.calls())

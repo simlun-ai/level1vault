@@ -17,12 +17,15 @@ N ?=
 UPGRADE_DIR ?=
 DISK_A ?=
 DISK_B ?=
-export SUDO BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A DISK_B N UPGRADE_DIR
+MEMBER ?=
+DISK ?=
+RECOVERY_DIR ?=
+export SUDO BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A DISK_B N UPGRADE_DIR MEMBER DISK RECOVERY_DIR
 
 RUN = python3 pipeline/lifecycle.py shared
 
 # Expose the supported project lifecycle commands.
-.PHONY: help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
+.PHONY: prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
@@ -37,6 +40,8 @@ help:
 	  'make initialize PAIR=2            Initialize an empty replica' \
 	  'make write-usb DISK_A=/dev/sda DISK_B=/dev/sdb  Write the selected USB pair (destructive)' \
 	  'make upgrade-os UPGRADE_DIR=... PAIR=2 DISK_A=/dev/sda DISK_B=/dev/sdb  Apply a prepared OS release' \
+	  'make prepare-replacement PAIR=1 MEMBER=A RECOVERY_DIR=build/recovery-1a  Build one empty replacement' \
+	  'make write-replacement PAIR=1 MEMBER=A RECOVERY_DIR=build/recovery-1a DISK=/dev/sda  Write one blank USB' \
 	  'make test                        Run local lint and unit/behavior tests' \
 	  'make test-container              Test real assembly and login in Trixie' \
 	  'make test-qemu                    Test pair 1 in QEMU; choose writable results automatically' \
@@ -131,3 +136,14 @@ clean:
 # Prune unused project build cache.
 cache-clean:
 	$(RUN) env PAIR="$$PAIR" BUILDX_BUILDER="$$BUILDX_BUILDER" bash pipeline/buildkit.sh cache-clean
+
+
+# Prepare one replacement without initializing or modifying the original pair.
+prepare-replacement:
+	@[[ "$$PAIR" =~ ^[1-9][0-9]*$$ && "$$MEMBER" =~ ^[ABab]$$ && -n "$$RECOVERY_DIR" ]] || { echo 'Set PAIR, MEMBER=A or B, and a new RECOVERY_DIR' >&2; exit 2; }
+	$(RUN) python3 stages/07-replace-member/prepare.py --original "$$OUT" --recovery-dir "$$RECOVERY_DIR" --pair "$$PAIR" --member "$${MEMBER,,}"
+
+# Write exactly one blank USB, sharing the pair writer and upgrade lock.
+write-replacement:
+	@[[ "$$PAIR" =~ ^[1-9][0-9]*$$ && "$$MEMBER" =~ ^[ABab]$$ && -n "$$RECOVERY_DIR" && -n "$$DISK" ]] || { echo 'Set PAIR, MEMBER=A or B, RECOVERY_DIR and DISK; identify the blank USB with lsblk first' >&2; exit 2; }
+	$(RUN) $(SUDO) python3 stages/07-replace-member/write.py --out "$$RECOVERY_DIR/pairs/$$PAIR" --pair "$$PAIR" --member "$${MEMBER,,}" --disk "$$DISK"

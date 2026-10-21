@@ -9,3 +9,5 @@ make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1
 ```
 
 It creates file-backed images and pools; it never launches a VM or writes physical disks. CI runs it directly on its disposable runner. Do not run it on a workstation holding real pools. See [development prerequisites](../../docs/DEVELOPMENT.md).
+
+The suite also replaces an unavailable member of a real encrypted mirror, verifies the unchanged pool/encryption/state, checks completed-recovery retry and unlocks the restored workspace. Only the USB transport/live-boot inspection is adapted for disposable loop devices; labels, pool import, replacement and resilvering use real ZFS. This does not replace physical boot/USB verification.
