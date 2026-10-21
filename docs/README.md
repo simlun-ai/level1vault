@@ -33,3 +33,5 @@ Start with the [quick start](../README.md) to build and use the first pair. Thes
 | [Architecture](ARCHITECTURE.md) | Live root, boot layout, DKMS, host/container responsibilities and design review |
 | [Validation](VALIDATION.md) | Current acceptance checklist and explicitly historical results |
 
+
+- [Generated output: what to keep and what to delete](ARTIFACTS.md)

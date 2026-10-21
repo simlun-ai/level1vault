@@ -19,16 +19,22 @@ DISK_A ?=
 DISK_B ?=
 MEMBER ?=
 DISK ?=
+RECORDS_DIR ?= records
+REPLACEMENT ?=
+CONFIRMED ?=
 RECOVERY_DIR ?=
+export RECORDS_DIR REPLACEMENT CONFIRMED
 export SUDO BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A DISK_B N UPGRADE_DIR MEMBER DISK RECOVERY_DIR
 
 RUN = python3 pipeline/lifecycle.py shared
 
 # Expose the supported project lifecycle commands.
-.PHONY: prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
+.PHONY: save-records confirm-replacement prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
+	  'make save-records PAIR=1         Export recovery records from existing initialized images' \
+	  'make confirm-replacement PAIR=1 REPLACEMENT=... CONFIRMED=yes  Record successful live recovery' \
 	  'make check-host                  Check build, USB and test dependencies; print apt fixes' \
 	  'make prepare-pairs N=1           Build and initialize one active pair' \
 	  'make add-pair PAIR=2             Assemble and initialize an empty replica from the existing ISO' \
@@ -69,7 +75,7 @@ add-pair:
 # Prepare a complete initial set with all authentication and secret prompts upfront.
 prepare-pairs:
 	@[[ "$$N" =~ ^[1-9][0-9]*$$ ]] || { echo 'Set N to a positive pair count, e.g. N=3' >&2; exit 2; }
-	$(RUN) $(SUDO) env LEVEL1VAULT_LOCKED=1 BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" FRESH="$$FRESH" python3 pipeline/prepare-pairs.py --build-dir "$$BUILD_DIR" --count "$$N"
+	$(RUN) $(SUDO) env RECORDS_DIR="$$RECORDS_DIR" LEVEL1VAULT_LOCKED=1 BUILDX_BUILDER="$$BUILDX_BUILDER" DEBIAN_IMAGE="$$DEBIAN_IMAGE" FRESH="$$FRESH" python3 pipeline/prepare-pairs.py --build-dir "$$BUILD_DIR" --count "$$N"
 
 # Build and export the live system.
 build:
@@ -88,10 +94,12 @@ initialize:
 	@[[ "$$PAIR" =~ ^[1-9][0-9]*$$ ]] || { echo 'Set PAIR to a positive integer, e.g. PAIR=1' >&2; exit 1; }
 	@[[ "$$ACTIVE" == 0 || "$$ACTIVE" == 1 ]] || { echo 'ACTIVE must be 0 or 1' >&2; exit 1; }
 	$(RUN) $(SUDO) ./stages/03-initialize-pair/initialize.sh "$$OUT" "$$PAIR" $$( [[ "$$ACTIVE" == 1 ]] && printf '%s' --active || : )
+	$(RUN) python3 pipeline/records.py save --out "$$OUT" --pair "$$PAIR"
 
 # Write an initialized pair to two explicitly identified whole USB disks.
 write-usb:
 	@[[ -n "$$DISK_A" && -n "$$DISK_B" ]] || { echo 'Set both DISK_A and DISK_B; identify disks with lsblk first' >&2; exit 2; }
+	$(RUN) python3 pipeline/records.py save --out "$$OUT" --pair "$$PAIR"
 	$(RUN) $(SUDO) python3 stages/05-write-usb/write.py --out "$$OUT" --pair "$$PAIR" --disk-a "$$DISK_A" --disk-b "$$DISK_B"
 
 # Apply a prepared OS release to one explicitly identified existing pair in place.
@@ -141,9 +149,18 @@ cache-clean:
 # Prepare one replacement without initializing or modifying the original pair.
 prepare-replacement:
 	@[[ "$$PAIR" =~ ^[1-9][0-9]*$$ && "$$MEMBER" =~ ^[ABab]$$ && -n "$$RECOVERY_DIR" ]] || { echo 'Set PAIR, MEMBER=A or B, and a new RECOVERY_DIR' >&2; exit 2; }
-	$(RUN) python3 stages/07-replace-member/prepare.py --original "$$OUT" --recovery-dir "$$RECOVERY_DIR" --pair "$$PAIR" --member "$${MEMBER,,}"
+	$(RUN) python3 stages/07-replace-member/prepare.py --membership "$$RECORDS_DIR/pairs/$$PAIR/current.json" --recovery-dir "$$RECOVERY_DIR" --pair "$$PAIR" --member "$${MEMBER,,}"
 
 # Write exactly one blank USB, sharing the pair writer and upgrade lock.
 write-replacement:
 	@[[ "$$PAIR" =~ ^[1-9][0-9]*$$ && "$$MEMBER" =~ ^[ABab]$$ && -n "$$RECOVERY_DIR" && -n "$$DISK" ]] || { echo 'Set PAIR, MEMBER=A or B, RECOVERY_DIR and DISK; identify the blank USB with lsblk first' >&2; exit 2; }
 	$(RUN) $(SUDO) python3 stages/07-replace-member/write.py --out "$$RECOVERY_DIR/pairs/$$PAIR" --pair "$$PAIR" --member "$${MEMBER,,}" --disk "$$DISK"
+
+# Export small non-secret records without copying images into the durable directory.
+save-records:
+	$(RUN) python3 pipeline/records.py save --out "$$OUT" --pair "$$PAIR"
+
+# Record the operator's confirmation after live recovery and file verification.
+confirm-replacement:
+	@test "$$CONFIRMED" = yes || { echo 'Set CONFIRMED=yes only after successful live recovery and read-check' >&2; exit 2; }
+	$(RUN) python3 pipeline/records.py accept --pair "$$PAIR" --replacement "$$REPLACEMENT" --confirmed

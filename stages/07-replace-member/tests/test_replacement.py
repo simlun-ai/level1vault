@@ -37,8 +37,16 @@ class PreparationTests(unittest.TestCase):
         self.original.mkdir()
         (self.original / 'READY').touch()
         (self.original / 'WORKSPACE-INFO.txt').write_text('pair=1\npool=level1-workspace-1\npool_guid=100\n')
-        self.old = dict(format=1, images=dict(a=dict(zfs_partuuid=IDS[0]), b=dict(zfs_partuuid=IDS[1])))
-        (self.original / 'images.json').write_text(json.dumps(self.old))
+        self.old = dict(format=1, pair='1', pool_guid='100', members=dict(
+            a=dict(zfs_partuuid=IDS[0], esp_uuid='1111-AAAA', minimum_bytes=4096),
+            b=dict(zfs_partuuid=IDS[1], esp_uuid='2222-BBBB', minimum_bytes=4096)))
+        self.records = self.root / 'records'
+        self.current = self.records / 'pairs/1/current.json'
+        self.current.parent.mkdir(parents=True)
+        self.current.write_text(json.dumps(self.old))
+        self.env = patch.dict(prepare.os.environ, RECORDS_DIR=str(self.records))
+        self.env.start()
+        self.addCleanup(self.env.stop)
         self.new = dict(format=1, images=dict(a=dict(zfs_partuuid=IDS[2], esp_uuid='ABCD-1234')))
         self.destination = self.root / 'recovery'
 
@@ -49,36 +57,35 @@ class PreparationTests(unittest.TestCase):
         (out / 'images.json').write_text(json.dumps(self.new))
 
     def test_prepares_without_initializing_and_embeds_matching_record(self):
-        tables = [dict(partitions=[{}, dict(uuid=IDS[0], size=8)]),
-                  dict(partitions=[dict(start=2048), dict(size=8)])]
+        tables = [dict(partitions=[dict(start=2048), dict(size=8)])]
         def embedded(*args):
             return (self.destination / 'pairs/1/member-recovery.json').read_text()
         with patch.object(prepare, 'partition_table', side_effect=tables), \
                 patch.object(prepare.subprocess, 'run', side_effect=self.build) as build, \
                 patch.object(prepare, 'command') as command, \
                 patch.object(prepare, 'output', side_effect=embedded):
-            prepare.prepare(self.original, self.destination, '1', 'a')
+            prepare.prepare(self.current, self.destination, '1', 'a')
         record = json.loads((self.destination / 'pairs/1/member-recovery.json').read_text())
         self.assertEqual(record['survivor_partuuid'], IDS[1])
         self.assertEqual(record['minimum_bytes'], 4096)
         self.assertTrue((self.destination / 'pairs/1/REPLACEMENT-READY').is_file())
         self.assertEqual(build.call_args.args[0][2], 'build')
         self.assertEqual(command.call_args.args[0], 'mcopy')
-        self.assertEqual((self.destination / 'pairs/1/original-images.json').read_text(), (self.original / 'images.json').read_text())
+        self.assertEqual(json.loads(self.current.read_text()), self.old)
+        self.assertEqual(len(list((self.current.parent / 'replacements').glob('*.json'))), 1)
 
     def test_invalid_original_or_existing_destination_prevents_build(self):
         for pair, destination in (('2', self.destination), ('1', self.original)):
             with patch.object(prepare.subprocess, 'run') as build:
                 with self.assertRaises(ValueError):
-                    prepare.prepare(self.original, destination, pair, 'a')
+                    prepare.prepare(self.current, destination, pair, 'a')
                 build.assert_not_called()
 
     def test_undersized_partition_does_not_publish_readiness(self):
-        with patch.object(prepare, 'partition_table', side_effect=[dict(partitions=[{}, dict(uuid=IDS[0], size=16)]),
-                         dict(partitions=[dict(start=2048), dict(size=8)])]), \
+        with patch.object(prepare, 'partition_table', return_value=dict(partitions=[dict(start=2048), dict(size=4)])), \
                 patch.object(prepare.subprocess, 'run', side_effect=self.build):
             with self.assertRaisesRegex(ValueError, 'too small'):
-                prepare.prepare(self.original, self.destination, '1', 'a')
+                prepare.prepare(self.current, self.destination, '1', 'a')
         self.assertFalse((self.destination / 'pairs/1/REPLACEMENT-READY').exists())
 
 

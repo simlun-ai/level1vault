@@ -34,7 +34,7 @@ For online/replacement procedures and divergent-history restrictions, see [membe
 
 ## Member recovery
 
-Before every recovery: stop all other pool owners, disconnect duplicate image/physical copies, retain backups, identify authoritative data. Preserve the original build manifest outside the pool.
+Before every recovery: stop all other pool owners, disconnect duplicate image/physical copies, retain backups, identify authoritative data. Back up the complete `records/` directory outside the pool; see [retention rules](ARTIFACTS.md).
 
 For a formerly disconnected **original member**, reattach both devices on the authoritative host and import with the mount helper. Inspect:
 
@@ -69,11 +69,11 @@ make check-host
 make prepare-replacement PAIR=1 MEMBER=A RECOVERY_DIR=build/recovery-1a
 ```
 
-`BUILD_DIR` (default `build/default`) and `OUT` select the **original initialized pair**, whose `images.json`, `WORKSPACE-INFO.txt`, `READY` and original `usb-a.img` are needed. Include `BUILD_DIR=build/original-batch` or `OUT=/path/to/original/pairs/1` if necessary. Keep the original manifests current if a member was previously replaced; the survivor PARTUUID must describe the actual surviving drive.
+Preparation reads **`records/pairs/1/current.json`**, including pool GUID, current member identities and partition sizes. Original images, ISO, `READY` and build metadata are not needed. Restore your records backup into this checkout first, or pass `RECORDS_DIR=/path/to/records` to all recovery commands. For an existing deployment without records, follow the [one-time export instructions](ARTIFACTS.md#existing-deployments-export-once-before-deleting-images) before removing old images.
 
-`RECOVERY_DIR` must be new. This command builds the current OS with `workspace-replace`, assembles fresh boot identities, checks the replacement partition against the original image's size, preserves copies of the original metadata and embeds a non-secret `member-recovery.json` on the new boot filesystem. It never imports a pool, initializes encryption, or touches USB disks. Preparation uses no passphrase. It creates both A/B boot images but selects only A for this recovery; **do not initialize or write the unused B image**.
+`RECOVERY_DIR` must be new. This command builds the current OS with `workspace-replace`, assembles fresh boot identities, checks the replacement partition against recorded member sizes, saves a durable replacement proposal under `records/pairs/1/replacements/` and embeds a non-secret `member-recovery.json` on the new boot filesystem. It never imports a pool, initializes encryption, or touches USB disks. Preparation uses no passphrase. It creates both A/B boot images but selects only A for this recovery; **do not initialize or write the unused B image**.
 
-Retain `build/recovery-1a/pairs/1/` outside the pool. Custom enlarged layouts that do not fit the standard replacement partition are refused; a physically larger USB alone does not enlarge the image partition. Do not use `make initialize`, `make add-pair`, `make prepare-pairs` or the two-disk `make write-usb` for member replacement.
+Keep the preparation output until recovery completes. Back up `records/` including the new replacement proposal immediately. Note the printed replacement UUID for the final confirmation step. Custom enlarged layouts that do not fit the standard replacement partition are refused; a physically larger USB alone does not enlarge the image partition. Do not use `make initialize`, `make add-pair`, `make prepare-pairs` or the two-disk `make write-usb` for member replacement.
 
 #### 2. Write only the blank replacement USB
 
@@ -113,7 +113,13 @@ sudo zpool status -gP level1-workspace-1
 
 #### 4. Save membership and test independent boot
 
-Save the final status, unchanged pool GUID, replacement record, new A PARTUUID/FAT UUID, surviving B identities and physical serials outside the pool. Update your current membership manifest's A entry from `build/recovery-1a/pairs/1/images.json`; retain the original metadata as history. The original initialized images no longer represent current membership and must never be written back over the recovered pair.
+After successful replacement and file read-check, run the confirmation command printed by preparation **on the workstation**:
+
+```bash
+make confirm-replacement PAIR=1 REPLACEMENT=THE_PRINTED_UUID CONFIRMED=yes
+```
+
+Find the UUID in `build/recovery-1a/pairs/1/replacement-id` or the filename under `records/pairs/1/replacements/`. Confirmation acknowledges your successful live checks and advances `current.json` without discarding history. Do not confirm an incomplete recovery. Back up the entire `records/` directory again outside the pool. Retain final pool status and physical serials with that backup if desired. Original initialized images are stale and must never be written over the recovered pair. Replacement build data can be deleted after the boot/health checks below; see [retention rules](ARTIFACTS.md).
 
 Close all workspace applications and shells, then:
 
