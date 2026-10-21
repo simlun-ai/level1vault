@@ -194,6 +194,76 @@ def interrupted_transfer(send, destination, readonly):
     raise RuntimeError('Injected cable interruption')
 
 
+def verify_member_replacement(base):
+    # Exercise real labels, GUID import, replacement, resilver and final membership.
+    # Only USB/live-boot inspection is adapted to these disposable loop devices.
+    out = prepare(base, '99', active=True)
+    pool = 'level1-workspace-99'
+    loader = importlib.machinery.SourceFileLoader('integration_replace', str(ROOT/'runtime/workspace-replace'))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    replacement = importlib.util.module_from_spec(spec)
+    loader.exec_module(replacement)
+    import member_recovery
+    old = json.loads((out/'images.json').read_text())
+    devices = []
+    image = base/'replacement-a.img'
+    command('truncate', '-s', '512M', str(image))
+    command('sgdisk', '--clear', '-n', '1:2048:+64M', '-t', '1:ef00',
+            '-n', '2:0:0', '-t', '2:bf01', str(image), stdout=subprocess.DEVNULL)
+    table = member_recovery.partition_table(image)
+    info = dict(line.split('=', 1) for line in (out/'WORKSPACE-INFO.txt').read_text().splitlines() if '=' in line)
+    record = dict(format=1, pair='99', member='a', pool_guid=info['pool_guid'],
+                  failed_partuuid=old['images']['a']['zfs_partuuid'],
+                  survivor_partuuid=old['images']['b']['zfs_partuuid'],
+                  new_partuuid=table['partitions'][1]['uuid'].lower(), esp_uuid='ABCD-1234',
+                  minimum_bytes=table['partitions'][1]['size']*512)
+    original_read = Path.read_text
+    def read_text(path, *args, **kwargs):
+        if str(path) == '/run/live/medium/member-recovery.json':
+            return json.dumps(record)
+        return original_read(path, *args, **kwargs)
+    def inspect(disk, current_record, boot=False, empty=True):
+        assert current_record == record and boot
+        actual = member_recovery.partition_table(disk)
+        assert actual['partitions'][1]['uuid'].lower() == record['new_partuuid']
+        if empty:
+            member_recovery.empty_partition(actual['partitions'][1]['node'])
+        return dict(model='disposable-loop', serial='test'), actual
+    try:
+        for side in ('a', 'b'):
+            devices.append(run('losetup', '--find', '--show', '--partscan', str(out/f'usb-{side}.img')))
+        command('udevadm', 'settle')
+        command('zpool', 'import', '-N', '-d', '/dev/disk/by-partuuid', '-o', 'cachefile=none', record['pool_guid'])
+        command('zfs', 'load-key', pool+'/data', input=KEY+'\n', text=True)
+        command('zfs', 'mount', pool+'/data')
+        Path('/mnt/workspace/replacement-check').write_text('surviving encrypted payload')
+        command('zfs', 'unmount', pool+'/data')
+        command('zpool', 'export', pool)
+        command('losetup', '-d', devices.pop(0))
+        devices.append(run('losetup', '--find', '--show', '--partscan', str(image)))
+        command('udevadm', 'settle')
+        command('mkfs.vfat', '-F', '32', '-i', 'ABCD1234', devices[1]+'p1', stdout=subprocess.DEVNULL)
+        command('udevadm', 'trigger', '--action=change', '--sysname-match='+Path(devices[1]+'p1').name)
+        command('udevadm', 'settle')
+        with patch.object(Path, 'read_text', read_text), patch.object(replacement, 'inspect_replacement', side_effect=inspect):
+            replacement.replace('99', True)
+            replacement.replace('99', True)  # a completed recovery can be checked again
+        assert run('zpool', 'get', '-H', '-o', 'value', 'guid', pool) == record['pool_guid']
+        assert get(pool+'/data', 'encryption') == 'aes-256-gcm'
+        assert get(pool, 'org.level1vault:state') == 'active'
+        command('zfs', 'load-key', pool+'/data', input=KEY+'\n', text=True)
+        command('zfs', 'mount', pool+'/data')
+        assert Path('/mnt/workspace/replacement-check').read_text() == 'surviving encrypted payload'
+        command('zfs', 'unmount', pool+'/data')
+        command('zpool', 'export', pool)
+        print('Real single-member replacement and completed-recovery retry passed.')
+    finally:
+        if pool in run('zpool', 'list', '-H', '-o', 'name').splitlines():
+            command('zpool', 'export', pool)
+        for device in devices:
+            command('losetup', '-d', device)
+
+
 def main():
     assert os.geteuid() == 0 and os.environ.get('LEVEL1VAULT_DISPOSABLE_TEST_VM') == '1'
     command('modprobe', 'zfs')
@@ -217,6 +287,7 @@ def main():
                 owned.append(pool)
 
             verify_os_upgrade(base/'pairs/1', base)
+            verify_member_replacement(base)
 
             # Verify pre-flash replica seeding and completion markers.
             command('python3', str(ROOT/'stages/03-initialize-pair/seed.py'), str(base), '2')

@@ -77,6 +77,8 @@ test -x "$ROOT/usr/local/sbin/workspace-umount"
 test -x "$ROOT/usr/local/sbin/workspace-sync"
 test -x "$ROOT/usr/local/sbin/workspace-activate"
 test -x "$ROOT/usr/local/sbin/workspace-prune"
+chroot "$ROOT" /usr/local/sbin/workspace-replace --help >/dev/null
+chroot "$ROOT" sh -c "command -v sfdisk"
 chroot "$ROOT" /usr/local/sbin/workspace-prune --help >/dev/null
 chroot "$ROOT" /usr/local/sbin/workspace-activate --help >/dev/null
 chroot "$ROOT" python3 /usr/local/sbin/workspace-sync --help >/dev/null

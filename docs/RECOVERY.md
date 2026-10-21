@@ -56,123 +56,66 @@ If its path cannot be resolved, do not blindly replace it with a stale copy. Ins
 
 ### Replace failed drive 1A using surviving drive 1B
 
-This example assumes pair **1** is the active workspace, **1A has died**, **1B holds the authoritative data**, and you have one blank USB drive to become the new **1A**. The existing pool, encryption and passphrase are preserved; ZFS copies the workspace from 1B to the replacement.
+Pair **1** is the active workspace, **1A has died**, and **1B holds the authoritative data**. Use these commands to provision one blank USB as the new **1A** and restore the existing mirror. Encryption, passphrase and pool identity are preserved. The same workflow supports replacing B or another numbered pair.
 
-#### 1. Secure the survivor and record the original identities
+#### 1. Secure 1B and prepare the replacement on the workstation
 
-Stop applications using the workspace, leave it in every shell, and export it with `sudo workspace-umount 1`. Shut down before unplugging the boot drive. Remove failed 1A and keep it disconnected throughout recovery. Fence other hosts/VMs and disconnect image loops or cloned copies of pair 1.
+Stop all other pool owners, disconnect failed 1A and duplicate physical/image copies, and keep an independent backup if possible. Close workspace applications and shells, run `cd /` and `sudo workspace-umount 1`, then power off before unplugging the boot drive. Keep **1B disconnected during preparation and writing**. These commands cannot establish remote fencing or make a backup for you.
 
-Keep a current independent backup if possible: until replacement finishes, 1B is the only working mirror member. Save the original pair's `images.json` and `WORKSPACE-INFO.txt` outside the pool. They identify the original A/B PARTUUIDs and pool GUID. Record 1B's physical serial number.
-
-#### 2. Prepare a fresh, uninitialized boot image on the workstation
-
-Use a separate **Linux amd64 workstation OS**, with the repository and the original build directory/ISO available. Leave surviving **1B disconnected while writing the replacement**. Reuse the ISO that boots 1B so the ZFS/kernel versions match.
-
-From the repository root, choose a new output directory beneath that build directory:
+From a clean checkout of this revision on a **Linux amd64 workstation with working ZFS**, run:
 
 ```bash
-build_dir=build/default
-replacement_out="$build_dir/recovery-1a"
-make assemble PAIR=1 BUILD_DIR="$build_dir" OUT="$replacement_out"
-test -f "$replacement_out/IMAGES-PREPARED"
-test ! -e "$replacement_out/READY"
-test ! -e "$replacement_out/INITIALIZING"
+make check-host
+make prepare-replacement PAIR=1 MEMBER=A RECOVERY_DIR=build/recovery-1a
 ```
 
-Set `build_dir` to your original `BUILD_DIR` if different. Use a new `replacement_out` for each attempt; assembly refuses an existing directory. If the original ISO is unavailable, `make build PAIR=1 BUILD_DIR=build/recovery-os` creates a new ISO and uninitialized images; use `build/recovery-os/pairs/1` as `replacement_out` and ensure that OS supports the surviving pool.
+`BUILD_DIR` (default `build/default`) and `OUT` select the **original initialized pair**, whose `images.json`, `WORKSPACE-INFO.txt`, `READY` and original `usb-a.img` are needed. Include `BUILD_DIR=build/original-batch` or `OUT=/path/to/original/pairs/1` if necessary. Keep the original manifests current if a member was previously replaced; the survivor PARTUUID must describe the actual surviving drive.
 
-Assembly creates two bootable images with fresh GPT, partition and FAT identities and matching GRUB configuration. Use **only the new `usb-a.img`**; its ZFS partition is empty. The unused `usb-b.img` is not a replacement for surviving 1B.
+`RECOVERY_DIR` must be new. This command builds the current OS with `workspace-replace`, assembles fresh boot identities, checks the replacement partition against the original image's size, preserves copies of the original metadata and embeds a non-secret `member-recovery.json` on the new boot filesystem. It never imports a pool, initializes encryption, or touches USB disks. Preparation uses no passphrase. It creates both A/B boot images but selects only A for this recovery; **do not initialize or write the unused B image**.
 
-**Do not run `make initialize`, `make add-pair` or `make prepare-pairs` on these images. Do not use `make write-usb`: it writes both drives and requires initialized images.** An initialized image contains a separate pool, not an empty replacement member. Do not clone 1B or reuse the original initialized `usb-a.img`.
+Retain `build/recovery-1a/pairs/1/` outside the pool. Custom enlarged layouts that do not fit the standard replacement partition are refused; a physically larger USB alone does not enlarge the image partition. Do not use `make initialize`, `make add-pair`, `make prepare-pairs` or the two-disk `make write-usb` for member replacement.
 
-Record the new A identities from the fresh manifest:
+#### 2. Write only the blank replacement USB
 
-```bash
-python3 - "$replacement_out/images.json" <<'PY'
-import json, sys
-m = json.load(open(sys.argv[1]))
-print("Replacement 1A:", m["images"]["a"])
-print("Image bytes:", m["image_mib"] * 1024 * 1024)
-print("ESP MiB:", m["esp_mib"])
-PY
-```
-
-The new USB must fit the entire image, and its new ZFS partition must be at least as large as the failed member's partition. The standard image is 12 GiB with a 4 GiB ESP; matching the original layout satisfies this for standard, unexpanded pairs. If your old workspace partitions were enlarged or used a custom layout, stop and prepare a sufficiently large empty replacement partition before proceeding; a larger physical stick alone does not enlarge the partition in this image.
-
-#### 3. Write and verify only the blank replacement USB
-
-Connect the blank USB. Identify its **whole-disk path by model, serial and size**:
+Connect only the blank destination USB and identify its **whole-disk path by model, serial and size**:
 
 ```bash
 lsblk -o NAME,PATH,SIZE,MODEL,SERIAL,TRAN,MOUNTPOINTS
+# /dev/sda must be the blank replacement, not 1B or a workstation disk.
+make write-replacement PAIR=1 MEMBER=A RECOVERY_DIR=build/recovery-1a DISK=/dev/sda
 ```
 
-Here **`/dev/sda` must be the blank replacement**, not a workstation disk or 1B. Unmount any automounted partitions and ensure the destination is not in use. The following overwrites that entire USB:
+Unmount automounted partitions first. This command overwrites **only the selected USB**. It refuses mounted, imported, non-USB, read-only, undersized and nonblank disks; it also refuses to proceed while either recorded original member is connected. It shares the physical-writer lock with normal provisioning and OS upgrades, verifies the written bytes by readback, relocates the backup GPT, and verifies the fresh partition/FAT identities, empty ZFS partition and embedded recovery record. A successful write saves `write-report.json` alongside the preparation metadata.
+
+Stop on errors. An interrupted write may leave signatures on the destination, so a retry can be refused; inspect it and establish that it really is the disposable replacement before deliberately clearing it. No signatures are erased automatically. Label the verified stick **1A** and safely remove it from the workstation.
+
+#### 3. Boot new 1A, connect 1B and restore the mirror
+
+Boot **the newly prepared 1A**, with Secure Boot disabled, so the new recovery command is available even if 1B contains an older OS. Keep it connected until shutdown. At its root console, connect surviving **1B**, leaving failed 1A and other copies disconnected:
 
 ```bash
-image="$replacement_out/usb-a.img"
-sudo blockdev --getsize64 /dev/sda
-stat -c %s "$image"
-# Continue only if the USB byte count is at least the image byte count.
-sudo dd if="$image" of=/dev/sda bs=4M conv=fsync status=progress
-sudo blockdev --flushbufs /dev/sda
-sudo cmp -n "$(stat -c %s "$image")" "$image" /dev/sda
-sudo sgdisk --move-second-header /dev/sda
-sudo partprobe /dev/sda
-sudo udevadm settle
-lsblk -o PATH,SIZE,FSTYPE,PARTUUID,UUID,MODEL,SERIAL /dev/sda
+lsblk -o PATH,SIZE,FSTYPE,PARTUUID,UUID,MODEL,SERIAL
+sudo workspace-replace 1 --fenced
 ```
 
-Stop on any error. `cmp` must exit successfully (no output); it verifies the written image bytes before `sgdisk` relocates the backup GPT to the physical end of a larger USB. This does not enlarge the workspace partition or change its PARTUUID. Confirm partition 2's PARTUUID and partition 1's FAT UUID match **A in the new manifest**, and partition 2 has no filesystem signature:
+`--fenced` acknowledges that other owners and failed/duplicate members are stopped and disconnected. The command uses the record on the replacement's read-only live boot medium. It verifies the selected pair and pool GUID, the recorded survivor's labels, the new partition and FAT identities, partition sizes, encryption and active/replica policy. It imports the existing pool without mounting it or forcing ownership, finds the sole missing leaf of the two-member mirror, and runs `zpool replace` against the empty replacement partition. No passphrase is required for resilvering encrypted data.
 
-```bash
-sudo wipefs --no-act /dev/sda2
-```
+If normal import reports another owner, follow the fenced import procedure above after resolving ownership, then rerun the command. It never force-imports or force-replaces, creates a pool, adds a top-level vdev, promotes a replica or changes the encryption policy.
 
-Require no signatures on partition 2. Preserve the new manifest and replacement serial outside the pool, clearly labelled **replacement 1A**; retain the original manifest for 1B and the failed A identities. Do not attach either prepared image as a loop device while its physical copy is connected.
+The command waits for both resilver and replacement completion (including removal of the old leaf), then requires the expected two leaves **ONLINE**, zero READ/WRITE/CKSUM errors and no known data errors before reporting success. Waiting alone is not accepted as proof. You can rerun it to check a completed replacement; unexpected or interrupted nested replacement trees require inspection rather than another automatic replacement. After an interruption, keep both drives attached and inspect `zpool status -gP level1-workspace-1` before proceeding.
 
-#### 4. Boot 1B and replace the missing mirror member
-
-Safely remove the new USB from the workstation. With failed 1A still disconnected, boot the live system from surviving **1B**, then connect the prepared replacement. Keep 1B connected until shutdown. At the root console (the commands also work with sudo), explicitly select pair 1 because automatic selection requires two existing mirror members:
+Unlock and read-check the workspace using the existing passphrase:
 
 ```bash
 sudo workspace-mount 1
-sudo zpool status -P level1-workspace-1
-sudo zpool status -g level1-workspace-1
-lsblk -o PATH,SIZE,FSTYPE,PARTUUID,UUID,MODEL,SERIAL
+sudo zpool status -gP level1-workspace-1
 ```
 
-Enter the existing workspace passphrase. If import reports another owner, follow the fenced import procedure above; do not force-import without resolving ownership. Confirm the expected pool and data are present on 1B, and status shows its leaf ONLINE and the missing A leaf unavailable. Compare the path listing with the **original** manifest, then take the missing A leaf's numeric vdev GUID from `zpool status -g`. Do not select the pool, mirror, or surviving B GUID.
+#### 4. Save membership and test independent boot
 
-Set the following to the verified values; `NEW_PARTUUID` comes from **A in the replacement manifest**, not the original A manifest:
+Save the final status, unchanged pool GUID, replacement record, new A PARTUUID/FAT UUID, surviving B identities and physical serials outside the pool. Update your current membership manifest's A entry from `build/recovery-1a/pairs/1/images.json`; retain the original metadata as history. The original initialized images no longer represent current membership and must never be written back over the recovered pair.
 
-```bash
-FAILED_MEMBER_GUID=REPLACE_WITH_MISSING_A_NUMERIC_GUID
-NEW_PARTUUID=REPLACE_WITH_NEW_A_ZFS_PARTUUID
-new_member="/dev/disk/by-partuuid/$NEW_PARTUUID"
-ls -l "$new_member"
-sudo blockdev --getsize64 "$new_member"
-sudo wipefs --no-act "$new_member"
-```
-
-Resolve that symlink to the replacement's partition 2 and recheck its serial. Require an empty partition and sufficient partition size (compare with surviving B's ZFS partition for the original equal-size layout). Then replace the failed leaf:
-
-```bash
-# MUTATES only the verified new ZFS partition.
-sudo zpool replace level1-workspace-1 "$FAILED_MEMBER_GUID" "$new_member"
-sudo zpool wait -t resilver level1-workspace-1
-sudo zpool status -P level1-workspace-1
-```
-
-Do not add `-f` to bypass an unexpected refusal. Investigate the selected disk, size and signatures instead. Never use `zpool create` on the survivor or `zpool add` to replace a mirror member.
-
-Require a completed resilver, **both leaves ONLINE**, zero READ/WRITE/CKSUM errors and no known data errors. Waiting alone is insufficient: `zpool wait` also returns if no resilver is running. If these checks fail, keep 1B authoritative and investigate before relying on the new drive.
-
-#### 5. Save the new membership and test each drive
-
-Save the replacement manifest, serial, new A PARTUUID/FAT UUID, unchanged B identities, pool GUID and final `zpool status -gP level1-workspace-1` output outside the pool. The original initialized images and manifest no longer describe the current A member; never write those images back over the recovered pair.
-
-Close all workspace applications and shells, then export and shut down:
+Close all workspace applications and shells, then:
 
 ```bash
 cd /
@@ -180,9 +123,7 @@ sudo workspace-umount 1
 sudo poweroff
 ```
 
-With the machine off, disconnect 1B and test booting **new 1A alone**. Run `sudo workspace-mount 1`, unlock with the existing passphrase, and verify expected files can be read. A degraded mirror is expected with B absent. Export and power off again before removing 1A. If you write to the pool during this test, B becomes stale until it rejoins and resilvers.
-
-Reconnect both drives, boot, run `sudo workspace-mount 1`, wait for any resilver and require both members ONLINE with no errors again. To test 1B alone too, repeat the same export/shutdown/isolate/read-check sequence, then reconnect both and check final mirror health. Label the replacement **1A** and keep independent backups.
+With the computer off, disconnect 1B and boot **new 1A alone**. Run `sudo workspace-mount 1`, unlock and verify expected files. Degraded status is expected with B absent. Export and power off before removing the boot drive. Reconnect both, boot, mount pair 1, wait for any resilver and require both members ONLINE with no errors again. Test 1B alone with the same shutdown/isolate/read-check sequence, then reconnect both and check final health. Writes made while either member is absent make it stale until it rejoins and resilvers.
 
 When only inspecting a potentially stale original member, first fence every other owner and import by GUID with readonly=on; do not run the normal read-write mount helper on the stale member. Never add `-F`, `-X` or `-T` rewind/recovery flags as a routine fix.
 
@@ -194,7 +135,7 @@ Follow [OS upgrades](UPGRADES.md) to replace only the FAT live payload. That run
 - Live changes and the ZFS ARC consume RAM; test the minimum hardware configuration.
 - Prefer reliable USB SSDs over low-end flash sticks and keep independent backups.
 - Each assembled pair has its own identities. Initialized images are not generic replacement-member templates.
-- Signing EFI/kernel/DKMS for Secure Boot, remote authentication and automated replacement-drive provisioning remain outside this workflow.
+- Signing EFI/kernel/DKMS for Secure Boot, remote authentication and automatic recovery of custom partition layouts remain outside this workflow.
 
 ## Whole-pair recovery
 

@@ -16,3 +16,5 @@ The root Makefile is the public command interface. This directory owns the share
 Outputs use `BUILD_DIR/live/`, `pairs/<id>/`, and `validation/<test-run>/`; `BUILD_DIR=build/default` is the default run. Builder metadata and build logs live at the run root. `make upgrade-os` invokes the stage 6 updater directly; it never builds.
 
 See the [stage index](../docs/README.md), [development](../docs/DEVELOPMENT.md), and [BuildKit reference](../docs/BUILDKIT.md). CI builds and inspects artifacts but never launches VMs.
+
+`make prepare-replacement` and `make write-replacement` expose [single-member recovery](../stages/07-replace-member/README.md); they share lifecycle locking and never initialize a replacement pool.

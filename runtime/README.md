@@ -12,3 +12,6 @@ These files are installed into `/usr/local/sbin` by stage 1. They are shipped so
 
 Behavior tests in `tests/` run with mocked system commands through `make test`. Real cross-stage pool tests live in `../integration-tests/zfs/`. Operational guidance is in [pair operations](../docs/PAIRS.md) and [recovery](../docs/RECOVERY.md).
 
+
+`workspace-replace PAIR --fenced` restores one failed mirror member from the recovery record on a prepared replacement boot drive. Boot the new drive, connect the survivor, and follow [member recovery](../docs/RECOVERY.md#member-recovery). It shares the workspace lock, preserves encryption/state and requires verified final mirror health.
+
