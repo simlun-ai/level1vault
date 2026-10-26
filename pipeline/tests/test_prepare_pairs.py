@@ -37,7 +37,7 @@ class PreparePairsTests(unittest.TestCase):
             for args, options in calls:
                 self.assertNotIn('fixture-passphrase', ' '.join(args))
                 self.assertNotIn('fixture-passphrase', str(options.get('env', {})))
-            self.assertTrue(calls[-1][0][1].endswith('/seed.py'))
+            self.assertEqual(len([args for args, _ in calls if args[1].endswith('/records.py')]), 3)
             self.assertFalse((build / 'PREPARING-PAIRS').exists())
 
     def test_existing_build_is_rejected_without_any_host_operation(self):

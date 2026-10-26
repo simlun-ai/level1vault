@@ -26,6 +26,7 @@ def prepare(build, out, pair):
         subprocess.run([*sudo, '-v'], check=True)
     subprocess.run(['bash', str(ROOT / 'pipeline/buildkit.sh'), 'assemble', str(build), str(out)], check=True)
     subprocess.run([*sudo, str(ROOT / 'stages/03-initialize-pair/initialize.sh'), str(out), pair], check=True)
+    subprocess.run([sys.executable, str(ROOT / 'pipeline/records.py'), 'save', '--out', str(out), '--pair', pair], check=True)
 
 
 if __name__ == '__main__':

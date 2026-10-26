@@ -8,3 +8,4 @@
 *.log
 *.sha256
 __pycache__/
+/records/

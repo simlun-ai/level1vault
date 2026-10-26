@@ -2,6 +2,8 @@
 
 [Documentation index](README.md)
 
+Generated output is split between disposable `build/` and permanent `records/`. Read [what to keep and delete](ARTIFACTS.md) before removing images. Provisioning automatically exports recovery identities; back up records separately from Git and the pool.
+
 ## Workstation requirements
 
 Use a Linux amd64 workstation with working ZFS and local, rootful Docker Engine with the Buildx plugin. Ubuntu 22.04 is the tested host example; it is not a distribution requirement. Docker Desktop, remote Docker daemons, rootless Docker and cross-architecture builds are not supported by the wrapper. Have at least 80 GiB of free working space; more is useful for keeping multiple build versions. Use a native Linux filesystem for the build directory. From an existing checkout, run `git switch main` and `git pull --ff-only` before the first build.

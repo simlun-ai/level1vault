@@ -24,6 +24,12 @@ make prepare-pairs N=1 BUILD_DIR=build/new-batch
 
 Pass the same `BUILD_DIR` to later writing, testing and add-pair commands. [Build details and lower-level stages →](docs/BUILD.md)
 
+## Keep records; discard completed builds
+
+**Back up `records/` permanently, outside this checkout and the USB workspace.** Provisioning exports small recovery records there automatically; Git ignores them. `build/` holds disposable images, ISOs, releases and logs. Delete a build only after USB readback, independent boot checks, mirror health and a records backup. Images used as real QEMU workspaces may contain data you must save first.
+
+Existing pairs: run `make save-records PAIR=1 BUILD_DIR=build/original-batch` before deleting their original images. Recovery then needs only `records/` and the surviving USB. See [exact retention rules and replacement record updates](docs/ARTIFACTS.md).
+
 ## Write the USB drives
 
 Identify both **whole disks** by model and serial:
