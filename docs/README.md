@@ -27,6 +27,7 @@ Start with the [quick start](../README.md) to build and use the first pair. Thes
 | [QEMU testing](QEMU.md) | Firmware setup, guest checks and persistent writes |
 | [Shared QEMU checks](../stages/04-test-pair/README.md) | Generated manual commands matching the automated boot, reboot, degraded-write and rejoin scenarios |
 | [Persistent home and sessions](HOME.md) | Root autologin, start/tmux, encrypted home, defaults, export and upgrades |
+| [Offline transport](TRANSPORT.md) | Stage files on locked pairs and verify them into the encrypted inbox |
 | [Pair operations](PAIRS.md) | Any number of pairs, encrypted replication, rotation, ordered failover and retention |
 | [Recovery](RECOVERY.md) | Fenced imports, degraded mirrors and replacement members |
 | [Development](DEVELOPMENT.md) | Make targets, local tests, CI, cleanup and repository layout |

@@ -4,10 +4,16 @@ import argparse
 import datetime
 import fcntl
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
 import uuid
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'common') if (ROOT / 'common').is_dir() else '/usr/local/lib/level1vault')
+from transport import validate_transport
 
 PROPERTY = 'org.level1vault:'
 
@@ -138,7 +144,9 @@ def synchronize(source_pair, target_pair, rebind=False, checkpoint=None):
     # Read the destination history and source binding.
     source_data_guid = prop(source, 'guid')
     children = run('zfs', 'list', '-H', '-o', 'name', '-t', 'filesystem,volume', '-r', target_pool).splitlines()
-    require(set(children) <= {target_pool, target}, 'Unexpected datasets on destination; refusing')
+    require(set(children) <= {target_pool, target, target_pool + '/transport'}, 'Unexpected datasets on destination; refusing')
+    if target_pool + '/transport' in children:
+        validate_transport(target_pool)
     exists = target in children
     token = prop(target, 'receive_resume_token') if exists else '-'
     pending = prop(target_pool, PROPERTY + 'pending-snapshot')

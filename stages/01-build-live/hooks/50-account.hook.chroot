@@ -90,6 +90,8 @@ Pair IDs below are examples; use the IDs printed on your USB pairs.
   sudo workspace-mount           Unlock the only complete connected pair.
   sudo workspace-mount 1         Select pair 1 explicitly (also for degraded use).
                                  Active: writable. Replica: read-only.
+  sudo workspace-transport-import 1
+                                 Verify staged files into encrypted inbox, then remove transport.
   sudo workspace-sync 1 2        Copy active pair 1 to unmounted replica pair 2.
                                  Add more replica IDs to update them too; rerun to resume.
   sudo workspace-prune 1 --keep 10

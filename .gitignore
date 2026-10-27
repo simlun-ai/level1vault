@@ -9,3 +9,6 @@
 *.sha256
 __pycache__/
 /records/
+
+/transport/*
+!/transport/README.md

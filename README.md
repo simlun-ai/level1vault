@@ -85,6 +85,15 @@ Exit every tmux pane to return to root and answer the export and poweroff prompt
 
 The MOTD lists manual `workspace-*` commands. Replicas mount read-only; mounting never promotes them. See [replication, retention and failover](docs/PAIRS.md) and [recovery](docs/RECOVERY.md). Kernel logs remain available through `journalctl -k` or `dmesg`.
 
+## Bring files into the offline workspace
+
+Put files in `transport/`, connect both members of an exported pair to the
+workstation, then run `make stage-transport PAIR=1`. This replaces the pair's
+**unencrypted** transport dataset without unlocking its workspace. During the next
+offline live session, run `sudo workspace-transport-import 1` after `start 1`.
+It verifies the copied files in the encrypted inbox before deleting transport.
+[Workflow, security boundary and retries →](docs/TRANSPORT.md)
+
 ## Prepare and apply an OS upgrade
 
 After changing OS packages or configuration, commit your changes. **No preceding `make build` is needed.** Prepare a release on the host without USB drives:
