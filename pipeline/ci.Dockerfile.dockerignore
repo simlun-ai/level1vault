@@ -1,0 +1,17 @@
+# Admit source and test fixtures only; production uses its own root allowlist.
+**
+!Makefile
+!pipeline/
+!pipeline/**
+!stages/
+!stages/**
+!runtime/
+!runtime/**
+!common/
+!common/**
+!integration-tests/
+!integration-tests/**
+**/.git
+**/.venv
+**/__pycache__
+**/*.py[cod]

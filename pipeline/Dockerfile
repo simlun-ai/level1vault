@@ -55,12 +55,14 @@ COPY --from=pair-assembly /export/ /
 
 # Verify each container stage using its own tests.
 FROM source AS test-assembly
-RUN mkdir /results && TEST_ISO_OUTPUT=/results/live-image-amd64.hybrid.iso bash /src/stages/02-assemble-pair/tests/test_assembly.sh && touch /results/assembly-passed
+RUN --network=none mkdir /results && TEST_ISO_OUTPUT=/results/live-image-amd64.hybrid.iso bash /src/stages/02-assemble-pair/tests/test_assembly.sh && touch /results/assembly-passed
 FROM source AS test-account
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     zsh neovim fd-find bat man-db tmux starship zoxide fzf \
     zsh-autosuggestions zsh-syntax-highlighting && rm -rf /var/lib/apt/lists/*
-RUN bash /src/stages/01-build-live/tests/test_account.sh && mkdir /results && touch /results/account-passed
+RUN --network=none bash /src/stages/01-build-live/tests/test_account.sh && mkdir /results && touch /results/account-passed
+FROM scratch AS test-assembly-results
+COPY --from=test-assembly /results/ /
 FROM scratch AS test-results
 COPY --from=test-assembly /results/ /
 COPY --from=test-account /results/ /

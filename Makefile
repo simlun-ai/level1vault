@@ -29,7 +29,7 @@ export SUDO BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A D
 RUN = python3 pipeline/lifecycle.py shared
 
 # Expose the supported project lifecycle commands.
-.PHONY: stage-transport save-records confirm-replacement prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
+.PHONY: ci ci-build ci-zfs stage-transport save-records confirm-replacement prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
@@ -49,6 +49,7 @@ help:
 	  'make upgrade-os UPGRADE_DIR=... PAIR=2 DISK_A=/dev/sda DISK_B=/dev/sdb  Apply a prepared OS release' \
 	  'make prepare-replacement PAIR=1 MEMBER=A RECOVERY_DIR=build/recovery-1a  Build one empty replacement' \
 	  'make write-replacement PAIR=1 MEMBER=A RECOVERY_DIR=build/recovery-1a DISK=/dev/sda  Write one blank USB' \
+	  'make ci                          Run parallel containerized checks and host export validation' \
 	  'make test                        Run local lint and unit/behavior tests' \
 	  'make test-container              Test real assembly and login in Trixie' \
 	  'make test-qemu                    Test pair 1 in QEMU; choose writable results automatically' \
@@ -120,6 +121,17 @@ test-unit:
 
 # Run the workstation-safe checks.
 test: lint test-unit
+
+# Run workstation-safe CI through Bake, keeping cleanup excluded throughout.
+ci:
+	$(RUN) bash pipeline/buildkit.sh ci
+
+# Exercise real image and cleanup contracts; clean acquires its own exclusive lock.
+ci-build:
+	bash pipeline/ci-build.sh
+
+# Preserve the explicit disposable-environment gate on native ZFS integration.
+ci-zfs: test-zfs
 
 # Verify image assembly and account setup in Debian.
 test-container:

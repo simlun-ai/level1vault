@@ -13,7 +13,7 @@ The Dockerfile produces files through `FROM scratch` targets and BuildKit's loca
 | `assembly` | File-only GPT/FAT/GRUB assembly and sparse archive creation from the live ISO | No |
 | `artifacts` | Scratch stage exporting `live/` and a temporary pair archive for host extraction | No commands |
 | `pair-assembly`, `pair-artifacts` | Assemble/export another pair from an existing ISO | No |
-| `test-assembly`, `test-account`, `test-results` | Sandboxed assembly/login tests and scratch result export | No |
+| `test-assembly`, `test-account`, `test-assembly-results`, `test-results` | Sandboxed assembly/login tests and scratch result export | No |
 | `inspection`, `inspection-results` | Inspect an existing ISO; host wrapper separately checks prepared image markers | No |
 
 Live-build requires mounts inside its chroot, so moving it into a Dockerfile does not remove its privilege requirement. The wrapper creates a dedicated `docker-container` builder named `level1vault-<checkout-path-hash>`, with the `security.insecure` daemon entitlement. Only full builds request `--allow security.insecure`; only the `live` RUN uses it. This requires trusted source. Pool creation, passphrases, loop devices and physical USB writing remain host operations.
@@ -45,7 +45,7 @@ make build BUILD_DIR=build-next FRESH=1
 
 Each wrapper build/assembly call generates a fresh `ASSEMBLY_ID` build argument, consumed only in the assembly stages. This forces GPT/PARTUUID/FAT identity generation to rerun while allowing the expensive ISO stage to stay cached. Never use raw cached `pair-artifacts` output as a new pair. The supported Make/wrapper entrypoints always supply the fresh ID.
 
-`make test-container` forces the test stages to rerun. It also exports two small synthetic pairs through the real sparse archive/local-export/extraction path, checks their completion markers, logical image sizes and sparse allocation, and verifies all ESP/data partition identities are distinct across both pairs.
+`make ci` runs the parallel Bake check graph described in [pipeline CI](../pipeline/README.md#continuous-integration). `make test-container` selects its container subset and forces the test stages to rerun. It also exports two small synthetic pairs through the real sparse archive/local-export/extraction path, checks their completion markers, logical image sizes and sparse allocation, and verifies all ESP/data partition identities are distinct across both pairs.
 
 BuildKit retains intermediate cache on its own Docker volume. `make cache-clean` prunes unused cache on the selected dedicated builder. `make clean` removes checkout-owned builders and their state volumes, preserving all host artifacts. See [cleanup and rebuilds](DEVELOPMENT.md#cleanup-and-rebuilds) for locking, resource checks and rebuild commands.
 

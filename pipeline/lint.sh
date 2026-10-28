@@ -2,7 +2,17 @@
 set -euo pipefail
 
 # Select the shell sources owned by the pipeline, stages, and runtime.
-mapfile -t candidates < <(git ls-files --cached --others --exclude-standard -- pipeline stages runtime integration-tests)
+candidate_list=$(mktemp)
+trap 'rm -f -- "$candidate_list"' EXIT
+case ${1:-} in
+  --source-tree)
+    # Container inputs have already been filtered by the CI context allowlist.
+    find pipeline stages runtime integration-tests -type f -print0 > "$candidate_list"
+    ;;
+  '') git ls-files -z --cached --others --exclude-standard -- pipeline stages runtime integration-tests > "$candidate_list" ;;
+  *) echo 'Usage: lint.sh [--source-tree]' >&2; exit 2 ;;
+esac
+mapfile -d '' -t candidates < "$candidate_list"
 files=()
 for file in "${candidates[@]}"; do
   [[ -f $file ]] || continue
