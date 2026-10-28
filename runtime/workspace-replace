@@ -1,103 +1,193 @@
 #!/usr/bin/env python3
 """Restore a two-member workspace mirror from the surviving original member."""
+
 import argparse
 import fcntl
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'common') if (ROOT / 'common').is_dir() else '/usr/local/lib/level1vault')
-from member_recovery import (command, connected_identities, inspect_replacement, label_identity, output,
-                             empty_partition, require, validate_record, mirror_leaves)
+sys.path.insert(
+    0,
+    str(ROOT / "common")
+    if (ROOT / "common").is_dir()
+    else "/usr/local/lib/level1vault",
+)
+from member_recovery import (  # noqa: E402 - resolve shared helpers after configuring their path
+    command,
+    connected_identities,
+    empty_partition,
+    inspect_replacement,
+    label_identity,
+    mirror_leaves,
+    output,
+    require,
+    validate_record,
+)
 
 
 def check_complete(pool, survivor_guid, new_guid):
-    status = output('zpool', 'status', '-g', pool)
+    status = output("zpool", "status", "-g", pool)
     print(status)
     leaves = mirror_leaves(status)
-    require({row[1] for row in leaves} == {survivor_guid, new_guid}, 'Final membership differs from expected drives')
-    require(all(row[2:] == ('ONLINE', '0', '0', '0') for row in leaves) and
-            'errors: No known data errors' in status and
-            output('zpool', 'list', '-H', '-o', 'health', pool) == 'ONLINE',
-            'Recovery is not healthy: require both leaves ONLINE, zero counters and no data errors')
+    require(
+        {row[1] for row in leaves} == {survivor_guid, new_guid},
+        "Final membership differs from expected drives",
+    )
+    require(
+        all(row[2:] == ("ONLINE", "0", "0", "0") for row in leaves)
+        and "errors: No known data errors" in status
+        and output("zpool", "list", "-H", "-o", "health", pool) == "ONLINE",
+        "Recovery is not healthy: require both leaves ONLINE, zero counters and no data errors",
+    )
 
 
 def replace(pair, fenced):
     # Read the record from the replacement we booted; never import another pair by name alone.
-    require(fenced, 'Stop other pool owners, disconnect failed/duplicate members, then pass --fenced')
-    record = validate_record(json.loads(Path('/run/live/medium/member-recovery.json').read_text()))
-    require(record['pair'] == pair, 'PAIR does not match this replacement medium')
+    require(
+        fenced,
+        "Stop other pool owners, disconnect failed/duplicate members, then pass --fenced",
+    )
+    record = validate_record(
+        json.loads(Path("/run/live/medium/member-recovery.json").read_text())
+    )
+    require(record["pair"] == pair, "PAIR does not match this replacement medium")
     connected_identities(record, recovering=True)
-    require(not Path('/dev/disk/by-partuuid', record['failed_partuuid']).exists(), 'Disconnect the failed original member')
-    new_path = Path('/dev/disk/by-partuuid', record['new_partuuid'])
-    survivor = Path('/dev/disk/by-partuuid', record['survivor_partuuid'])
-    require(new_path.exists() and survivor.exists(), 'Connect the prepared replacement and the recorded survivor')
-    disk = Path(output('lsblk', '-n', '-p', '-o', 'PKNAME', new_path))
+    require(
+        not Path("/dev/disk/by-partuuid", record["failed_partuuid"]).exists(),
+        "Disconnect the failed original member",
+    )
+    new_path = Path("/dev/disk/by-partuuid", record["new_partuuid"])
+    survivor = Path("/dev/disk/by-partuuid", record["survivor_partuuid"])
+    require(
+        new_path.exists() and survivor.exists(),
+        "Connect the prepared replacement and the recorded survivor",
+    )
+    disk = Path(output("lsblk", "-n", "-p", "-o", "PKNAME", new_path))
     # The boot FAT partition is allowed only at the expected read-only live mount.
     info, table = inspect_replacement(disk, record, boot=True, empty=False)
-    require(Path(table['partitions'][1]['node']).resolve() == new_path.resolve(), 'Replacement path changed')
-    pool = 'level1-workspace-' + pair
-    name, guid, survivor_guid = label_identity(output('zdb', '-l', survivor))
-    require((name, guid) == (pool, record['pool_guid']), 'Survivor belongs to a different pool')
-    require(new_path.resolve() != survivor.resolve(), 'Replacement and survivor must be different partitions')
-    require(int(output('blockdev', '--getsize64', new_path)) >= int(output('blockdev', '--getsize64', survivor)),
-            'Replacement partition is smaller than the surviving member')
+    require(
+        Path(table["partitions"][1]["node"]).resolve() == new_path.resolve(),
+        "Replacement path changed",
+    )
+    pool = "level1-workspace-" + pair
+    name, guid, survivor_guid = label_identity(output("zdb", "-l", survivor))
+    require(
+        (name, guid) == (pool, record["pool_guid"]),
+        "Survivor belongs to a different pool",
+    )
+    require(
+        new_path.resolve() != survivor.resolve(),
+        "Replacement and survivor must be different partitions",
+    )
+    require(
+        int(output("blockdev", "--getsize64", new_path))
+        >= int(output("blockdev", "--getsize64", survivor)),
+        "Replacement partition is smaller than the surviving member",
+    )
 
     # Respect normal ownership protection and preserve active/replica and encryption policy.
-    if pool not in output('zpool', 'list', '-H', '-o', 'name').splitlines():
-        command('zpool', 'import', '-N', '-d', '/dev/disk/by-partuuid', '-o', 'cachefile=none', record['pool_guid'])
-    require(output('zpool', 'get', '-H', '-o', 'value', 'guid', pool) == record['pool_guid'], 'Imported pool GUID differs')
-    require(output('zfs', 'get', '-H', '-o', 'value', 'org.level1vault:pair', pool) == pair, 'Pool pair property differs')
-    state = output('zfs', 'get', '-H', '-o', 'value', 'org.level1vault:state', pool)
-    readonly = output('zfs', 'get', '-H', '-o', 'value', 'readonly', pool + '/data')
-    require((state, readonly) in (('active', 'off'), ('replica', 'on')), 'Pool state/readonly policy differs')
-    for prop, expected in (('encryption', 'aes-256-gcm'), ('encryptionroot', pool + '/data'), ('keyformat', 'passphrase')):
-        require(output('zfs', 'get', '-H', '-o', 'value', prop, pool + '/data') == expected, 'Unexpected encryption policy')
-    leaves = mirror_leaves(output('zpool', 'status', '-g', pool))
+    if pool not in output("zpool", "list", "-H", "-o", "name").splitlines():
+        command(
+            "zpool",
+            "import",
+            "-N",
+            "-d",
+            "/dev/disk/by-partuuid",
+            "-o",
+            "cachefile=none",
+            record["pool_guid"],
+        )
+    require(
+        output("zpool", "get", "-H", "-o", "value", "guid", pool)
+        == record["pool_guid"],
+        "Imported pool GUID differs",
+    )
+    require(
+        output("zfs", "get", "-H", "-o", "value", "org.level1vault:pair", pool) == pair,
+        "Pool pair property differs",
+    )
+    state = output("zfs", "get", "-H", "-o", "value", "org.level1vault:state", pool)
+    readonly = output("zfs", "get", "-H", "-o", "value", "readonly", pool + "/data")
+    require(
+        (state, readonly) in (("active", "off"), ("replica", "on")),
+        "Pool state/readonly policy differs",
+    )
+    for prop, expected in (
+        ("encryption", "aes-256-gcm"),
+        ("encryptionroot", pool + "/data"),
+        ("keyformat", "passphrase"),
+    ):
+        require(
+            output("zfs", "get", "-H", "-o", "value", prop, pool + "/data") == expected,
+            "Unexpected encryption policy",
+        )
+    leaves = mirror_leaves(output("zpool", "status", "-g", pool))
     surviving = [row for row in leaves if row[1] == survivor_guid]
-    require(len(surviving) == 1 and surviving[0][2:] == ('ONLINE', '0', '0', '0'), 'Survivor must be ONLINE without device errors')
+    require(
+        len(surviving) == 1 and surviving[0][2:] == ("ONLINE", "0", "0", "0"),
+        "Survivor must be ONLINE without device errors",
+    )
     missing = next(row for row in leaves if row[1] != survivor_guid)
 
     # Resume waiting when the replacement already joined; never replace it again.
-    if missing[2] in ('UNAVAIL', 'REMOVED', 'FAULTED', 'OFFLINE'):
+    if missing[2] in ("UNAVAIL", "REMOVED", "FAULTED", "OFFLINE"):
         empty_partition(new_path)
         current, _ = inspect_replacement(disk, record, boot=True, empty=True)
-        require(current == info, 'Replacement identity or usage changed')
-        print(f'Replacing failed vdev {missing[1]} using {new_path} ({info.get("model")}, {info.get("serial")})', flush=True)
-        command('zpool', 'replace', pool, missing[1], new_path)
+        require(current == info, "Replacement identity or usage changed")
+        print(
+            f"Replacing failed vdev {missing[1]} using {new_path} ({info.get('model')}, {info.get('serial')})",
+            flush=True,
+        )
+        command("zpool", "replace", pool, missing[1], new_path)
     else:
-        require(missing[2] == 'ONLINE', 'Unexpected member state; inspect before continuing')
-    new_name, new_pool_guid, new_guid = label_identity(output('zdb', '-l', new_path))
-    require((new_name, new_pool_guid) == (pool, record['pool_guid']), 'New member labels do not match pool')
-    command('zpool', 'wait', '-t', 'resilver,replace', pool)
+        require(
+            missing[2] == "ONLINE", "Unexpected member state; inspect before continuing"
+        )
+    new_name, new_pool_guid, new_guid = label_identity(output("zdb", "-l", new_path))
+    require(
+        (new_name, new_pool_guid) == (pool, record["pool_guid"]),
+        "New member labels do not match pool",
+    )
+    command("zpool", "wait", "-t", "resilver,replace", pool)
     check_complete(pool, survivor_guid, new_guid)
-    print(f'Mirror restored. Save zpool status -gP {pool} and the replacement record outside the pool. '
-          f'Run workspace-mount {pair} to unlock and read-check files. Export with workspace-umount before shutdown; boot-test each drive alone.')
+    print(
+        f"Mirror restored. Save zpool status -gP {pool} and the replacement record outside the pool. "
+        f"Run workspace-mount {pair} to unlock and read-check files. Export with workspace-umount before shutdown; boot-test each drive alone."
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('pair')
-    parser.add_argument('--fenced', action='store_true')
+    parser.add_argument("pair")
+    parser.add_argument("--fenced", action="store_true")
     args = parser.parse_args()
-    require(re.fullmatch(r'[1-9][0-9]*', args.pair) is not None, 'Invalid pair ID')
-    require(os.geteuid() == 0, 'Run with sudo')
-    with open('/run/lock/level1vault-workspace.lock', 'w') as lock:
+    require(re.fullmatch(r"[1-9][0-9]*", args.pair) is not None, "Invalid pair ID")
+    require(os.geteuid() == 0, "Run with sudo")
+    with open("/run/lock/level1vault-workspace.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        command('modprobe', 'zfs')
-        if not Path('/etc/hostid').exists() or Path('/etc/hostid').stat().st_size == 0:
-            command('zgenhostid')
-        command('udevadm', 'settle')
+        command("modprobe", "zfs")
+        if not Path("/etc/hostid").exists() or Path("/etc/hostid").stat().st_size == 0:
+            command("zgenhostid")
+        command("udevadm", "settle")
         replace(args.pair, args.fenced)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
-    except (ValueError, KeyError, IndexError, OSError, subprocess.CalledProcessError) as error:
-        sys.exit(f'Member replacement stopped: {error}. Keep the survivor connected; inspect status before retrying. No force import or replacement is performed.')
+    except (
+        ValueError,
+        KeyError,
+        IndexError,
+        OSError,
+        subprocess.CalledProcessError,
+    ) as error:
+        sys.exit(
+            f"Member replacement stopped: {error}. Keep the survivor connected; inspect status before retrying. No force import or replacement is performed."
+        )

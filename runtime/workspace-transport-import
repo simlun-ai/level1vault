@@ -1,28 +1,38 @@
 #!/usr/bin/env python3
 """Verify and import staged files into the active encrypted workspace inbox."""
+
 import argparse
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'common') if (ROOT / 'common').is_dir() else '/usr/local/lib/level1vault')
-from transport import import_transport, workspace_lock
-from member_recovery import output
+sys.path.insert(
+    0,
+    str(ROOT / "common")
+    if (ROOT / "common").is_dir()
+    else "/usr/local/lib/level1vault",
+)
+from member_recovery import output  # noqa: E402 - resolve shared helpers after configuring their path
+from transport import import_transport, workspace_lock  # noqa: E402 - resolve shared helpers after configuring their path
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('pair', nargs='?')
+    parser.add_argument("pair", nargs="?")
     args = parser.parse_args()
     with workspace_lock():
-        pair = args.pair or output('python3', Path(__file__).with_name('workspace-discover'))
+        pair = args.pair or output(
+            "python3", Path(__file__).with_name("workspace-discover")
+        )
         import_transport(pair)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except (RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as error:
-        sys.exit(f'Transport import stopped: {error}. Unverified data is never accepted. Inspect status and rerun to retry import or cleanup.')
+        sys.exit(
+            f"Transport import stopped: {error}. Unverified data is never accepted. Inspect status and rerun to retry import or cleanup."
+        )

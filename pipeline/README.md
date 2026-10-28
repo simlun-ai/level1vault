@@ -30,6 +30,7 @@ coordinate checks with `make clean`; no test requests an insecure RUN entitlemen
 
 | Bake target | Check |
 | --- | --- |
+| `ruff` | Python lint and formatting, targeting Python 3.10 |
 | `shell` | ShellCheck and declared-interpreter syntax checks |
 | `unit-pipeline` | Orchestration, export wrapper and lifecycle unit tests |
 | `unit-runtime` | Installed command behavior tests |
@@ -63,8 +64,8 @@ docker buildx bake --builder "$(python3 pipeline/lifecycle.py builder-name)" \
 ```
 
 `make test` retains the quick host lint/unit checks, and `python3 pipeline/test.py
-pipeline` (or `runtime`, `stages`) selects one owner. Ruff and Pyright are left for
-a later change; they can be independent Bake targets with their own pinned tools.
+pipeline` (or `runtime`, `stages`) selects one owner. Pyright remains a follow-up. Ruff runs as an independent Bake target with its
+own pinned tool stage.
 
 GitHub Actions sets up Buildx and calls `make ci`. Native ZFS remains a separate
 job invoking `make ci-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1`; it still requires an
@@ -72,3 +73,16 @@ explicitly disposable host. The path-filtered full build invokes `make ci-build`
 to build, inspect, validate upgrade metadata, verify ownership and exercise
 cleanup while preserving exported artifacts. Actions retains diagnostic upload
 on failure. Neither CI command boots VMs or writes physical USB drives.
+
+## Python lint and formatting
+
+`make lint-python` runs the same pinned Ruff check as the parallel `ruff` target
+in `make ci`. Ruff 0.17.2 checks lint and formatting across `pipeline/`, `stages/`,
+`runtime/`, `common/` and `integration-tests/`, including extensionless installed
+Python commands. `pyproject.toml` targets Python 3.10 with 88-character formatting
+and the homelab-hsm rule set (`E4`, `E7`, `E9`, `F`, `I`, `UP`, `B`). This controls
+Ruff's compatibility checks; it does not constitute testing on Python 3.10.
+
+The tool stage is isolated from production dependencies and executes checks with
+networking disabled. Intentional imports after shared-helper path setup carry
+line-specific E402 annotations; other Python lint rules remain enabled.
