@@ -1,5 +1,12 @@
 """Verify disk-writing guards and command ordering without opening real devices."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from _typeshed import ReadableBuffer
+
 import copy
 import hashlib
 import importlib.util
@@ -53,7 +60,7 @@ class WriteUsbTests(unittest.TestCase):
             ),
         ]
 
-    def output(self, *args):
+    def output(self, *args: str | Path):
         if args[0] == "losetup":
             return json.dumps({"loopdevices": []})
         if args[1] == "list":
@@ -64,19 +71,26 @@ class WriteUsbTests(unittest.TestCase):
         writer.write_pair(self.out, "4", Path("/dev/sda"), Path("/dev/sdb"))
 
     def test_writes_and_verifies_before_relocating_and_validating_gpt(self):
-        events = []
+        events: list[object] = []
+
+        def record_image_write(image: Path, disk: Path):
+            return events.append(("write", disk.name))
+
+        def record_command(cmd: list[str], **kw: object):
+            return events.append(tuple(cmd))
+
         with (
             patch.object(writer, "output", side_effect=self.output),
             patch.object(writer, "disk_info", side_effect=self.disks),
             patch.object(
                 writer,
                 "write_image",
-                side_effect=lambda image, disk: events.append(("write", disk.name)),
+                side_effect=record_image_write,
             ),
             patch.object(
                 writer.subprocess,
                 "run",
-                side_effect=lambda cmd, **kw: events.append(tuple(cmd)),
+                side_effect=record_command,
             ),
         ):
             self.write()
@@ -196,14 +210,14 @@ class WriteUsbTests(unittest.TestCase):
         image.write_bytes(b"payload" * (4 * 1024 * 1024 // 7 + 1))
         disk = self.out / "disk"
         disk.write_bytes(b"x" * (image.stat().st_size + 3000))
-        events = []
+        events: list[object] = []
         fsync = writer.os.fsync
 
-        def flush(cmd, **kwargs):
+        def flush(cmd: list[str], **kwargs: object):
             events.append("flush")
             self.assertEqual(cmd, ["blockdev", "--flushbufs", str(disk)])
 
-        def synced(fd):
+        def synced(fd: int):
             events.append("fsync")
             fsync(fd)
 
@@ -257,14 +271,21 @@ class WriteUsbTests(unittest.TestCase):
     def test_zero_byte_write_stops_instead_of_looping(self):
         original = Path.open
 
-        def opened(path, *args, **kwargs):
+        def opened(
+            path: Path,
+            mode: str = "r",
+            buffering: int = -1,
+            encoding: str | None = None,
+            errors: str | None = None,
+            newline: str | None = None,
+        ):
             if path.name == "disk":
                 from unittest.mock import MagicMock
 
                 target = MagicMock()
                 target.__enter__.return_value.write.return_value = 0
                 return target
-            return original(path, *args, **kwargs)
+            return original(path, mode, buffering, encoding, errors, newline)
 
         with (
             patch.object(Path, "open", opened),
@@ -279,8 +300,8 @@ class WriteUsbTests(unittest.TestCase):
         data = image.read_bytes()
 
         class PartialDisk(io.BytesIO):
-            def write(self, block):
-                return super().write(block[:2])
+            def write(self, block: ReadableBuffer):
+                return super().write(memoryview(block)[:2])
 
             def fileno(self):
                 return 123
@@ -291,8 +312,19 @@ class WriteUsbTests(unittest.TestCase):
         target = PartialDisk()
         original = Path.open
 
-        def opened(path, *args, **kwargs):
-            return target if path.name == "disk" else original(path, *args, **kwargs)
+        def opened(
+            path: Path,
+            mode: str = "r",
+            buffering: int = -1,
+            encoding: str | None = None,
+            errors: str | None = None,
+            newline: str | None = None,
+        ):
+            return (
+                target
+                if path.name == "disk"
+                else original(path, mode, buffering, encoding, errors, newline)
+            )
 
         with (
             patch.object(Path, "open", opened),

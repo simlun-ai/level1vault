@@ -1,16 +1,19 @@
 """Small deterministic releases and boot files for disposable upgrade tests."""
 
+from __future__ import annotations
+
 import hashlib
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from contracts import Release
 
 
-def make_release(root, text="new OS") -> "Release":
+def make_release(root: Path, text: str = "new OS") -> Release:
     root.mkdir()
-    files = {}
+    files: dict[str, str] = {}
     for name in (
         "live/vmlinuz",
         "live/initrd.img",
@@ -22,7 +25,7 @@ def make_release(root, text="new OS") -> "Release":
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text + ":" + name)
         files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
-    manifest = {
+    manifest: dict[str, object] = {
         "format": 1,
         "kernel": "6.12-fixture",
         "zfs_package": "2.3-fixture",
@@ -37,7 +40,7 @@ def make_release(root, text="new OS") -> "Release":
     return cast("Release", manifest)
 
 
-def make_boot(root, uuid="AAAA-BBBB"):
+def make_boot(root: Path, uuid: str = "AAAA-BBBB"):
     for name, content in {
         "EFI/BOOT/BOOTX64.EFI": "preserved loader",
         "boot/grub/grub.cfg": f"search --fs-uuid --set=root {uuid}\nlinux /live/vmlinuz boot=live nopersistence live-media=/dev/disk/by-uuid/{uuid}\ninitrd /live/initrd.img\n",

@@ -1,5 +1,7 @@
 """Host wrapper boundaries: no real Docker daemon or filesystem mutations outside temp dirs."""
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess
@@ -62,7 +64,7 @@ if args[:2] == ['buildx', 'build']:
         self.env.pop("DOCKER_HOST", None)
         self.env.pop("DOCKER_CONTEXT", None)
 
-    def run_task(self, *args, env=None):
+    def run_task(self, *args: str | Path, env: dict[str, str] | None = None):
         return subprocess.run(
             ["bash", str(ROOT / "pipeline/buildkit.sh"), *map(str, args)],
             env=env or self.env,

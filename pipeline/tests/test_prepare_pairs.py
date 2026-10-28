@@ -1,5 +1,7 @@
 """Check batch ordering, fail-fast behavior and secret handling without host mutations."""
 
+from __future__ import annotations
+
 import importlib.util
 import subprocess
 import tempfile
@@ -20,9 +22,9 @@ class PreparePairsTests(unittest.TestCase):
     def test_build_once_then_initialize_seed_and_verify_without_late_prompts(self):
         with tempfile.TemporaryDirectory() as tmp:
             build = Path(tmp).resolve() / "new"
-            calls = []
+            calls: list[tuple[list[str], dict[str, object]]] = []
 
-            def command(*args, **kwargs):
+            def command(*args: str | Path, **kwargs: object):
                 calls.append((list(map(str, args)), kwargs))
                 if args[2] == "build":
                     build.mkdir()
@@ -80,24 +82,30 @@ class PreparePairsTests(unittest.TestCase):
                 batch.ask_passphrase()
 
     def test_main_collects_secret_before_starting_work(self):
-        events = []
+        events: list[object] = []
+
+        def record_preflight(*args: str | Path):
+            return events.append("preflight")
+
+        def record_prompt():
+            return events.append("prompt") or "fixture-passphrase"
+
+        def record_build(*args: str | Path):
+            return events.append("build")
+
         with (
             patch.object(
                 batch.sys,
                 "argv",
                 ["prepare", "--build-dir", "build/new", "--count", "3"],
             ),
-            patch.object(
-                batch, "preflight", side_effect=lambda *args: events.append("preflight")
-            ),
+            patch.object(batch, "preflight", side_effect=record_preflight),
             patch.object(
                 batch,
                 "ask_passphrase",
-                side_effect=lambda: events.append("prompt") or "fixture-passphrase",
+                side_effect=record_prompt,
             ),
-            patch.object(
-                batch, "prepare", side_effect=lambda *args: events.append("build")
-            ),
+            patch.object(batch, "prepare", side_effect=record_build),
         ):
             batch.main()
         self.assertEqual(events, ["preflight", "prompt", "build"])

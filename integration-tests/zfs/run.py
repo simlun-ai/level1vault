@@ -5,6 +5,14 @@ Do not run on a workstation: requires LEVEL1VAULT_DISPOSABLE_TEST_VM=1 and
 refuses any pre-existing imported level1vault pool. No physical disk writes.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from contracts import Query, RecoveryRecord
+
+
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -22,19 +30,24 @@ PAIRS = ["1", "2", "3", "10"]
 POOLS = ["level1-workspace-" + pair for pair in PAIRS]
 
 
-def run(*args, **kwargs):
-    return subprocess.check_output(args, text=True, **kwargs).strip()
+def run(*args: str | Path) -> str:
+    return subprocess.check_output(args, text=True).strip()
 
 
-def command(*args, **kwargs):
-    subprocess.run(args, check=True, **kwargs)
+def command(
+    *args: str | Path,
+    stdout: int | None = None,
+    input: str | None = None,
+    text: bool = False,
+) -> None:
+    subprocess.run(args, check=True, stdout=stdout, input=input, text=text)
 
 
-def get(dataset, name):
+def get(dataset: str, name: str):
     return run("zfs", "get", "-H", "-p", "-o", "value", name, dataset)
 
 
-def helper(name, *args, input=None, ok=True):
+def helper(name: str, *args: str | Path, input: str | None = None, ok: bool = True):
     r = subprocess.run(
         [str(ROOT / "runtime" / name), *args],
         text=True,
@@ -48,7 +61,7 @@ def helper(name, *args, input=None, ok=True):
     return r
 
 
-def prepare(base, pair, active=False):
+def prepare(base: Path, pair: str, active: bool = False):
     out = base / "pairs" / pair
     out.mkdir(parents=True)
     images = {}
@@ -90,7 +103,7 @@ def prepare(base, pair, active=False):
     return out
 
 
-def verify_live_home(base, dataset, existing=False):
+def verify_live_home(base: Path, dataset: str, existing: bool = False):
     # Exercise real encrypted bind mounts on test-owned paths, never the runner's home.
     loader = importlib.machinery.SourceFileLoader(
         "workspace_home", str(ROOT / "runtime/workspace-home")
@@ -165,7 +178,7 @@ def verify_live_home(base, dataset, existing=False):
                 command("umount", str(target))
 
 
-def verify_os_upgrade(out, base):
+def verify_os_upgrade(out: Path, base: Path):
     # Update real disposable FAT partitions and verify ZFS bytes remain unchanged.
     sys.path.insert(0, str(ROOT / "stages/06-upgrade-os"))
     sys.path.insert(0, str(ROOT / "stages/06-upgrade-os/tests"))
@@ -176,7 +189,7 @@ def verify_os_upgrade(out, base):
     release = base / "upgrade-release"
     manifest = make_release(release)
     (release / "UPGRADE-READY").touch()
-    devices = []
+    devices: list[str] = []
     try:
         for side in ("a", "b"):
             loop = run(
@@ -193,7 +206,7 @@ def verify_os_upgrade(out, base):
             with upgrade.mounted(loop + "p1", readonly=False) as root:
                 make_boot(root, esp_uuid)
 
-        def edge_hash(loop):
+        def edge_hash(loop: str):
             image = Path(
                 run("losetup", "--list", "--noheadings", "--output", "BACK-FILE", loop)
             )
@@ -212,7 +225,7 @@ def verify_os_upgrade(out, base):
         tables_before = [run("sfdisk", "--dump", loop) for loop in devices]
         describe = upgrade.describe_disk
 
-        def describe_test_loop(path, query):
+        def describe_test_loop(path: Path, query: Query):
             # Exercise real layout and label checks on this test's loop devices.
             assert str(path) in devices
             info = describe(path, query)
@@ -253,7 +266,7 @@ def verify_os_upgrade(out, base):
     assert value.hexdigest() == data_before[0]
 
 
-def interrupted_transfer(send, destination, readonly):
+def interrupted_transfer(send: list[str], destination: str, readonly: str):
 
     # Produce a genuine resumable receive by closing its input mid-stream.
     sender = subprocess.Popen(send, stdout=subprocess.PIPE)
@@ -288,7 +301,7 @@ def interrupted_transfer(send, destination, readonly):
     raise RuntimeError("Injected cable interruption")
 
 
-def verify_member_replacement(base):
+def verify_member_replacement(base: Path):
     # Exercise real labels, GUID import, replacement, resilver and final membership.
     # Only USB/live-boot inspection is adapted to these disposable loop devices.
     out = prepare(base, "99", active=True)
@@ -301,9 +314,10 @@ def verify_member_replacement(base):
     replacement = importlib.util.module_from_spec(spec)
     loader.exec_module(replacement)
     import member_recovery
+    from contracts import RecoveryRecord
 
     old = json.loads((out / "images.json").read_text())
-    devices = []
+    devices: list[str] = []
     image = base / "replacement-a.img"
     command("truncate", "-s", "512M", str(image))
     command(
@@ -326,7 +340,7 @@ def verify_member_replacement(base):
         for line in (out / "WORKSPACE-INFO.txt").read_text().splitlines()
         if "=" in line
     )
-    record = dict(
+    record = RecoveryRecord(
         format=1,
         pair="99",
         member="a",
@@ -339,12 +353,17 @@ def verify_member_replacement(base):
     )
     original_read = Path.read_text
 
-    def read_text(path, *args, **kwargs):
+    def read_text(path: Path, encoding: str | None = None, errors: str | None = None):
         if str(path) == "/run/live/medium/member-recovery.json":
             return json.dumps(record)
-        return original_read(path, *args, **kwargs)
+        return original_read(path, encoding=encoding, errors=errors)
 
-    def inspect(disk, current_record, boot=False, empty=True):
+    def inspect(
+        disk: Path,
+        current_record: RecoveryRecord,
+        boot: bool = False,
+        empty: bool = True,
+    ):
         assert current_record == record and boot
         actual = member_recovery.partition_table(disk)
         assert actual["partitions"][1]["uuid"].lower() == record["new_partuuid"]
@@ -428,7 +447,7 @@ def verify_member_replacement(base):
             command("losetup", "-d", device)
 
 
-def verify_transport(base):
+def verify_transport(base: Path):
     # Stage and replace packages with keys unloaded, then verify real encrypted inbox IO.
     source = base / "transport-source"
     source.mkdir()
@@ -522,8 +541,8 @@ def main():
     loader.exec_module(sync)
 
     # Track test-owned resources for cleanup.
-    loops = []
-    owned = []
+    loops: list[str] = []
+    owned: list[str] = []
     with tempfile.TemporaryDirectory(prefix="level1vault-zfs-") as tmp:
         base = Path(tmp)
         try:

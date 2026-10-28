@@ -30,7 +30,7 @@ coordinate checks with `make clean`; no test requests an insecure RUN entitlemen
 
 | Bake target | Check |
 | --- | --- |
-| `typecheck` | Pyright basic type checking across all Python, targeting Python 3.10 |
+| `typecheck` | Pyright strict type checking across all Python, targeting Python 3.10 |
 | `ruff` | Python lint and formatting, targeting Python 3.10 |
 | `shell` | ShellCheck and declared-interpreter syntax checks |
 | `unit-pipeline` | Orchestration, export wrapper and lifecycle unit tests |
@@ -97,16 +97,15 @@ Its isolated Python 3.10 environment installs only the pinned pexpect dependency
 and ptyprocess; it never launches QEMU. Check execution disables networking,
 while tool/dependency preparation is cached. Warnings fail the command too.
 
-The default policy is Pyright **basic**, across all Python source and tests,
-with **strict** checking enforced for all shared helpers and operational Python
-in `common/`, `pipeline/*.py`, `stages/*/*.py` and the extensionless runtime
-commands,
-including explicit extensionless runtime commands. Unlike homelab-hsm's strict
-policy, it permits existing unannotated functions; unit tests and the cross-stage ZFS integration runner migrate separately. There are no baseline ignores or disabled
+Pyright **strict** is the default across all source, unit tests and the native
+ZFS integration runner, including the explicitly listed extensionless runtime
+commands. There are no baseline ignores, per-path basic exceptions or disabled
 error rules. Extra import paths resolve shared helpers and upgrade test fixtures.
 Dynamic imports and subprocess pipes are explicitly narrowed where needed;
-heterogeneous JSON test data is annotated at its boundary. No checker tools or
-dependencies are installed in the live image by this target.
+heterogeneous JSON test data is annotated at its boundary. Mock callbacks use
+named typed functions where their signatures could not be inferred. Failed-write,
+partial-write and malformed-input fixtures retain their original assertions.
+No checker tools or dependencies are installed in the live image by this target.
 
 
 Shared contracts in `common/contracts.py` describe disk/partition metadata,
@@ -114,9 +113,7 @@ recovery membership, release payloads and transport inventory variants. Runtime
 validation remains authoritative: TypedDict annotations do not validate JSON.
 The existing recovery validators accept dynamic mappings at their input boundary
 and expose typed records only after the original checks. The contracts module
-is installed beside the live runtime helpers. `common/` has no suppressed strict
-diagnostics; operational callers are also strict; unit tests and the cross-stage ZFS runner
-retain basic checking during migration.
+is installed beside the live runtime helpers. All owners are checked strictly without suppressed diagnostics.
 
 
 Operational reports and cleanup inputs have owner-local TypedDict contracts.

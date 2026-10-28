@@ -1,9 +1,12 @@
 """Prerequisite reports include every workflow and aggregate apt package advice."""
 
+from __future__ import annotations
+
 import contextlib
 import importlib.util
 import io
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,12 +21,18 @@ spec.loader.exec_module(host)
 
 class HostCheckTests(unittest.TestCase):
     def report(
-        self, missing=(), *, pexpect=True, firmware=True, probe=None, module=True
+        self,
+        missing: tuple[str, ...] = (),
+        *,
+        pexpect: bool = True,
+        firmware: bool = True,
+        probe: Callable[..., tuple[bool, str]] | None = None,
+        module: bool = True,
     ):
-        def exists(path):
+        def exists(path: Path):
             return module if str(path) == "/sys/module/zfs" else firmware
 
-        def ready(*args):
+        def ready(*args: str | Path):
             if args[:2] == ("docker", "info"):
                 return (
                     True,
@@ -34,11 +43,15 @@ class HostCheckTests(unittest.TestCase):
             return True, ""
 
         stream = io.StringIO()
+
+        def find_tool(name: str):
+            return None if name in missing else "/bin/" + name
+
         with (
             patch.object(
                 host.shutil,
                 "which",
-                side_effect=lambda name: None if name in missing else "/bin/" + name,
+                side_effect=find_tool,
             ),
             patch.object(
                 host.importlib.util,
@@ -96,7 +109,7 @@ class HostCheckTests(unittest.TestCase):
         self.assertNotIn("sudo apt install", report)
 
     def test_missing_buildx_and_unavailable_docker_produce_different_advice(self):
-        def unavailable(*args):
+        def unavailable(*args: str | Path):
             if args[:2] == ("docker", "buildx"):
                 return False, "no buildx"
             return False, "permission denied"

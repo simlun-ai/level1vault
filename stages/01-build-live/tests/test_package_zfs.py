@@ -1,5 +1,7 @@
 """Verify the real standalone Debian module package without loading kernel code."""
 
+from __future__ import annotations
+
 import importlib.util
 import os
 import shutil

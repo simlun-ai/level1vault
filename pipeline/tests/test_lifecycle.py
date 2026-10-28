@@ -1,5 +1,7 @@
 """Check privilege handoff, cleanup exclusion, and published metadata ownership."""
 
+from __future__ import annotations
+
 import fcntl
 import importlib.util
 import os

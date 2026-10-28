@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Behavior tests with mocked system tools; no mounts, ZFS, or privileged IO."""
 
+from __future__ import annotations
+
 import os
 import subprocess
 import tempfile
@@ -22,12 +24,12 @@ class ScriptTests(unittest.TestCase):
             os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", LOG=str(self.log)
         )
 
-    def tool(self, name, body):
+    def tool(self, name: str, body: str):
         file = self.bin / name
         file.write_text("#!/bin/sh\nset -eu\n" + body + "\n")
         file.chmod(0o755)
 
-    def run_script(self, script):
+    def run_script(self, script: Path):
         return subprocess.run(
             ["sh", str(script), "1"], env=self.env, capture_output=True, text=True
         )
@@ -35,15 +37,15 @@ class ScriptTests(unittest.TestCase):
     def workspace(
         self,
         *,
-        imported=False,
-        mounted=False,
-        source="level1-workspace-1/data",
-        mountpoint=None,
-        canmount="noauto",
-        import_fails=False,
-        encrypted=True,
-        key_fails=False,
-        replica=False,
+        imported: bool = False,
+        mounted: bool = False,
+        source: str = "level1-workspace-1/data",
+        mountpoint: str | None = None,
+        canmount: str = "noauto",
+        import_fails: bool = False,
+        encrypted: bool = True,
+        key_fails: bool = False,
+        replica: bool = False,
     ):
         mp = self.base / "workspace"
         mp.mkdir()

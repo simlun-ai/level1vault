@@ -1,5 +1,7 @@
 """Exercise member recovery with mocked devices and realistic ZFS status output."""
 
+from __future__ import annotations
+
 import importlib.machinery
 import importlib.util
 import json
@@ -34,7 +36,12 @@ RECORD = RecoveryRecord(
 )
 
 
-def status(state="UNAVAIL", a="11", errors="No known data errors", counters="0 0 0"):
+def status(
+    state: str = "UNAVAIL",
+    a: str = "11",
+    errors: str = "No known data errors",
+    counters: str = "0 0 0",
+):
     return f"""  pool: level1-workspace-1
  state: DEGRADED
 config:
@@ -49,7 +56,7 @@ errors: {errors}
 """
 
 
-def label(leaf="12", pool="100"):
+def label(leaf: str = "12", pool: str = "100"):
     return f"LABEL 0\n name: 'level1-workspace-1'\n pool_guid: {pool}\n guid: {leaf}\n vdev_tree:\n type: 'mirror'\n"
 
 
@@ -92,7 +99,7 @@ class ReplaceTests(unittest.TestCase):
         ):
             replace.check_complete("level1-workspace-1", "12", "13")
 
-    def query(self, *args):
+    def query(self, *args: str | Path):
         if args[0] == "lsblk":
             return "/dev/sda"
         if args[0] == "zdb":
@@ -121,10 +128,10 @@ class ReplaceTests(unittest.TestCase):
                 "encryption": "aes-256-gcm",
                 "encryptionroot": "level1-workspace-1/data",
                 "keyformat": "passphrase",
-            }[args[-2]]
+            }[str(args[-2])]
         raise AssertionError(args)
 
-    def recover(self, resuming=False, wrong_pool=False):
+    def recover(self, resuming: bool = False, wrong_pool: bool = False):
         self.status_reads = 0
         self.pool_guid = "999" if wrong_pool else "100"
         self.resuming = resuming
@@ -135,14 +142,16 @@ class ReplaceTests(unittest.TestCase):
                 dict(node="/dev/disk/by-partuuid/" + RECORD["new_partuuid"]),
             ]
         )
+
+        def connected_path(p: Path):
+            return str(p) != "/dev/disk/by-partuuid/" + RECORD["failed_partuuid"]
+
         with (
             patch.object(Path, "read_text", return_value=json.dumps(RECORD)),
             patch.object(
                 Path,
                 "exists",
-                lambda p: (
-                    str(p) != "/dev/disk/by-partuuid/" + RECORD["failed_partuuid"]
-                ),
+                connected_path,
             ),
             patch.object(replace, "output", side_effect=self.query),
             patch.object(replace, "connected_identities"),

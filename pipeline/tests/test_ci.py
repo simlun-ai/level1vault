@@ -1,5 +1,7 @@
 """Check CI sequencing and cleanup using disposable exporter fixtures, without Docker."""
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess
@@ -71,7 +73,7 @@ else:
             BUILDX_BUILDER="level1vault-fixture",
         )
 
-    def run_ci(self, group="ci", **settings):
+    def run_ci(self, group: str = "ci", **settings: str):
         return subprocess.run(
             ["bash", str(ROOT / "pipeline/ci.sh"), group],
             env=dict(self.env, **settings),

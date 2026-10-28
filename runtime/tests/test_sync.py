@@ -1,5 +1,7 @@
 """Pipeline checks without ZFS IO; actual replication is tested by CI on real pools."""
 
+from __future__ import annotations
+
 import argparse
 import importlib.machinery
 import importlib.util

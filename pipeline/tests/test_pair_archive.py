@@ -1,5 +1,7 @@
 """Exercise the real sparse transport and incomplete-extraction boundary."""
 
+from __future__ import annotations
+
 import os
 import subprocess
 import tempfile
@@ -10,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PairArchiveTests(unittest.TestCase):
-    def run_archive(self, action, source, destination):
+    def run_archive(self, action: str, source: Path, destination: Path | None):
         return subprocess.run(
             [
                 "bash",

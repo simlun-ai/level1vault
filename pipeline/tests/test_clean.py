@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib.util
 import json
 import tempfile
@@ -16,7 +18,7 @@ spec.loader.exec_module(cleaner)
 class CleanupTests(unittest.TestCase):
     def test_refuses_mount_container_and_loop(self):
         build = Path("/build-test")
-        cases = [
+        cases: list[tuple[str, list[dict[str, object]], dict[str, object]]] = [
             (
                 "1 2 0:1 / /build-test/chroot/dev rw - tmpfs tmpfs rw",
                 [],

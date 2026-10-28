@@ -1,5 +1,7 @@
 """Host initializer command-flow tests; kernel/ZFS commands are mocked."""
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess
@@ -91,12 +93,12 @@ esac""",
         self.script = self.base / "initialize.sh"
         self.script.write_text(text)
 
-    def tool(self, name, body):
+    def tool(self, name: str, body: str):
         p = self.bin / name
         p.write_text(f'#!/bin/sh\nset -eu\necho "{name} $*" >> "$LOG"\n' + body + "\n")
         p.chmod(0o755)
 
-    def run_initialize(self, *args):
+    def run_initialize(self, *args: str | Path):
         return subprocess.run(
             ["bash", str(self.script), str(self.out), *(args or ("1", "--active"))],
             env=self.env,
