@@ -41,3 +41,15 @@ FROM lint-tools AS ruff
 COPY --link . .
 RUN --network=none ruff check --no-cache pipeline stages runtime common integration-tests && \
     ruff format --check --no-cache pipeline stages runtime common integration-tests
+
+# Match homelab-hsm's pinned checker and JavaScript runtime.
+FROM node:24.19.0-bookworm-slim AS pyright-node
+RUN npm install --global pyright@1.1.414
+
+FROM python:3.10-slim-bookworm AS typecheck
+RUN pip install --no-cache-dir pexpect==4.9.0 ptyprocess==0.7.0
+COPY --from=pyright-node /usr/local/bin/node /usr/local/bin/node
+COPY --from=pyright-node /usr/local/lib/node_modules/pyright /opt/pyright
+WORKDIR /src
+COPY --link . .
+RUN --network=none node /opt/pyright/index.js --pythonpath /usr/local/bin/python --warnings

@@ -30,6 +30,7 @@ coordinate checks with `make clean`; no test requests an insecure RUN entitlemen
 
 | Bake target | Check |
 | --- | --- |
+| `typecheck` | Pyright basic type checking across all Python, targeting Python 3.10 |
 | `ruff` | Python lint and formatting, targeting Python 3.10 |
 | `shell` | ShellCheck and declared-interpreter syntax checks |
 | `unit-pipeline` | Orchestration, export wrapper and lifecycle unit tests |
@@ -64,7 +65,7 @@ docker buildx bake --builder "$(python3 pipeline/lifecycle.py builder-name)" \
 ```
 
 `make test` retains the quick host lint/unit checks, and `python3 pipeline/test.py
-pipeline` (or `runtime`, `stages`) selects one owner. Pyright remains a follow-up. Ruff runs as an independent Bake target with its
+pipeline` (or `runtime`, `stages`) selects one owner. Pyright runs in the independent `typecheck` target. Ruff runs as an independent Bake target with its
 own pinned tool stage.
 
 GitHub Actions sets up Buildx and calls `make ci`. Native ZFS remains a separate
@@ -86,3 +87,21 @@ Ruff's compatibility checks; it does not constitute testing on Python 3.10.
 The tool stage is isolated from production dependencies and executes checks with
 networking disabled. Intentional imports after shared-helper path setup carry
 line-specific E402 annotations; other Python lint rules remain enabled.
+
+
+## Python type checking
+
+`make typecheck` runs the same Pyright target as `make ci`. The check pins Pyright
+1.1.414 and Node 24.19.0, matching homelab-hsm, and targets Python 3.10 on Linux.
+Its isolated Python 3.10 environment installs only the pinned pexpect dependency
+and ptyprocess; it never launches QEMU. Check execution disables networking,
+while tool/dependency preparation is cached. Warnings fail the command too.
+
+The initial policy is Pyright **basic**, across all Python source and tests,
+including explicit extensionless runtime commands. Unlike homelab-hsm's strict
+policy, it permits existing unannotated functions; adopting strict mode requires
+a separate annotation migration. There are no baseline ignores or disabled
+error rules. Extra import paths resolve shared helpers and upgrade test fixtures.
+Dynamic imports and subprocess pipes are explicitly narrowed where needed;
+heterogeneous JSON test data is annotated at its boundary. No checker tools or
+dependencies are installed in the live image by this target.

@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location(
     "check_host", ROOT / "pipeline/check-host.py"
 )
+assert spec is not None and spec.loader is not None
 host = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
 

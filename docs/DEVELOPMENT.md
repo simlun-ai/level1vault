@@ -22,6 +22,7 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 | `make ci-build` | Full image, inspection, upgrade metadata, ownership and cleanup checks |
 | `make ci-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1` | Explicitly enabled native ZFS integration on a disposable host |
 | `make test` | ShellCheck, shell syntax checks and Python unit/behavior tests |
+| `make typecheck` | Pinned Pyright basic type checking targeting Python 3.10 |
 | `make lint-python` | Pinned Ruff lint and formatting checks targeting Python 3.10 |
 | `make test-unit` | Only Python unit/behavior tests |
 | `make test-container` | Build the toolchain and test real disk assembly and account/login configuration in separate sandboxed BuildKit stages |

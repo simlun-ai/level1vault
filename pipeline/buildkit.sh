@@ -141,8 +141,8 @@ case $ACTION in
     ;;
 
   # Run the Bake graph and verify actual local exports as the caller.
-  ruff)
-    (cd "$SOURCE_DIR" && docker buildx bake --builder "$BUILDX_BUILDER" --file docker-bake.hcl --progress=plain ruff)
+  ruff|typecheck)
+    (cd "$SOURCE_DIR" && docker buildx bake --builder "$BUILDX_BUILDER" --file docker-bake.hcl --progress=plain "$ACTION")
     ;;
 
   ci|test)

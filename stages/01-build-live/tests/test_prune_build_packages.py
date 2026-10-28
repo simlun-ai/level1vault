@@ -8,6 +8,7 @@ STAGE = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
     "prune_build_packages", STAGE / "prune-build-packages.py"
 )
+assert spec is not None and spec.loader is not None
 pruner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pruner)
 

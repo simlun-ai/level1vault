@@ -6,6 +6,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,10 +17,11 @@ loader = importlib.machinery.SourceFileLoader(
     "workspace_replace", str(ROOT / "runtime/workspace-replace")
 )
 spec = importlib.util.spec_from_loader(loader.name, loader)
+assert spec is not None and spec.loader is not None
 replace = importlib.util.module_from_spec(spec)
 loader.exec_module(replace)
 
-RECORD = dict(
+RECORD: dict[str, Any] = dict(
     format=1,
     pair="1",
     member="a",

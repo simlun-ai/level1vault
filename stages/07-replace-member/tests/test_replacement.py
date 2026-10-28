@@ -19,6 +19,7 @@ def load(name, filename):
     spec = importlib.util.spec_from_file_location(
         name, ROOT / "stages/07-replace-member" / filename
     )
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
