@@ -1,20 +1,40 @@
 #!/usr/bin/env python3
 """Refuse BuildKit cleanup while checkout or selected-build resources are in use."""
 
+from __future__ import annotations
+
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import TypedDict
+
+
+class MountSource(TypedDict, total=False):
+    Source: str
+
+
+class Container(TypedDict, total=False):
+    Mounts: list[MountSource]
+    Id: str
+
+
+Loop = TypedDict("Loop", {"back-file": str, "name": str})
+
+
+class LoopInfo(TypedDict, total=False):
+    loopdevices: list[Loop]
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def inside(path, parent):
+def inside(path: Path, parent: Path):
     return path == parent or parent in path.parents
 
 
-def output(*args):
+def output(*args: str | Path):
     return subprocess.check_output(args, text=True).strip()
 
 
@@ -22,7 +42,9 @@ def mountinfo():
     return Path("/proc/self/mountinfo").read_text()
 
 
-def check_idle(build, mountinfo, containers, loops):
+def check_idle(
+    build: Path, mountinfo: str, containers: list[Container], loops: LoopInfo
+):
     """Fail closed before deletion; caller provides observed host state."""
     for line in mountinfo.splitlines():
         target = Path(
@@ -47,9 +69,11 @@ def check_idle(build, mountinfo, containers, loops):
             raise ValueError(f"Loop device still attached: {device['name']}")
 
 
-def check_checkout_idle(build):
+def check_checkout_idle(build: Path):
     ids = output("docker", "ps", "-q").split()
-    containers = json.loads(output("docker", "inspect", *ids)) if ids else []
+    containers: list[Container] = (
+        json.loads(output("docker", "inspect", *ids)) if ids else []
+    )
     loops = json.loads(
         output("losetup", "--json", "--list", "--output", "NAME,BACK-FILE")
     )

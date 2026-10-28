@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Package committed repository history and install an independent offline checkout."""
 
+from __future__ import annotations
+
 import argparse
 import subprocess
 from pathlib import Path
@@ -8,14 +10,14 @@ from pathlib import Path
 ORIGIN = "https://github.com/simlun-ai/level1vault.git"
 
 
-def git(*args, cwd=None):
+def git(*args: str | Path, cwd: Path | None = None):
     options = ["-c", "safe.directory=" + str(Path(cwd).resolve())] if cwd else []
     return subprocess.check_output(
         ["git", *options, *map(str, args)], cwd=cwd, text=True
     ).strip()
 
 
-def bundle(source, destination):
+def bundle(source: Path, destination: Path):
     # Require complete history before preparing the image's repository input.
     if git("rev-parse", "--is-shallow-repository", cwd=source) != "false":
         raise SystemExit(
@@ -27,7 +29,7 @@ def bundle(source, destination):
     (destination / "commit").write_text(commit + "\n")
 
 
-def install(source, destination):
+def install(source: Path, destination: Path):
     # Create a self-contained checkout at the build's committed revision.
     commit = (source / "commit").read_text().strip()
     git("clone", "--no-checkout", source / "source.bundle", destination)

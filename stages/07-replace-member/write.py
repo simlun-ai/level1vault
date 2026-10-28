@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Write one blank USB as an empty replacement member and verify its readback."""
 
+from __future__ import annotations
+
 import argparse
 import fcntl
 import json
@@ -26,7 +28,7 @@ from usb_devices import descendants, describe_disk, imported_devices, validate_i
 from usb_io import write_image  # noqa: E402 - resolve shared helpers after configuring their path
 
 
-def write(out, pair, member, disk):
+def write(out: Path, pair: str, member: str, disk: Path):
     # Require a complete, uninitialized replacement and an unattached source image.
     require(
         (out / "REPLACEMENT-READY").is_file()

@@ -98,9 +98,11 @@ and ptyprocess; it never launches QEMU. Check execution disables networking,
 while tool/dependency preparation is cached. Warnings fail the command too.
 
 The default policy is Pyright **basic**, across all Python source and tests,
-with **strict** checking enforced for every file under `common/`,
+with **strict** checking enforced for all shared helpers and operational Python
+in `common/`, `pipeline/*.py`, `stages/*/*.py` and the extensionless runtime
+commands,
 including explicit extensionless runtime commands. Unlike homelab-hsm's strict
-policy, it permits existing unannotated functions; the remaining owners migrate to strict checking separately. There are no baseline ignores or disabled
+policy, it permits existing unannotated functions; unit tests and the cross-stage ZFS integration runner migrate separately. There are no baseline ignores or disabled
 error rules. Extra import paths resolve shared helpers and upgrade test fixtures.
 Dynamic imports and subprocess pipes are explicitly narrowed where needed;
 heterogeneous JSON test data is annotated at its boundary. No checker tools or
@@ -113,4 +115,13 @@ validation remains authoritative: TypedDict annotations do not validate JSON.
 The existing recovery validators accept dynamic mappings at their input boundary
 and expose typed records only after the original checks. The contracts module
 is installed beside the live runtime helpers. `common/` has no suppressed strict
-diagnostics; all other source and tests retain basic checking during migration.
+diagnostics; operational callers are also strict; unit tests and the cross-stage ZFS runner
+retain basic checking during migration.
+
+
+Operational reports and cleanup inputs have owner-local TypedDict contracts.
+The QEMU runner describes its dynamically imported pexpect interface with small
+protocols; the existing pinned dependency remains optional outside the checker
+and explicit workstation QEMU command. Its runner is checked without booting a
+guest. Runtime annotations are postponed for Python 3.10 compatibility and to
+avoid adding runtime imports of annotation-only dependencies.

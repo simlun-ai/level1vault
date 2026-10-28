@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Write and read back one initialized image pair to two explicitly selected whole USB disks."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from contracts import Disk
+
+
 import argparse
 import fcntl
 import json
@@ -20,16 +28,16 @@ from usb_io import readback as readback  # noqa: E402 - resolve shared helpers a
 from usb_io import write_image  # noqa: E402 - resolve shared helpers after configuring their path
 
 
-def output(*args):
+def output(*args: str | Path):
     return subprocess.check_output(args, text=True).strip()
 
 
-def require(condition, message):
+def require(condition: object, message: str):
     if not condition:
         raise ValueError(message)
 
 
-def verify_images(out, pair):
+def verify_images(out: Path, pair: str):
     # Require completed regular images belonging to the selected pair.
     require(
         (out / "READY").is_file() and not (out / "INITIALIZING").exists(),
@@ -48,16 +56,16 @@ def verify_images(out, pair):
         require(image.stat().st_size > 0, f"Empty source file: {image}")
 
 
-def disk_info(path):
+def disk_info(path: Path):
     return describe_disk(path, output)
 
 
-def validate_disk(info, image_size, imported):
+def validate_disk(info: Disk, image_size: int, imported: set[Path]):
     validate_idle(info, imported)
     require(int(info["size"]) >= image_size, f"Disk is too small: {info['name']}")
 
 
-def write_pair(out, pair, disk_a, disk_b):
+def write_pair(out: Path, pair: str, disk_a: Path, disk_b: Path):
     # Check readiness and reject source image loops before inspecting destinations.
     verify_images(out, pair)
     images = [out / "usb-a.img", out / "usb-b.img"]

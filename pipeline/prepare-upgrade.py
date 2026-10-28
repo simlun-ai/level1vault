@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Build and inspect an OS upgrade without accessing USB disks."""
 
+from __future__ import annotations
+
 import argparse
 import os
 import subprocess
@@ -10,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def prepare(build):
+def prepare(build: Path):
     # Refuse existing releases and source that cannot be reproduced from Git.
     if build.exists() or build.is_symlink() or "," in str(build):
         raise ValueError(

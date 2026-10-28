@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Populate freshly initialized image replicas from pair 1 before USB writing."""
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -17,11 +19,11 @@ sys.path.insert(0, str(ROOT / "common"))
 from artifact_owner import publish  # noqa: E402 - resolve shared helpers after configuring their path
 
 
-def output(*args):
+def output(*args: str | Path):
     return subprocess.check_output(list(map(str, args)), text=True).strip()
 
 
-def command(*args):
+def command(*args: str | Path):
     subprocess.run(list(map(str, args)), check=True)
 
 
@@ -32,10 +34,10 @@ def imported_pools():
     )
 
 
-def release(resources):
+def release(resources: list[tuple[str, str, list[str]]]):
     # Export only this run's pools, retaining loops whenever ownership is uncertain.
     pools = imported_pools()
-    errors = []
+    errors: list[str] = []
     for pool, guid, loops in reversed(resources):
         try:
             if pool in pools:
@@ -50,10 +52,10 @@ def release(resources):
         raise RuntimeError("; ".join(errors))
 
 
-def seed(build, count):
+def seed(build: Path, count: int):
     # Check all pair identities and reserve their final readiness markers.
     pairs = [build / "pairs" / str(pair) for pair in range(1, count + 1)]
-    records = []
+    records: list[tuple[str, str]] = []
     occupied = imported_pools()
     for pair, out in enumerate(pairs, 1):
         if not (out / "READY").is_file() or (out / "INITIALIZING").exists():
@@ -75,12 +77,12 @@ def seed(build, count):
         (out / "READY").unlink()
 
     # Import only the new image pools through a private device search directory.
-    resources = []
+    resources: list[tuple[str, str, list[str]]] = []
     with tempfile.TemporaryDirectory(prefix="seed-", dir=build) as temporary:
         search = Path(temporary)
         try:
             for out, (pool, guid) in zip(pairs, records, strict=False):
-                loops = []
+                loops: list[str] = []
                 resources.append((pool, guid, loops))
                 devices = search / pool
                 devices.mkdir()

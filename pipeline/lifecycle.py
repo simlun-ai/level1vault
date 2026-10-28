@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Serialize cleanup against checkout operations and run builds as the caller."""
 
+from __future__ import annotations
+
 import fcntl
 import hashlib
 import os
 import shlex
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def git_path(name):
+def git_path(name: str):
     path = Path(
         subprocess.check_output(
             ["git", "rev-parse", "--git-path", name], cwd=ROOT, text=True
@@ -25,7 +28,7 @@ def builder_name():
     return "level1vault-" + hashlib.sha256(str(ROOT).encode()).hexdigest()[:12]
 
 
-def user_command(args):
+def user_command(args: list[str]):
     # Privileged host coordinators hand all BuildKit work back to the sudo caller.
     uid = os.environ.get("SUDO_UID")
     if os.geteuid() == 0 and uid and int(uid) != 0:
@@ -47,7 +50,7 @@ def user_command(args):
     return args
 
 
-def wait_command(args, env):
+def wait_command(args: list[str], env: Mapping[str, str]):
     with subprocess.Popen(args, env=env) as process:
         while True:
             try:

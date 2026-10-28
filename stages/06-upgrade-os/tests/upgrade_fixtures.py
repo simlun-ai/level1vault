@@ -2,9 +2,13 @@
 
 import hashlib
 import json
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from contracts import Release
 
 
-def make_release(root, text="new OS"):
+def make_release(root, text="new OS") -> "Release":
     root.mkdir()
     files = {}
     for name in (
@@ -30,7 +34,7 @@ def make_release(root, text="new OS"):
     ).hexdigest()
     (root / "live/release.json").write_text(json.dumps(manifest))
     (root / "UPGRADE-READY").touch()
-    return manifest
+    return cast("Release", manifest)
 
 
 def make_boot(root, uuid="AAAA-BBBB"):

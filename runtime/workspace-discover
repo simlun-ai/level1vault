@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Select a unique complete workspace mirror from offline labels, without importing."""
 
+from __future__ import annotations
+
 import argparse
 import re
 import subprocess
 import sys
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 
 
-def identity(text):
+def identity(text: str):
     # Require all readable label copies to agree on the mirror and this member.
-    records = set()
+    records: set[tuple[str, str, str, frozenset[str]]] = set()
     for label in re.split(r"LABEL\s+[0-9]+", text):
         name = re.search(r"^\s*name:\s*'(level1-workspace-[1-9][0-9]*)'", label, re.M)
         pool = re.search(r"^\s*pool_guid:\s*([0-9]+)", label, re.M)
@@ -33,19 +36,21 @@ def identity(text):
     return next(iter(records)) if len(records) == 1 else None
 
 
-def select(devices, pair=None):
+def select(devices: Sequence[tuple[Path, str]], pair: str | None = None):
     # Count physical partitions once and reject duplicate member or pool identities.
-    groups = defaultdict(list)
-    names = defaultdict(set)
+    groups: defaultdict[tuple[str, str], list[tuple[Path, str, frozenset[str]]]] = (
+        defaultdict(list)
+    )
+    names: defaultdict[str, set[str]] = defaultdict(set)
     for device, text in devices:
         record = identity(text)
         if record and (pair is None or record[0] == "level1-workspace-" + pair):
             name, pool, leaf, children = record
             groups[name, pool].append((device, leaf, children))
             names[name].add(pool)
-    candidates = []
+    candidates: list[str] = []
     for (name, _pool), members in groups.items():
-        leaves = {leaf for _, leaf, _ in members}
+        leaves = frozenset(leaf for _, leaf, _ in members)
         if (
             len(names[name]) == 1
             and len(members) == 2
@@ -61,9 +66,9 @@ def select(devices, pair=None):
     return candidates[0]
 
 
-def discover(pair=None, guid=False):
+def discover(pair: str | None = None, guid: bool = False):
     # Scan PARTUUID aliases as the mount helper does; label reads never import pools.
-    devices = []
+    devices: list[tuple[Path, str]] = []
     paths = sorted({path.resolve() for path in Path("/dev/disk/by-partuuid").glob("*")})
     for path in paths:
         result = subprocess.run(

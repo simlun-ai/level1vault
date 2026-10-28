@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise UEFI boot and workspace recovery on disposable copies of a pair."""
 
+from __future__ import annotations
+
 import argparse
 import base64
 import datetime
@@ -14,24 +16,68 @@ import subprocess
 import sys
 import tempfile
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Protocol, TextIO, TypedDict, cast
+
+
+class Child(Protocol):
+    logfile_read: TextIO | None
+    match: re.Match[str] | None
+    exitstatus: int | None
+
+    def expect(
+        self, pattern: str | list[str] | type[BaseException], *, timeout: float
+    ) -> int: ...
+    def sendline(self, line: str) -> int: ...
+    def close(self, force: bool = False) -> None: ...
+    def isalive(self) -> bool: ...
+
+
+class Expect(Protocol):
+    EOF: type[BaseException]
+
+    def spawn(
+        self,
+        command: str,
+        args: list[str],
+        *,
+        encoding: str,
+        codec_errors: str,
+        timeout: float,
+    ) -> Child: ...
+
+
+class Scenario(TypedDict):
+    name: str
+    purpose: str
+    drives: list[str]
+    steps: list[list[str]]
+
+
+class SuiteReport(TypedDict):
+    status: str
+    pair: str
+    run: str
+    completed: list[str]
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = ROOT / "stages/04-test-pair/scenarios.json"
 GUEST = ROOT / "stages/04-test-pair/guest-checks.sh"
 
 
-def command(*args):
+def command(*args: str | Path):
     # Run a host operation without interpreting shell syntax.
     return subprocess.check_output(args, text=True).strip()
 
 
-def require(condition, message):
+def require(condition: object, message: str):
     if not condition:
         raise RuntimeError(message)
 
 
-def verify_inputs(out, pair, sys_block=Path("/sys/block")):
+def verify_inputs(out: Path, pair: str, sys_block: Path = Path("/sys/block")):
     # Reject incomplete, unexpected, or host-attached source images.
     require(out.is_dir(), "OUT must be an initialized image directory")
     require(
@@ -61,7 +107,7 @@ def verify_inputs(out, pair, sys_block=Path("/sys/block")):
             )
 
 
-def serial_config(config):
+def serial_config(config: str):
     # Enable the test console without changing the image's boot selection.
     lines = config.splitlines(keepends=True)
     count = 0
@@ -77,7 +123,7 @@ def serial_config(config):
     return "".join(lines)
 
 
-def prepare_copies(out, work, upgrade_release=None):
+def prepare_copies(out: Path, work: Path, upgrade_release: Path | None = None):
     # Copy the raw disks while QEMU's normal source locking is in effect.
     for side in ("a", "b"):
         source = out / f"usb-{side}.img"
@@ -114,10 +160,10 @@ def prepare_copies(out, work, upgrade_release=None):
         )
 
 
-def firmware_pair(code, variables):
+def firmware_pair(code: str | Path | None, variables: str | Path | None):
     # Select a matching non-Secure-Boot OVMF firmware pair.
     require(bool(code) == bool(variables), "Specify both --code and --vars together")
-    if code:
+    if code and variables:
         paths = Path(code).resolve(), Path(variables).resolve()
         require(
             all(path.is_file() for path in paths), "OVMF firmware files are missing"
@@ -134,7 +180,7 @@ def firmware_pair(code, variables):
     )
 
 
-def qemu_args(work, sides, code, variables, accel):
+def qemu_args(work: Path, sides: list[str], code: Path, variables: Path, accel: str):
     # Attach only disposable disks with no network or host filesystem access.
     args = [
         "-machine",
@@ -167,7 +213,13 @@ def qemu_args(work, sides, code, variables, accel):
 
 
 class Guest:
-    def __init__(self, child, expect, timeout, expected_revision=None):
+    def __init__(
+        self,
+        child: Child,
+        expect: Expect,
+        timeout: float,
+        expected_revision: str | None = None,
+    ):
         self.child = child
         self.expect = expect
         self.timeout = timeout
@@ -198,7 +250,7 @@ class Guest:
             "base64 -d /tmp/level1vault-qemu-check.b64 > /tmp/level1vault-qemu-check.sh"
         )
 
-    def run(self, script, passphrase=None):
+    def run(self, script: str, passphrase: str | None = None):
         # Report command status without confusing echoed input for a result.
         marker = "L1V_" + uuid.uuid4().hex
         line = script + "; printf '\\n%s:%s\\n' " + marker + ' "$?"'
@@ -214,7 +266,7 @@ class Guest:
                 self.child.sendline(passphrase)
             self.child.expect(marker + r":([0-9]+)\r*\n", timeout=self.timeout)
             require(
-                self.child.match.group(1) == "0",
+                self.child.match is not None and self.child.match.group(1) == "0",
                 "Guest acceptance check failed; see the scenario log",
             )
         finally:
@@ -235,16 +287,23 @@ class Guest:
         require(self.child.exitstatus == 0, "QEMU did not exit cleanly")
 
 
-def run_suite(args, expect, out, results, firmware, passphrase):
+def run_suite(
+    args: argparse.Namespace,
+    expect: Expect,
+    out: Path,
+    results: Path,
+    firmware: Sequence[Path],
+    passphrase: str | None,
+):
     # Keep copied workspace data temporary even when a test is interrupted.
     run_id = uuid.uuid4().hex[:16]
-    completed = []
+    completed: list[str] = []
     expected_revision = None
     if args.upgrade_release is not None:
         expected_revision = json.loads(
             (args.upgrade_release / "live/release.json").read_text()
         )["source_commit"]
-    report = {
+    report: SuiteReport = {
         "status": "running",
         "pair": args.pair,
         "run": run_id,
@@ -254,7 +313,8 @@ def run_suite(args, expect, out, results, firmware, passphrase):
         with tempfile.TemporaryDirectory(prefix="disks-", dir=results) as temporary:
             work = Path(temporary)
             prepare_copies(out, work, args.upgrade_release)
-            for scenario in json.loads(SCENARIOS.read_text()):
+            scenarios: list[Scenario] = json.loads(SCENARIOS.read_text())
+            for scenario in scenarios:
                 print(f"QEMU: {scenario['name']} — {scenario['purpose']}", flush=True)
                 variables = work / "vars.fd"
                 shutil.copyfile(firmware[1], variables)
@@ -300,7 +360,7 @@ def run_suite(args, expect, out, results, firmware, passphrase):
         (results / "result.json").write_text(json.dumps(report, indent=2) + "\n")
 
 
-def prepare_results(results, fallback=None):
+def prepare_results(results: Path, fallback: Path | None = None) -> Path:
     # Reserve private test storage before checking images or requesting secrets.
     require("," not in str(results), "QEMU paths must not contain commas")
     try:
@@ -409,7 +469,7 @@ def main():
     # Protect test logs and run the acceptance suite on private copies.
     os.umask(0o077)
     try:
-        run_suite(args, pexpect, out, results, firmware, passphrase)
+        run_suite(args, cast(Expect, pexpect), out, results, firmware, passphrase)
     except (pexpect.TIMEOUT, pexpect.EOF):
         raise RuntimeError(
             "Guest timed out or exited unexpectedly; inspect the scenario log (unlock exchange omitted)"

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Identify installed build tools and development headers for removal."""
 
+from __future__ import annotations
+
 import re
 import sys
 from pathlib import Path
 
 
-def build_package(name):
+def build_package(name: str):
     # Retain the GCC version metadata needed by runtime libraries.
     name = name.split(":", 1)[0]
     if re.fullmatch(r"gcc-\d+-base", name):
@@ -21,7 +23,7 @@ def build_package(name):
     )
 
 
-def removal_plan(inventory):
+def removal_plan(inventory: str):
     # Select installed packages only, preserving exact multiarch package names.
     return sorted(
         name

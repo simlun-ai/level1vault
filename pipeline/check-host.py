@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Report host build, USB and test prerequisites without changing the system."""
 
+from __future__ import annotations
+
 import argparse
 import importlib.util
 import json
@@ -92,7 +94,7 @@ GROUPS = {
 }
 
 
-def probe(*args):
+def probe(*args: str | Path):
     try:
         result = subprocess.run(args, capture_output=True, text=True, timeout=15)
         return result.returncode == 0, result.stdout.strip() or result.stderr.strip()
@@ -100,9 +102,9 @@ def probe(*args):
         return False, str(error)
 
 
-def check(code=None, variables=None):
+def check(code: str | None = None, variables: str | None = None):
     # Collect every missing executable, module and firmware dependency in one pass.
-    packages = set()
+    packages: set[str] = set()
     failed = False
     for group, tools in GROUPS.items():
         missing = [tool for tool in tools if shutil.which(tool) is None]

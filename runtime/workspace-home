@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Manage the live user's home inside the existing encrypted workspace dataset."""
 
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -9,6 +11,14 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import TypedDict
+
+
+class Mount(TypedDict):
+    source: str
+    fstype: str
+    fsroot: str
+
 
 WORKSPACE = Path("/mnt/workspace")
 HOME = Path("/home/simlun")
@@ -16,7 +26,7 @@ DEFAULTS = Path("/usr/local/share/level1vault/home-default")
 UID = GID = 1000
 
 
-def mounted(path):
+def mounted(path: Path):
     result = subprocess.run(
         [
             "findmnt",
@@ -40,7 +50,7 @@ def mounted(path):
     return filesystems[0]
 
 
-def verify_mount(mount, dataset, root):
+def verify_mount(mount: Mount | None, dataset: str, root: str):
     if not mount or (mount["source"], mount["fstype"], mount["fsroot"]) != (
         dataset,
         "zfs",
@@ -49,7 +59,7 @@ def verify_mount(mount, dataset, root):
         raise RuntimeError("Unexpected workspace/home mount; inspect before continuing")
 
 
-def directory(path):
+def directory(path: Path):
     if path.is_symlink() or not path.is_dir():
         raise RuntimeError(f"Expected a real directory at {path}")
 
@@ -70,7 +80,7 @@ def require_idle():
         )
 
 
-def attach(dataset):
+def attach(dataset: str):
     # Verify both mount locations before creating or hiding any home files.
     verify_mount(mounted(WORKSPACE), dataset, "/")
     directory(HOME)
@@ -104,7 +114,7 @@ def attach(dataset):
     verify_mount(mounted(HOME), dataset, "/home/simlun")
 
 
-def detach(pool):
+def detach(pool: str):
     # Leave homes belonging to other selected pools untouched.
     current = mounted(HOME)
     if not current:
