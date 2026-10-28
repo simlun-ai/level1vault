@@ -39,7 +39,8 @@ if group == os.environ.get('FAIL_GROUP'):
     sys.exit(42)
 results = pathlib.Path(os.environ['CI_RESULTS'])
 if group in ('ci', 'container'):
-    results.mkdir()
+    assert results.is_dir()
+    assert pathlib.Path(os.environ["CI_ISO"]).is_dir()
     (results / 'assembly-passed').touch()
     (results / 'live-image-amd64.hybrid.iso').write_text('synthetic')
 else:

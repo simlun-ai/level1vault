@@ -343,7 +343,13 @@ class ZFSLifecycleTests(unittest.TestCase):
         ):
             t.stage("1", Path("/source"), Path("/discover"))
         with (
-            patch.object(t, "walk_tree", return_value=[{"size": 1}]),
+            patch.object(
+                t,
+                "walk_tree",
+                return_value=[
+                    {"type": "file", "path": "fixture", "size": 1, "sha256": "0" * 64}
+                ],
+            ),
             self.assertRaisesRegex(ValueError, "Export"),
         ):
             t.stage("1", Path("/source"), Path("/discover"))
