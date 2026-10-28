@@ -11,7 +11,9 @@ export CI_RESULTS="$TASK_TMP/results" CI_ISO="$TASK_TMP/iso"
 export ASSEMBLY_ID_1 ASSEMBLY_ID_2
 ASSEMBLY_ID_1=$(python3 -c 'import uuid; print(uuid.uuid4())')
 ASSEMBLY_ID_2=$(python3 -c 'import uuid; print(uuid.uuid4())')
-bake=(docker buildx bake --builder "$BUILDX_BUILDER" --file docker-bake.hcl --progress=plain)
+# Grant only the temporary output path outside the checkout to Bake's exporter.
+bake=(docker buildx bake --builder "$BUILDX_BUILDER" --file docker-bake.hcl --progress=plain
+  "--allow=fs.write=$CI_RESULTS")
 
 # Run independent checks together and retain the synthetic ISO for real exports.
 "${bake[@]}" "${1:-ci}"
@@ -20,7 +22,7 @@ mkdir "$CI_ISO"
 mv "$CI_RESULTS/live-image-amd64.hybrid.iso" "$CI_ISO/"
 
 # Exercise both local exporters and host sparse extraction with identical ISO input.
-"${bake[@]}" exports
+"${bake[@]}" "--allow=fs.read=$CI_ISO" exports
 for pair in 1 2; do
   bash pipeline/pair-archive.sh unpack "$CI_RESULTS/export-$pair/pair.tar" "$TASK_TMP/pair-$pair"
 done

@@ -50,7 +50,8 @@ Most targets use cache-only output, without loading or publishing images.
 `ci.sh` retains the assembly fixture in a temporary directory, then runs two
 independent pair exports through Bake. It extracts the real sparse archives on
 the host and checks sizes, allocation, ownership and unique disk identities.
-Temporary outputs are removed on success or failure. `make test-container` runs
+Bake receives explicit filesystem access only to the temporary ISO input and
+export output paths. Temporary outputs are removed on success or failure. `make test-container` runs
 only the assembly/account checks and the same complete export verification.
 
 To inspect the graph use `docker buildx bake --print ci`. To run one check,

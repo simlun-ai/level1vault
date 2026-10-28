@@ -24,6 +24,10 @@ class CoordinatorTests(unittest.TestCase):
         docker.write_text('#!' + sys.executable + '\n' + '''import json, os, pathlib, subprocess, sys
 args = sys.argv[1:]
 group = args[-1]
+assert '--allow=fs.write=' + os.environ['CI_RESULTS'] in args
+if group == 'exports':
+    assert '--allow=fs.read=' + os.environ['CI_ISO'] in args
+assert not any(arg in ('--allow=fs=*', '--allow=fs.read=*', '--allow=fs.write=*') for arg in args)
 with open(os.environ['CALLS'], 'a') as log:
     log.write(json.dumps(args) + '\\n')
 if group == os.environ.get('FAIL_GROUP'):
