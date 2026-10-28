@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Package target-kernel ZFS modules independently of DKMS ownership."""
 
+from __future__ import annotations
+
 import argparse
 import re
 import shutil
@@ -9,7 +11,14 @@ import tempfile
 from pathlib import Path
 
 
-def build_package(kernel, version, architecture, modules, copyright_file, output):
+def build_package(
+    kernel: str,
+    version: str,
+    architecture: str,
+    modules: Path,
+    copyright_file: Path,
+    output: Path,
+):
     # Validate package metadata and require actual compiled ZFS module files.
     for value in (kernel, version, architecture):
         if not re.fullmatch(r"[A-Za-z0-9.+:~_-]+", value):

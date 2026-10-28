@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Replace existing USB OS payloads in place while preserving workspace partitions."""
 
+from __future__ import annotations
+
+from collections.abc import Generator
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from contracts import PartitionTable, Release
 import argparse
 import fcntl
 import json
@@ -13,6 +20,31 @@ import tempfile
 import uuid
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
+
+
+class InspectedDisk(TypedDict):
+    disk: str
+    device_id: int
+    model: str | None
+    serial: str | None
+    table: PartitionTable
+    esp: str
+    esp_uuid: str
+    data: str
+    pool: str
+    pool_guid: str
+    leaf_guid: str
+
+
+class UpgradeReport(TypedDict):
+    release_id: str
+    source_commit: str
+    pair: str
+    status: str
+    disks: list[InspectedDisk]
+    boot_files: list[dict[str, str]]
+    completed: list[str]
+
 
 # Host helpers must not leave root-owned bytecode in the checkout.
 sys.dont_write_bytecode = True
@@ -46,17 +78,17 @@ TOOLS = (
 )
 
 
-def output(*args):
+def output(*args: str | Path):
     return subprocess.check_output(list(map(str, args)), text=True).strip()
 
 
-def command(*args):
+def command(*args: str | Path):
     subprocess.run(list(map(str, args)), check=True)
 
 
-def load_release(release):
+def load_release(release: Path):
     # Validate release metadata and permitted paths before USB access.
-    manifest = json.loads((release / "live/release.json").read_text())
+    manifest: Release = json.loads((release / "live/release.json").read_text())
     require(manifest.get("format") == 1, "Unsupported OS release format")
     require(
         re.fullmatch(r"[0-9a-f]{64}", manifest["release_id"]) is not None,
@@ -94,12 +126,14 @@ def load_release(release):
     return manifest
 
 
-def inspect_disk(path, imported):
+def inspect_disk(path: Path, imported: set[Path]) -> InspectedDisk:
     # Capture immutable device and partition identities for the upgrade report.
     info = describe_disk(path, output)
     validate_idle(info, imported)
     disk = Path(info["name"])
-    table = json.loads(output("sfdisk", "--json", disk))["partitiontable"]
+    table: PartitionTable = json.loads(output("sfdisk", "--json", disk))[
+        "partitiontable"
+    ]
     parts = table["partitions"]
     require(
         table["label"] == "gpt" and len(parts) == 2,
@@ -130,7 +164,7 @@ def inspect_disk(path, imported):
     }
 
 
-def inspect_pair(pair, disk_a, disk_b):
+def inspect_pair(pair: str, disk_a: Path, disk_b: Path):
     imported = imported_devices(output)
     disks = [inspect_disk(path, imported) for path in (disk_a, disk_b)]
     require(
@@ -162,7 +196,7 @@ def inspect_pair(pair, disk_a, disk_b):
 
 
 @contextmanager
-def mounted(esp, readonly):
+def mounted(esp: str, readonly: bool) -> Generator[Path, None, None]:
     # Mount only the EFI partition and retain the mountpoint if unmounting fails.
     mountpoint = Path(tempfile.mkdtemp(prefix="level1vault-upgrade-"))
     active = False
@@ -191,7 +225,7 @@ def mounted(esp, readonly):
         mountpoint.rmdir()
 
 
-def boot_identity(root, esp_uuid):
+def boot_identity(root: Path, esp_uuid: str):
     # Preserve the existing loader and its disk-specific boot configuration.
     loader = root / "EFI/BOOT/BOOTX64.EFI"
     config = root / "boot/grub/grub.cfg"
@@ -214,7 +248,7 @@ def boot_identity(root, esp_uuid):
     return {str(path.relative_to(root)): digest(path) for path in (loader, config)}
 
 
-def check_space(root, release):
+def check_space(root: Path, release: Path):
     # Allow in-place replacement without reserving a second complete OS copy.
     usage = os.statvfs(root)
     cluster = usage.f_frsize
@@ -243,7 +277,7 @@ def check_space(root, release):
     )
 
 
-def verify_payload(root, manifest):
+def verify_payload(root: Path, manifest: Release):
     for name, checksum in manifest["files"].items():
         require(
             (root / name).is_file() and digest(root / name) == checksum,
@@ -255,7 +289,7 @@ def verify_payload(root, manifest):
     )
 
 
-def replace_payload(root, release, manifest):
+def replace_payload(root: Path, release: Path, manifest: Release):
     # Replace only the OS files, leaving boot files and all partition metadata intact.
     for name in ("live", ".disk"):
         if (root / name).exists():
@@ -268,7 +302,9 @@ def replace_payload(root, release, manifest):
     command("sync", "-f", root)
 
 
-def update_esp(esp, esp_uuid, release, manifest, boot):
+def update_esp(
+    esp: str, esp_uuid: str, release: Path, manifest: Release, boot: dict[str, str]
+):
     # Apply the release and read back the USB payload after a clean unmount.
     with mounted(esp, readonly=False) as root:
         require(
@@ -287,7 +323,7 @@ def update_esp(esp, esp_uuid, release, manifest, boot):
         )
 
 
-def apply_release(release, pair, disk_a, disk_b):
+def apply_release(release: Path, pair: str, disk_a: Path, disk_b: Path):
     # Validate the release and both destinations before replacing either payload.
     require(
         (release / "UPGRADE-READY").is_file(),
@@ -295,7 +331,7 @@ def apply_release(release, pair, disk_a, disk_b):
     )
     manifest = load_release(release)
     disks = inspect_pair(pair, disk_a, disk_b)
-    boots = []
+    boots: list[dict[str, str]] = []
     for disk in disks:
         command("fsck.vfat", "-n", disk["esp"])
         with mounted(disk["esp"], readonly=True) as root:
@@ -307,7 +343,7 @@ def apply_release(release, pair, disk_a, disk_b):
     reports.mkdir(exist_ok=True)
     publish(reports)
     report_path = reports / ("pair-" + pair + "-" + uuid.uuid4().hex[:12] + ".json")
-    report = {
+    report: UpgradeReport = {
         "release_id": manifest["release_id"],
         "source_commit": manifest["source_commit"],
         "pair": pair,
@@ -353,7 +389,7 @@ def prerequisites():
         require(shutil.which(tool) is not None, f"Missing host tool: {tool}")
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None):
     # Share one readiness, locking and error-handling path for direct and Make use.
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--release", required=True, type=Path)

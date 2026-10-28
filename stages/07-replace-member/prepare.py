@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Build a fresh bootable, empty replacement without touching USB devices or pools."""
 
+from __future__ import annotations
+
 import argparse
 import copy
 import json
@@ -25,7 +27,7 @@ from pair_records import (  # noqa: E402 - resolve shared helpers after configur
 )
 
 
-def prepare(membership, recovery, pair, member):
+def prepare(membership: Path, recovery: Path, pair: str, member: str):
     require_separate(records_root(), recovery)
     # Preserve the current membership record before building anything.
     require(

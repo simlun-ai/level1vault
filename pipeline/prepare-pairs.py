@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Build and initialize a complete numbered set of ready-to-write USB pairs."""
 
+from __future__ import annotations
+
 import argparse
 import getpass
 import os
@@ -8,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 # Host helpers must not leave root-owned bytecode in the checkout.
@@ -18,11 +21,26 @@ sys.path.insert(0, str(ROOT / "common"))
 from artifact_owner import publish  # noqa: E402 - resolve shared helpers after configuring their path
 
 
-def command(*args, **kwargs):
-    subprocess.run(list(map(str, args)), check=True, **kwargs)
+def command(
+    *args: str | Path,
+    env: Mapping[str, str] | None = None,
+    stdin: int | None = None,
+    stdout: int | None = None,
+    input: str | None = None,
+    text: bool = False,
+) -> None:
+    subprocess.run(
+        list(map(str, args)),
+        check=True,
+        env=env,
+        stdin=stdin,
+        stdout=stdout,
+        input=input,
+        text=text,
+    )
 
 
-def preflight(build, count):
+def preflight(build: Path, count: str):
     # Reject invalid requests and missing prerequisites before asking for secrets.
     if not re.fullmatch(r"[1-9][0-9]*", count):
         raise ValueError("N must be a positive integer without leading zeros")
@@ -96,7 +114,7 @@ def ask_passphrase():
     return first
 
 
-def prepare(build, count, passphrase):
+def prepare(build: Path, count: int, passphrase: str):
     # Build and inspect the live OS once, then assemble the remaining unique pairs.
     env = dict(os.environ, PAIR="1")
     wrapper = ROOT / "pipeline/buildkit.sh"

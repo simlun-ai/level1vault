@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Restore a two-member workspace mirror from the surviving original member."""
 
+from __future__ import annotations
+
 import argparse
 import fcntl
 import json
@@ -31,7 +33,7 @@ from member_recovery import (  # noqa: E402 - resolve shared helpers after confi
 )
 
 
-def check_complete(pool, survivor_guid, new_guid):
+def check_complete(pool: str, survivor_guid: str, new_guid: str):
     status = output("zpool", "status", "-g", pool)
     print(status)
     leaves = mirror_leaves(status)
@@ -47,7 +49,7 @@ def check_complete(pool, survivor_guid, new_guid):
     )
 
 
-def replace(pair, fenced):
+def replace(pair: str, fenced: bool):
     # Read the record from the replacement we booted; never import another pair by name alone.
     require(
         fenced,

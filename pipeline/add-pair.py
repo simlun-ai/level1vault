@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Assemble and initialize one additional empty replica using an existing ISO."""
 
+from __future__ import annotations
+
 import argparse
 import os
 import re
@@ -12,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def prepare(build, out, pair):
+def prepare(build: Path, out: Path, pair: str):
     # Reject invalid or previously used destinations before doing any work.
     if not re.fullmatch(r"[1-9][0-9]*", pair):
         raise ValueError("PAIR must be a positive integer without leading zeros")

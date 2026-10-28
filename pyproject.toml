@@ -18,4 +18,4 @@ extraPaths = ["common", "stages/06-upgrade-os", "stages/06-upgrade-os/tests"]
 pythonVersion = "3.10"
 pythonPlatform = "Linux"
 typeCheckingMode = "basic"
-strict = ["common"]
+strict = ["common", "pipeline/*.py", "stages/*/*.py", "runtime/workspace-*"]

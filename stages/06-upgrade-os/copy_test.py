@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Apply an OS release only to a disposable regular image file for QEMU testing."""
 
+from __future__ import annotations
+
 import argparse
 import subprocess
 import tempfile
@@ -9,7 +11,7 @@ from pathlib import Path
 from upgrade import digest, load_release, require
 
 
-def apply_to_copy(image, release):
+def apply_to_copy(image: Path, release: Path):
     # Restrict test updates to regular files and validate the release first.
     require(
         image.is_file() and not image.is_symlink(),
@@ -21,7 +23,7 @@ def apply_to_copy(image, release):
         root = Path(temporary)
 
         # Preserve both disk-specific boot files across the test update.
-        originals = {}
+        originals: dict[str, str] = {}
         for name in ("EFI/BOOT/BOOTX64.EFI", "boot/grub/grub.cfg"):
             target = root / name
             target.parent.mkdir(parents=True, exist_ok=True)

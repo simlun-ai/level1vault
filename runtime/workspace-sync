@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Raw ZFS replication and explicit failover for numbered level1vault pairs."""
 
+from __future__ import annotations
+
 import argparse
 import datetime
 import fcntl
@@ -25,7 +27,7 @@ PROPERTY = "org.level1vault:"
 
 
 # Validate pair identifiers and derive pool names.
-def pair_id(value):
+def pair_id(value: str):
     if not re.fullmatch(r"[1-9][0-9]*", value):
         raise argparse.ArgumentTypeError(
             "PAIR_ID must be a positive integer without leading zeros"
@@ -33,30 +35,30 @@ def pair_id(value):
     return value
 
 
-def pool_name(pair):
+def pool_name(pair: str):
     return "level1-workspace-" + pair_id(pair)
 
 
 # Run checked commands and read dataset properties.
-def run(*args):
+def run(*args: str | Path):
     return subprocess.check_output(args, text=True).strip()
 
 
-def command(*args):
+def command(*args: str | Path):
     subprocess.run(args, check=True)
 
 
-def prop(dataset, name):
+def prop(dataset: str, name: str):
     return run("zfs", "get", "-H", "-p", "-o", "value", name, dataset)
 
 
-def require(condition, message):
+def require(condition: object, message: str):
     if not condition:
         raise RuntimeError(message)
 
 
 # Track replication checkpoints and their retention holds.
-def snapshots(dataset):
+def snapshots(dataset: str):
     rows = run(
         "zfs",
         "list",
@@ -78,13 +80,13 @@ def snapshots(dataset):
     ]
 
 
-def hold(snapshot, tag):
+def hold(snapshot: str, tag: str):
     rows = run("zfs", "holds", "-H", snapshot)
     if not any(row.split("\t")[1] == tag for row in rows.splitlines()):
         command("zfs", "hold", tag, snapshot)
 
 
-def release_older(dataset, latest, tag):
+def release_older(dataset: str, latest: str, tag: str):
     for snapshot, _ in snapshots(dataset):
         if snapshot == latest:
             continue
@@ -93,8 +95,14 @@ def release_older(dataset, latest, tag):
             command("zfs", "release", tag, snapshot)
 
 
+# Close only an allocated pipe when recovering from subprocess setup or transfer failure.
+def close_stdout(process: subprocess.Popen[bytes]) -> None:
+    if process.stdout is not None:
+        process.stdout.close()
+
+
 # Transfer an encrypted stream and require both processes to succeed.
-def transfer(send, destination, readonly):
+def transfer(send: list[str], destination: str, readonly: str):
 
     # Both exit statuses matter. No shell, plaintext stream, force or rollback.
     receive = [
@@ -121,8 +129,7 @@ def transfer(send, destination, readonly):
         receive_rc = receiver.wait()
         send_rc = sender.wait()
     except BaseException:
-        if sender.stdout is not None:
-            sender.stdout.close()
+        close_stdout(sender)
         for process in (sender, receiver):
             if process is not None and process.poll() is None:
                 process.terminate()
@@ -138,7 +145,7 @@ def transfer(send, destination, readonly):
 
 
 # Import and validate the requested numbered pair.
-def import_pair(pair):
+def import_pair(pair: str):
     pool = pool_name(pair)
     imported = run("zpool", "list", "-H", "-o", "name").splitlines()
     if pool not in imported:
@@ -160,7 +167,7 @@ def import_pair(pair):
 
 
 # Require a single passphrase-encrypted workspace dataset.
-def validate_data(dataset):
+def validate_data(dataset: str):
     require(
         prop(dataset, "encryption") == "aes-256-gcm"
         and prop(dataset, "encryptionroot") == dataset
@@ -175,7 +182,12 @@ def validate_data(dataset):
 
 
 # Replicate a completed checkpoint to an independent replica.
-def synchronize(source_pair, target_pair, rebind=False, checkpoint=None):
+def synchronize(
+    source_pair: str,
+    target_pair: str,
+    rebind: bool = False,
+    checkpoint: str | None = None,
+):
     require(source_pair != target_pair, "Source and destination IDs must differ")
     source_pool = import_pair(source_pair)
     target_pool = import_pair(target_pair)
@@ -318,7 +330,8 @@ def synchronize(source_pair, target_pair, rebind=False, checkpoint=None):
                 (name for name, guid in snapshots(source) if guid == dest_snaps[-1][1]),
                 None,
             )
-            require(base is not None, "No common latest snapshot; refusing rollback")
+            if base is None:
+                raise RuntimeError("No common latest snapshot; refusing rollback")
             require(
                 prop(target, "written") == "0",
                 "Destination has diverged; refusing rollback",
@@ -353,7 +366,7 @@ def synchronize(source_pair, target_pair, rebind=False, checkpoint=None):
 
 
 # Create a uniquely named source checkpoint.
-def create_checkpoint(source):
+def create_checkpoint(source: str):
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     end = source + "@l1v-" + stamp + "-" + uuid.uuid4().hex[:8]
     command("zfs", "snapshot", end)
@@ -361,7 +374,7 @@ def create_checkpoint(source):
 
 
 # Preview or delete old project checkpoints without releasing replication holds.
-def retention_plan(pair, keep):
+def retention_plan(pair: str, keep: int):
     require(keep >= 1, "Keep at least one project checkpoint")
     pool = pool_name(pair)
     data = pool + "/data"
@@ -385,7 +398,8 @@ def retention_plan(pair, keep):
 
     # Offsite bases are protected by persistent holds, even while disconnected.
     # Also protect visible pending endpoints by name and GUID across failovers.
-    pending_names, pending_guids = set(), set()
+    pending_names: set[str] = set()
+    pending_guids: set[str] = set()
     for other in pools:
         if re.fullmatch(r"level1-workspace-[1-9][0-9]*", other):
             pending_names.add(prop(other, PROPERTY + "pending-snapshot"))
@@ -398,7 +412,7 @@ def retention_plan(pair, keep):
     ]
     newest = {name for name, _ in project[-keep:]}
     project_names = {name for name, _ in project}
-    plan = []
+    plan: list[tuple[str, str, str | None]] = []
     for name, guid in entries:
         if name not in project_names:
             reason = "user snapshot"
@@ -418,7 +432,7 @@ def retention_plan(pair, keep):
     return plan
 
 
-def prune(pair, keep, apply=False):
+def prune(pair: str, keep: int, apply: bool = False):
     plan = retention_plan(pair, keep)
     for name, _, reason in plan:
         print(f"KEEP {name}: {reason}" if reason else f"WOULD DELETE {name}")
@@ -474,7 +488,7 @@ def discover_pairs():
 
 
 # Make a fenced replica the active writable pair.
-def activate(pair, fenced=False):
+def activate(pair: str, fenced: bool = False):
     require(
         fenced,
         "Fence/disconnect the old active pair, then pass --fenced to acknowledge exclusive ownership",
