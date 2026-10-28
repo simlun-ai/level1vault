@@ -116,6 +116,7 @@ This applies the prepared OS payload and verifies the written files; it never bu
 
 ```bash
 make help                       # command overview
+make ci                         # parallel containerized CI checks and export validation
 make test                       # local lint and behavior tests
 make test-container             # assembly and login tests in Debian containers
 make clean                      # remove checkout BuildKit state; retain host artifacts

@@ -18,6 +18,9 @@ Run Make from the repository root. Host operations use `sudo`; tests that only i
 | `make assemble PAIR=2` | Reuse the existing ISO to assemble a new pair with unique identities |
 | `make initialize PAIR=2` | Initialize an empty replica; its first receive creates the encrypted data filesystem |
 | `make builder` | Create/bootstrap the dedicated BuildKit builder |
+| `make ci` | Parallel containerized source, behavior, assembly/account and real host export checks; see [CI architecture](../pipeline/README.md#continuous-integration) |
+| `make ci-build` | Full image, inspection, upgrade metadata, ownership and cleanup checks |
+| `make ci-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1` | Explicitly enabled native ZFS integration on a disposable host |
 | `make test` | ShellCheck, shell syntax checks and Python unit/behavior tests |
 | `make test-unit` | Only Python unit/behavior tests |
 | `make test-container` | Build the toolchain and test real disk assembly and account/login configuration in separate sandboxed BuildKit stages |
@@ -73,7 +76,7 @@ QEMU testing uses `stages/04-test-pair/run.py`, the guest checks in `stages/04-t
 
 ## CI
 
-`.github/workflows/check.yml` uses `make test`, `make test-container` and `make test-zfs` in separate Ubuntu 22.04 jobs. The full-build workflow uses `make build` then `make check-build`, retaining build diagnostics on failure. These are the same entrypoints as local runs.
+`.github/workflows/check.yml` sets up Buildx and runs `make ci`, with native ZFS isolated in a separate disposable-runner job using `make ci-zfs`. The path-filtered full-build workflow invokes `make ci-build`, retaining diagnostics on failure. The [CI architecture](../pipeline/README.md#continuous-integration) documents Bake targets, caching, source contexts and individual check commands. These are the same entrypoints as local runs.
 
 **CI does not launch VMs.** QEMU boot/recovery acceptance is an explicit workstation operation through `make test-qemu PAIR=N`. CI still lints the guest checks, unit-tests the runner without launching QEMU, and checks that the manual acceptance instructions match the shared test sources. Native file-backed ZFS integration on the disposable CI runner remains separate and does not launch a guest.
 

@@ -3,30 +3,22 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
-  scripts:
+  ci:
     runs-on: ubuntu-22.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: make test
-  container-assembly:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-        with:
-          buildkitd-flags: --allow-insecure-entitlement security.insecure
-      # No insecure RUN entitlement is requested for these test stages.
-      - run: make test-container SUDO=
+      - run: make ci SUDO=
   zfs-integration:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - run: sudo apt-get update && sudo apt-get install -y zfsutils-linux gdisk dosfstools fdisk mtools
       - name: Exercise encryption and replication on disposable file-backed mirrors
-        run: make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1
+        run: make ci-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1

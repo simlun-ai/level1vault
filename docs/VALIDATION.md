@@ -15,7 +15,7 @@ Historical results below do **not** certify the current source revision. Record 
 | Workstation QEMU | [Automated and manual checks](QEMU.md) | Boot, root autologin, persistent home, reboot reset, degraded writes and mirror rejoin on disposable copies |
 | Physical devices | Checklist below | Intended hardware, actual USB transport and sustained device behavior |
 
-CI runs the first four layers in separate jobs; it never launches VMs. Real ZFS integration requires an explicitly disposable environment, not the normal build workstation. No automated suite writes physical USB drives. See [development](DEVELOPMENT.md#local-tests-on-linux) for dependencies and commands.
+CI runs the first two layers together through `make ci`, with ZFS and the full build in separate jobs; it never launches VMs. Real ZFS integration requires an explicitly disposable environment, not the normal build workstation. No automated suite writes physical USB drives. See [development](DEVELOPMENT.md#local-tests-on-linux) for dependencies and commands.
 
 ## Workstation acceptance before permanent use
 

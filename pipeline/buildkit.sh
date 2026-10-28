@@ -140,23 +140,12 @@ case $ACTION in
     fi
     ;;
 
-  # Verify container behavior and distinct exported image identities.
-  test)
-    TASK_TMP=$(mktemp -d)
-    "${base[@]}" --target test-results --no-cache-filter test-assembly,test-account \
-      --output "type=local,dest=$TASK_TMP,platform-split=false" "$SOURCE_DIR"
-    test -f "$TASK_TMP/assembly-passed" && test -f "$TASK_TMP/account-passed"
-    # Exercise the actual scratch/local export twice with identical ISO input.
-    mkdir "$TASK_TMP/iso"
-    mv "$TASK_TMP/live-image-amd64.hybrid.iso" "$TASK_TMP/iso/"
-    for pair in 1 2; do
-      "${base[@]}" --target pair-artifacts --build-context "iso-input=$TASK_TMP/iso" \
-        --build-arg IMAGE_MIB=512 --build-arg ESP_MIB=64 \
-        --build-arg "ASSEMBLY_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')" \
-        --output "type=local,dest=$TASK_TMP/export-$pair,platform-split=false" "$SOURCE_DIR"
-      bash "$SOURCE_DIR/pipeline/pair-archive.sh" unpack "$TASK_TMP/export-$pair/pair.tar" "$TASK_TMP/pair-$pair"
-    done
-    python3 "$SOURCE_DIR/stages/02-assemble-pair/tests/check_exports.py" "$TASK_TMP"
+  # Run the Bake graph and verify actual local exports as the caller.
+  ci|test)
+    group=ci
+    if [[ $ACTION == test ]]; then group=container; fi
+    export BUILDX_BUILDER DEBIAN_IMAGE
+    bash "$SOURCE_DIR/pipeline/ci.sh" "$group"
     ;;
 
   # Inspect the exported live system and prepared images.
@@ -179,5 +168,5 @@ case $ACTION in
     # Prune only unused cache on this dedicated builder; never host output files.
     docker buildx prune --builder "$BUILDX_BUILDER" --force
     ;;
-  *) echo 'Usage: buildkit.sh builder|build DIR [LB_ARGS...]|build-upgrade DIR|assemble DIR OUT|release DIR OUT|test|check DIR|cache-clean' >&2; exit 2 ;;
+  *) echo 'Usage: buildkit.sh builder|build DIR [LB_ARGS...]|build-upgrade DIR|assemble DIR OUT|release DIR OUT|ci|test|check DIR|cache-clean' >&2; exit 2 ;;
 esac
