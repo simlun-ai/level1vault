@@ -1,5 +1,7 @@
 """Verify upgrade scope, failures and retries without opening physical disks."""
 
+from __future__ import annotations
+
 import importlib.util
 import json
 import os
@@ -67,7 +69,7 @@ class UpgradeTests(unittest.TestCase):
         original_copy = upgrade.shutil.copyfile
         count = 0
 
-        def fail_copy(*args):
+        def fail_copy(*args: str | Path):
             nonlocal count
             count += 1
             if count == 2:
@@ -180,17 +182,17 @@ class UpgradeTests(unittest.TestCase):
         self.assertTrue(root.is_dir())
 
     def test_update_flushes_after_unmount_before_final_readback(self):
-        events = []
+        events: list[object] = []
 
         @contextmanager
-        def mounted(esp, readonly):
+        def mounted(esp: str, readonly: bool):
             events.append("ro" if readonly else "rw")
             yield self.esp
             events.append("unmount")
 
         boot = upgrade.boot_identity(self.esp, "AAAA-BBBB")
 
-        def command(*args):
+        def command(*args: str | Path):
             events.append(args[0])
 
         with (
@@ -219,14 +221,14 @@ class UpgradeTests(unittest.TestCase):
             dict(disk="/a", esp="/a1", esp_uuid="AAAA-BBBB", model="a", serial="1"),
             dict(disk="/b", esp="/b1", esp_uuid="AAAA-BBBB", model="b", serial="2"),
         ]
-        mounts = []
+        mounts: list[str] = []
 
         @contextmanager
-        def mounted(esp, readonly):
+        def mounted(esp: str, readonly: bool):
             mounts.append(esp)
             yield self.esp
 
-        def fail_update(*args):
+        def fail_update(*args: str | Path):
             self.assertEqual(mounts, ["/a1", "/b1"])
             raise OSError("write failed")
 

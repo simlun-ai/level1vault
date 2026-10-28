@@ -1,5 +1,7 @@
 """Host preparation contracts with no Docker, sudo or disk mutations."""
 
+from __future__ import annotations
+
 import importlib.util
 import os
 import subprocess
@@ -11,7 +13,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def load(name):
+def load(name: str):
     spec = importlib.util.spec_from_file_location(
         name, ROOT / "pipeline" / (name + ".py")
     )
@@ -30,7 +32,7 @@ class PreparationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             build = Path(tmp) / "2026-10-18"
 
-            def complete(args, **kwargs):
+            def complete(args: list[str], **kwargs: object):
                 self.assertEqual(args[2], "build-upgrade")
                 self.assertEqual(Path(args[3]), build)
                 self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)

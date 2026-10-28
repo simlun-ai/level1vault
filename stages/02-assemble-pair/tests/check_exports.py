@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Verify that separately exported pairs have independent disk identities."""
 
+from __future__ import annotations
+
 import json
 import os
 import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
-seen = set()
+seen: set[str] = set()
 for pair in (1, 2):
     out = root / f"pair-{pair}"
     assert (out / "IMAGES-PREPARED").exists() and not (out / "READY").exists()

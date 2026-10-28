@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Behavior tests with mocked system tools; no mounts, ZFS, or privileged IO."""
 
+from __future__ import annotations
+
 import os
 import subprocess
 import tempfile
@@ -22,7 +24,7 @@ class ScriptTests(unittest.TestCase):
             os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", LOG=str(self.log)
         )
 
-    def tool(self, name, body):
+    def tool(self, name: str, body: str):
         file = self.bin / name
         file.write_text("#!/bin/sh\nset -eu\n" + body + "\n")
         file.chmod(0o755)

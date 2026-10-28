@@ -1,5 +1,7 @@
 """Check pre-flash seeding and cleanup without opening disks or loading ZFS."""
 
+from __future__ import annotations
+
 import importlib.util
 import json
 import subprocess
@@ -40,9 +42,9 @@ class SeedTests(unittest.TestCase):
                 )
                 for side in ("a", "b"):
                     (out / f"usb-{side}.img").write_text(side)
-            calls = []
+            calls: list[tuple[str | Path, ...]] = []
 
-            def output(*args):
+            def output(*args: str | Path):
                 if args[:2] == ("losetup", "-j"):
                     return ""
                 if args[0] == "losetup":
@@ -55,7 +57,7 @@ class SeedTests(unittest.TestCase):
                     return "aaa" if str(args[-1]).endswith("ap2") else "bbb"
                 raise AssertionError(args)
 
-            def command(*args):
+            def command(*args: str | Path):
                 calls.append(tuple(map(str, args)))
                 if str(args[0]).endswith("workspace-sync"):
                     self.assertFalse(

@@ -1,5 +1,7 @@
 """Transport integrity and failure ordering without privileged ZFS IO."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import os
@@ -40,11 +42,15 @@ class PackageTests(unittest.TestCase):
         self.contexts.enter_context(patch.object(t.os, "chown"))
         # Exercise real file IO as the test user, without requiring UID 0 or 1000.
         original = t.private_directory
+
+        def private_for_test_user(path: Path, owner: int = 0):
+            return original(path, os.getuid())
+
         self.contexts.enter_context(
             patch.object(
                 t,
                 "private_directory",
-                side_effect=lambda path, owner=0: original(path, os.getuid()),
+                side_effect=private_for_test_user,
             )
         )
 
@@ -116,7 +122,7 @@ class PackageTests(unittest.TestCase):
     def test_inbox_copy_is_rehashed_before_publication(self):
         original = t.walk_tree
 
-        def copy_with_corruption(source, destination=None):
+        def copy_with_corruption(source: Path, destination: Path | None = None):
             result = original(source, destination)
             if destination is not None:
                 (destination / "README.md").write_text("corruption")
@@ -191,9 +197,11 @@ class ZFSLifecycleTests(unittest.TestCase):
             "mountpoint": "/mnt/workspace",
             "keystatus": "unavailable",
         }
-        self.contexts.enter_context(
-            patch.object(t, "prop", side_effect=lambda ds, name: self.props[name])
-        )
+
+        def read_property(ds: str, name: str):
+            return self.props[name]
+
+        self.contexts.enter_context(patch.object(t, "prop", side_effect=read_property))
         self.contexts.enter_context(patch.object(t, "output", side_effect=self.output))
         self.contexts.enter_context(
             patch.object(
@@ -201,7 +209,7 @@ class ZFSLifecycleTests(unittest.TestCase):
             )
         )
 
-    def output(self, *args):
+    def output(self, *args: str | Path):
         if args[:4] == ("zpool", "list", "-H", "-o"):
             return "ONLINE" if args[4] == "health" else self.pool
         if args[0] == "python3" or args[:2] == ("zpool", "get"):
@@ -211,28 +219,33 @@ class ZFSLifecycleTests(unittest.TestCase):
         return ""
 
     @contextmanager
-    def mounted(self, *args, **kwargs):
+    def mounted(self, *args: str | Path, **kwargs: object):
         yield Path("/unused")
 
     def test_import_orders_publication_unmount_then_exact_destroy(self):
-        events = []
+        events: list[object] = []
 
         @contextmanager
-        def mounted(*args, **kwargs):
+        def mounted(*args: str | Path, **kwargs: object):
             self.assertTrue(kwargs["readonly"])
             events.append("mount")
             yield Path("/unused")
             events.append("unmount")
 
-        self.commands.side_effect = lambda *args: events.append(args)
+        def record_command(*args: str | Path):
+            return events.append(args)
+
+        self.commands.side_effect = record_command
+
+        def publish_delivery(*args: str | Path):
+            return events.append("published") or Path("/inbox/delivery")
+
         with (
             patch.object(t, "mounted_transport", side_effect=mounted),
             patch.object(
                 t,
                 "publish_inbox",
-                side_effect=lambda *args: (
-                    events.append("published") or Path("/inbox/delivery")
-                ),
+                side_effect=publish_delivery,
             ),
         ):
             t.import_transport("1")
@@ -246,7 +259,7 @@ class ZFSLifecycleTests(unittest.TestCase):
         for failure in ("verify", "unmount"):
 
             @contextmanager
-            def mounted(*args, failure=failure, **kwargs):
+            def mounted(*args: str | Path, failure: str = failure, **kwargs: object):
                 yield Path("/unused")
                 if failure == "unmount":
                     raise OSError("busy")
@@ -294,15 +307,17 @@ class ZFSLifecycleTests(unittest.TestCase):
             patch.object(t, "package", return_value={"delivery": "test"})
         )
         original = self.output
+
+        def list_or_query(*args: str | Path):
+            return (
+                "" if args == ("zpool", "list", "-H", "-o", "name") else original(*args)
+            )
+
         self.contexts.enter_context(
             patch.object(
                 t,
                 "output",
-                side_effect=lambda *args: (
-                    ""
-                    if args == ("zpool", "list", "-H", "-o", "name")
-                    else original(*args)
-                ),
+                side_effect=list_or_query,
             )
         )
 
@@ -361,8 +376,12 @@ class ZFSLifecycleTests(unittest.TestCase):
             patch.object(t, "validate_transport", wraps=self.real_validate_transport)
         )
         values = dict(t.POLICY)
+
+        def policy_property(ds: str, name: str):
+            return values[name]
+
         with (
-            patch.object(t, "prop", side_effect=lambda ds, name: values[name]),
+            patch.object(t, "prop", side_effect=policy_property),
             patch.object(t, "datasets", return_value=[self.transport]),
             patch.object(t, "output", return_value=""),
         ):
@@ -413,7 +432,7 @@ class ZFSLifecycleTests(unittest.TestCase):
             payload = mountpoint / "payload"
             payload.write_text("retain")
 
-            def command(*args):
+            def command(*args: str | Path):
                 if args[0] == "umount":
                     raise OSError("busy")
 

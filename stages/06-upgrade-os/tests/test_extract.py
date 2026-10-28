@@ -1,5 +1,7 @@
 """Check the shared extraction contract used by assembly and OS release builds."""
 
+from __future__ import annotations
+
 import hashlib
 import importlib.util
 import json
@@ -37,7 +39,7 @@ class ExtractTests(unittest.TestCase):
             (source / ".disk/live-uuid").chmod(0o444)
             (source / ".disk").chmod(0o555)
 
-            def extract_command(args, **kwargs):
+            def extract_command(args: list[str], **kwargs: object):
                 shutil.copytree(source, Path(args[-1]))
 
             metadata = {
@@ -46,11 +48,13 @@ class ExtractTests(unittest.TestCase):
                 "source-commit": "1" * 40,
                 "packages.tsv": "zfsutils-linux\t2.3-fixture",
             }
+
+            def read_metadata(squash: Path, name: str):
+                return metadata[name]
+
             with (
                 patch.object(payload.subprocess, "run", side_effect=extract_command),
-                patch.object(
-                    payload, "metadata", side_effect=lambda squash, name: metadata[name]
-                ),
+                patch.object(payload, "metadata", side_effect=read_metadata),
             ):
                 release = payload.extract(base / "input.iso", base / "release")
             self.assertEqual(

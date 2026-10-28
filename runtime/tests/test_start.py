@@ -1,5 +1,7 @@
 """Exercise the interactive session wrapper without real mounts, users, or shutdown."""
 
+from __future__ import annotations
+
 import os
 import subprocess
 import tempfile
@@ -33,12 +35,12 @@ class StartTests(unittest.TestCase):
         self.tool("poweroff", ":")
         self.tool("python3", 'exit "${CHECK_STATUS:-0}"')
 
-    def tool(self, name, body):
+    def tool(self, name: str, body: str):
         target = self.base / name
         target.write_text(f'#!/bin/sh\nset -eu\necho "{name} $*" >> "$LOG"\n{body}\n')
         target.chmod(0o755)
 
-    def run_start(self, answers="", *args):
+    def run_start(self, answers: str = "", *args: str | Path):
         result = subprocess.run(
             ["sh", str(self.script), *args],
             input=answers,

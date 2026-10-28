@@ -1,5 +1,7 @@
 """Retention must preserve recovery history and never delete during a preview."""
 
+from __future__ import annotations
+
 import importlib.machinery
 import importlib.util
 import subprocess
@@ -37,23 +39,28 @@ class RetentionTests(unittest.TestCase):
         }
         self.properties.update({(name, "guid"): guid for name, guid in self.entries})
         self.held = {self.entries[1][0]}
+
+        def read_property(obj: str, key: str):
+            return self.properties.get((obj, key), "-")
+
+        def snapshot_list(data: str):
+            return list(self.entries)
+
         patches = [
             patch.object(sync, "run", side_effect=self.query),
             patch.object(
                 sync,
                 "prop",
-                side_effect=lambda obj, key: self.properties.get((obj, key), "-"),
+                side_effect=read_property,
             ),
             patch.object(sync, "validate_data"),
-            patch.object(
-                sync, "snapshots", side_effect=lambda data: list(self.entries)
-            ),
+            patch.object(sync, "snapshots", side_effect=snapshot_list),
         ]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
 
-    def query(self, *args):
+    def query(self, *args: str | Path):
         if args == ("zpool", "list", "-H", "-o", "name"):
             return POOL + "\n" + OTHER
         if args[:3] == ("zfs", "holds", "-H"):
@@ -103,7 +110,7 @@ class RetentionTests(unittest.TestCase):
         for change in ("guid", "hold"):
             calls = 0
 
-            def observe(*args, change=change):
+            def observe(*args: str | int, change: str = change):
                 nonlocal calls
                 calls += 1
                 if calls == 2:

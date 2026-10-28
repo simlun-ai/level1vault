@@ -1,5 +1,7 @@
 """Select mirrors from realistic offline label topology, without importing pools."""
 
+from __future__ import annotations
+
 import importlib.machinery
 import importlib.util
 import unittest
@@ -15,7 +17,12 @@ discover = importlib.util.module_from_spec(spec)
 loader.exec_module(discover)
 
 
-def label(pair="1", pool="100", leaf="11", children=("11", "12")):
+def label(
+    pair: str = "1",
+    pool: str = "100",
+    leaf: str = "11",
+    children: tuple[str, str] = ("11", "12"),
+):
     return f"""------------------------------------
 LABEL 0
 ------------------------------------
@@ -44,7 +51,7 @@ LABEL 0
 """
 
 
-def complete(pair="1", pool="100"):
+def complete(pair: str = "1", pool: str = "100"):
     return [
         (f"{pair}-a", label(pair, pool, "11")),
         (f"{pair}-b", label(pair, pool, "12")),

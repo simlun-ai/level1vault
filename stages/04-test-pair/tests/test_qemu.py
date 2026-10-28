@@ -1,5 +1,7 @@
 """Check QEMU orchestration safety and manual/automated acceptance parity."""
 
+from __future__ import annotations
+
 import importlib.util
 import json
 import re
@@ -82,10 +84,12 @@ class QemuTests(unittest.TestCase):
         fallback = self.base / "home" / "level1vault-qemu" / "run"
         mkdir = Path.mkdir
 
-        def denied_build(path, *args, **kwargs):
+        def denied_build(
+            path: Path, mode: int = 0o777, parents: bool = False, exist_ok: bool = False
+        ):
             if path == primary:
                 raise PermissionError("root-owned build directory")
-            return mkdir(path, *args, **kwargs)
+            return mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
 
         with patch.object(Path, "mkdir", autospec=True, side_effect=denied_build):
             selected = runner.prepare_results(primary, fallback)
@@ -155,7 +159,7 @@ class QemuTests(unittest.TestCase):
         work = self.base / "copies"
         work.mkdir()
 
-        def fake_command(*args):
+        def fake_command(*args: str):
             if args[0] == "qemu-img":
                 Path(args[-1]).write_bytes(Path(args[-2]).read_bytes())
             elif args[-2] == "::/boot/grub/grub.cfg":
@@ -200,7 +204,11 @@ class QemuTests(unittest.TestCase):
                     guest = runner.Guest(child, Mock(), 10)
 
                     def expect_status(
-                        pattern, child=child, newline=newline, status=status, **kwargs
+                        pattern: str,
+                        child: Mock = child,
+                        newline: str = newline,
+                        status: int = status,
+                        **kwargs: object,
                     ):
                         sent = child.sendline.call_args.args[0]
                         match = re.search(r"L1V_[a-f0-9]{32}", sent)
@@ -230,7 +238,7 @@ class QemuTests(unittest.TestCase):
         log = child.logfile_read
         guest = runner.Guest(child, Mock(), 10)
 
-        def failed_expect(*args, **kwargs):
+        def failed_expect(*args: str | Path, **kwargs: object):
             self.assertIsNone(child.logfile_read)
             raise RuntimeError("failed")
 

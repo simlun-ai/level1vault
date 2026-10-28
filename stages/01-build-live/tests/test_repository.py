@@ -1,5 +1,7 @@
 """Exercise full-history offline checkouts using real disposable Git repositories."""
 
+from __future__ import annotations
+
 import importlib.util
 import subprocess
 import tempfile
@@ -38,7 +40,7 @@ class RepositoryTests(unittest.TestCase):
         self.git("commit", "-am", "Second revision")
         self.head = self.git("rev-parse", "HEAD")
 
-    def git(self, *args, cwd=None):
+    def git(self, *args: str | Path, cwd: Path | None = None):
         return repository.git(*args, cwd=cwd or self.source)
 
     def test_full_history_tags_and_branches_survive_without_local_configuration(self):

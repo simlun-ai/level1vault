@@ -1,5 +1,7 @@
 """Prevent pre-existing toolchains from escaping final-image cleanup."""
 
+from __future__ import annotations
+
 import importlib.util
 import unittest
 from pathlib import Path

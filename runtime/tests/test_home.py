@@ -1,5 +1,7 @@
 """Exercise home initialization with real temporary files and mocked mount operations."""
 
+from __future__ import annotations
+
 import importlib.machinery
 import importlib.util
 import json
@@ -33,7 +35,7 @@ class HomeTests(unittest.TestCase):
         (self.defaults / "level1vault/README.md").write_text("offline checkout")
         self.dataset = "level1-workspace-1/data"
         self.mounts = {str(self.workspace): self.record("/")}
-        self.calls = []
+        self.calls: list[list[str]] = []
         self.process_status = 1
         self.umount_status = 0
         self.properties = {"readonly": "off", "org.level1vault:state": "active"}
@@ -50,18 +52,22 @@ class HomeTests(unittest.TestCase):
         context = patch.object(home.subprocess, "run", side_effect=self.command)
         context.start()
         self.addCleanup(context.stop)
+
+        def read_property(args: list[str], **kw: object):
+            return self.properties[args[5]]
+
         context = patch.object(
             home.subprocess,
             "check_output",
-            side_effect=lambda args, **kw: self.properties[args[5]],
+            side_effect=read_property,
         )
         context.start()
         self.addCleanup(context.stop)
 
-    def record(self, root, dataset="level1-workspace-1/data"):
+    def record(self, root: str, dataset: str = "level1-workspace-1/data"):
         return dict(source=dataset, fstype="zfs", fsroot=root)
 
-    def command(self, args, **kwargs):
+    def command(self, args: list[str], **kwargs: object):
         self.calls.append(args)
         status, output = 0, ""
         if args[0] == "findmnt":

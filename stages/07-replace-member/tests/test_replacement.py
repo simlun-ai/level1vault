@@ -1,5 +1,7 @@
 """Verify preparation contracts and refusal paths without opening real devices."""
 
+from __future__ import annotations
+
 import importlib.util
 import json
 import subprocess
@@ -15,7 +17,7 @@ sys.path.insert(0, str(ROOT / "common"))
 import member_recovery as recovery  # noqa: E402 - resolve shared helpers after configuring their path
 
 
-def load(name, filename):
+def load(name: str, filename: str):
     spec = importlib.util.spec_from_file_location(
         name, ROOT / "stages/07-replace-member" / filename
     )
@@ -66,7 +68,7 @@ class PreparationTests(unittest.TestCase):
         )
         self.destination = self.root / "recovery"
 
-    def build(self, *args, **kwargs):
+    def build(self, *args: str | Path, **kwargs: object):
         out = self.destination / "pairs/1"
         out.mkdir(parents=True)
         (out / "IMAGES-PREPARED").touch()
@@ -75,7 +77,7 @@ class PreparationTests(unittest.TestCase):
     def test_prepares_without_initializing_and_embeds_matching_record(self):
         tables = [dict(partitions=[dict(start=2048), dict(size=8)])]
 
-        def embedded(*args):
+        def embedded(*args: str | Path):
             return (self.destination / "pairs/1/member-recovery.json").read_text()
 
         with (
@@ -151,7 +153,7 @@ class WriterTests(unittest.TestCase):
         self.identity_patch.start()
         self.addCleanup(self.identity_patch.stop)
 
-    def output(self, *args):
+    def output(self, *args: str | Path):
         if args[0] == "losetup":
             return json.dumps(dict(loopdevices=[]))
         if args[0] == "blockdev":
@@ -209,7 +211,14 @@ class WriterTests(unittest.TestCase):
         self.assertFalse((self.out / "write-report.json").exists())
 
     def test_success_writes_only_selected_disk_and_records_verified_completion(self):
-        events = []
+        events: list[object] = []
+
+        def record_readback(*args: str | Path):
+            return events.append("readback")
+
+        def record_command(*args: str | Path):
+            return events.append(args[0])
+
         with (
             patch.object(writer, "describe_disk", return_value=self.disk),
             patch.object(writer, "output", side_effect=self.output),
@@ -217,11 +226,9 @@ class WriterTests(unittest.TestCase):
             patch.object(
                 writer,
                 "write_image",
-                side_effect=lambda *args: events.append("readback"),
+                side_effect=record_readback,
             ),
-            patch.object(
-                writer, "command", side_effect=lambda *args: events.append(args[0])
-            ),
+            patch.object(writer, "command", side_effect=record_command),
             patch.object(
                 writer,
                 "inspect_replacement",
@@ -243,7 +250,7 @@ class WriterTests(unittest.TestCase):
     def test_connected_survivor_prevents_disk_access(self):
         original = Path.exists
 
-        def exists(path):
+        def exists(path: Path):
             return str(path) == "/dev/disk/by-partuuid/" + IDS[1] or original(path)
 
         with (

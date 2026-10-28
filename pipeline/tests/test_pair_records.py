@@ -1,5 +1,7 @@
 """Exercise durable recovery records independently of retained disk images."""
 
+from __future__ import annotations
+
 import copy
 import json
 import sys

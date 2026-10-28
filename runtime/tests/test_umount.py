@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import subprocess
 import tempfile
@@ -42,7 +44,7 @@ export) exit "${EXPORT_FAIL:-0}";;
 esac""",
         )
 
-    def tool(self, name, body):
+    def tool(self, name: str, body: str):
         file = self.bin / name
         file.write_text(
             f'#!/bin/sh\nset -eu\necho "{name} $*" >> "$LOG"\n' + body + "\n"
