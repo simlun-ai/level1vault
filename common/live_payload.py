@@ -10,8 +10,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from contracts import Release, ReleasePayload
 
-def digest(path):
+
+def digest(path: Path) -> str:
     value = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(4 * 1024 * 1024), b""):
@@ -19,14 +21,14 @@ def digest(path):
     return value.hexdigest()
 
 
-def metadata(squash, name):
+def metadata(squash: Path, name: str) -> str:
     return subprocess.check_output(
         ["unsquashfs", "-cat", str(squash), "usr/local/share/level1vault/" + name],
         text=True,
     ).strip()
 
 
-def extract(iso, destination):
+def extract(iso: Path, destination: Path) -> Release:
     # Select the matching live filesystem, kernel and initramfs.
     destination.mkdir()
     with tempfile.TemporaryDirectory(prefix="live-payload-") as temporary:
@@ -73,26 +75,29 @@ def extract(iso, destination):
             path.chmod(0o755 if path.is_dir() else 0o644)
 
         # Record the exact payload contents and their source revision.
-        files = {}
+        files: dict[str, str] = {}
         for path in sorted(destination.rglob("*")):
             if path.is_file():
                 if path.stat().st_size >= 4294967296:
                     raise ValueError(f"Payload file exceeds FAT32 limit: {path}")
                 files[path.relative_to(destination).as_posix()] = digest(path)
-        release = {
+        release: ReleasePayload = {
             "format": 1,
             "kernel": kernel,
             "zfs_package": metadata(squash, "zfsutils-version"),
             "source_commit": metadata(squash, "source-commit"),
             "files": files,
         }
-        release["release_id"] = hashlib.sha256(
-            json.dumps(release, sort_keys=True).encode()
-        ).hexdigest()
+        result: Release = {
+            **release,
+            "release_id": hashlib.sha256(
+                json.dumps(release, sort_keys=True).encode()
+            ).hexdigest(),
+        }
         (live / "release.json").write_text(
-            json.dumps(release, indent=2, sort_keys=True) + "\n"
+            json.dumps(result, indent=2, sort_keys=True) + "\n"
         )
-    return release
+    return result
 
 
 if __name__ == "__main__":

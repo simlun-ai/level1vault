@@ -6,12 +6,12 @@ import json
 import sys
 import unittest
 from pathlib import Path
-from typing import Any
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "common"))
 import member_recovery as recovery  # noqa: E402 - resolve shared helpers after configuring their path
+from contracts import RecoveryRecord  # noqa: E402
 
 loader = importlib.machinery.SourceFileLoader(
     "workspace_replace", str(ROOT / "runtime/workspace-replace")
@@ -21,7 +21,7 @@ assert spec is not None and spec.loader is not None
 replace = importlib.util.module_from_spec(spec)
 loader.exec_module(replace)
 
-RECORD: dict[str, Any] = dict(
+RECORD = RecoveryRecord(
     format=1,
     pair="1",
     member="a",

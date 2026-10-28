@@ -8,6 +8,8 @@ cd "$SOURCE_DIR"
 TASK_TMP=$(mktemp -d)
 trap 'rm -rf -- "$TASK_TMP"' EXIT
 export CI_RESULTS="$TASK_TMP/results" CI_ISO="$TASK_TMP/iso"
+# Existing paths let Bake resolve the exact filesystem grants before exporting.
+mkdir "$CI_RESULTS" "$CI_ISO"
 export ASSEMBLY_ID_1 ASSEMBLY_ID_2
 ASSEMBLY_ID_1=$(python3 -c 'import uuid; print(uuid.uuid4())')
 ASSEMBLY_ID_2=$(python3 -c 'import uuid; print(uuid.uuid4())')
@@ -18,7 +20,6 @@ bake=(docker buildx bake --builder "$BUILDX_BUILDER" --file docker-bake.hcl --pr
 # Run independent checks together and retain the synthetic ISO for real exports.
 "${bake[@]}" "${1:-ci}"
 test -f "$CI_RESULTS/assembly-passed"
-mkdir "$CI_ISO"
 mv "$CI_RESULTS/live-image-amd64.hybrid.iso" "$CI_ISO/"
 
 # Exercise both local exporters and host sparse extraction with identical ISO input.

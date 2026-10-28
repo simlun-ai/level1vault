@@ -14,6 +14,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "common"))
+from contracts import Member, RecoveryRecord  # noqa: E402
 from member_recovery import command, output, partition_table, require, validate_record  # noqa: E402 - resolve shared helpers after configuring their path
 from pair_records import (  # noqa: E402 - resolve shared helpers after configuring their path
     locked_pair,
@@ -57,7 +58,7 @@ def prepare(membership, recovery, pair, member):
         "New workspace partition is too small; custom enlarged layouts require manual preparation",
     )
     record = validate_record(
-        dict(
+        RecoveryRecord(
             format=1,
             pair=pair,
             member=member,
@@ -84,7 +85,7 @@ def prepare(membership, recovery, pair, member):
     )
     # Keep a durable proposal; only acknowledge it after successful live recovery.
     after = copy.deepcopy(old)
-    after["members"][member] = dict(
+    after["members"][member] = Member(
         zfs_partuuid=record["new_partuuid"],
         esp_uuid=record["esp_uuid"],
         minimum_bytes=table["partitions"][1]["size"] * 512,

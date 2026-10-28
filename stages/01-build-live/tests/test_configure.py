@@ -3,6 +3,7 @@
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -63,6 +64,20 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual((installed / "source.bundle").read_text(), "fixture")
         self.assertTrue(
             (self.base / "config/hooks/live/60-repository.hook.chroot").is_file()
+        )
+        library = self.base / "config/includes.chroot/usr/local/lib/level1vault"
+        self.assertEqual(
+            (library / "contracts.py").read_bytes(),
+            (ROOT / "common/contracts.py").read_bytes(),
+        )
+        subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-c",
+                f"import sys; sys.path.insert(0, {str(library)!r}); import contracts, transport, member_recovery, usb_devices",
+            ],
+            check=True,
         )
         for name in ("zshrc", "tmux.conf", "starship.toml"):
             staged = (

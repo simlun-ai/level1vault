@@ -1,13 +1,17 @@
 """Check the shared extraction contract used by assembly and OS release builds."""
 
+import hashlib
 import importlib.util
+import json
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "common"))
 spec = importlib.util.spec_from_file_location(
     "shared_live_payload", ROOT / "common/live_payload.py"
 )
@@ -56,6 +60,17 @@ class ExtractTests(unittest.TestCase):
                 (base / "release/live/initrd.img").read_text(),
                 "initrd.img-6.12-fixture",
             )
+            expected_id = hashlib.sha256(
+                json.dumps(
+                    {
+                        key: value
+                        for key, value in release.items()
+                        if key != "release_id"
+                    },
+                    sort_keys=True,
+                ).encode()
+            ).hexdigest()
+            self.assertEqual(release["release_id"], expected_id)
             self.assertEqual(release["kernel"], "6.12-fixture")
             self.assertIn(".disk/live-uuid", release["files"])
             self.assertTrue((base / "release/live/release.json").is_file())

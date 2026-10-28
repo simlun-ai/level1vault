@@ -4,11 +4,12 @@ import hashlib
 import os
 import subprocess
 import time
+from pathlib import Path
 
 from usb_devices import require
 
 
-def readback(disk, size, expected):
+def readback(disk: Path, size: int, expected: str) -> None:
     # Read exactly the written extent after flushing the device cache.
     subprocess.run(["blockdev", "--flushbufs", str(disk)], check=True)
     digest = hashlib.sha256()
@@ -22,7 +23,7 @@ def readback(disk, size, expected):
     require(digest.hexdigest() == expected, f"USB readback checksum mismatch: {disk}")
 
 
-def write_image(image, disk):
+def write_image(image: Path, disk: Path) -> None:
     # Hash the bytes being written without a separate source verification pass.
     size = image.stat().st_size
     digest = hashlib.sha256()

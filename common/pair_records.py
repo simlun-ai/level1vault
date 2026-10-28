@@ -6,21 +6,23 @@ import os
 import re
 import tempfile
 import uuid
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from artifact_owner import publish
+from contracts import Member, Membership
 from member_recovery import partition_table, require
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def records_root():
+def records_root() -> Path:
     return Path(os.environ.get("RECORDS_DIR", ROOT / "records")).resolve()
 
 
-def validate_membership(record, pair):
+def validate_membership(record: Mapping[str, Any], pair: str) -> Membership:
     require(re.fullmatch(r"[1-9][0-9]*", pair) is not None, "Invalid pair ID")
     require(
         record["format"] == 1 and record["pair"] == pair,
@@ -53,10 +55,10 @@ def validate_membership(record, pair):
         record["members"]["a"]["esp_uuid"] != record["members"]["b"]["esp_uuid"],
         "Duplicate FAT UUID",
     )
-    return record
+    return cast(Membership, record)
 
 
-def write_json(path, value):
+def write_json(path: Path, value: object) -> None:
     # Publish complete JSON atomically, including when called under sudo.
     temporary = None
     try:
@@ -80,7 +82,7 @@ def write_json(path, value):
 
 
 @contextmanager
-def locked_pair(root, pair):
+def locked_pair(root: Path, pair: str) -> Generator[Path, None, None]:
     require(re.fullmatch(r"[1-9][0-9]*", pair) is not None, "Invalid pair ID")
     directory = root / "pairs" / pair
     directory.mkdir(parents=True, exist_ok=True)
@@ -91,7 +93,7 @@ def locked_pair(root, pair):
         yield directory
 
 
-def require_separate(root, staging):
+def require_separate(root: Path, staging: Path) -> None:
     root, staging = root.resolve(), staging.resolve()
     require(
         not root.is_relative_to(staging) and not staging.is_relative_to(root),
@@ -99,7 +101,7 @@ def require_separate(root, staging):
     )
 
 
-def save_pair(out, pair, root) -> dict[str, Any]:
+def save_pair(out: Path, pair: str, root: Path) -> Membership:
     # Export only initialized identities; images are read once to record real bounds.
     staging = out.parent.parent if out.parent.name == "pairs" else out
     require_separate(root, staging)
@@ -118,14 +120,14 @@ def save_pair(out, pair, root) -> dict[str, Any]:
     )
     images = json.loads((out / "images.json").read_text())
     require(images["format"] == 1, "Unsupported image manifest")
-    members = {}
+    members: dict[str, Member] = {}
     for member in ("a", "b"):
         part = partition_table(out / f"usb-{member}.img")["partitions"][1]
         row = images["images"][member]
         require(
             part["uuid"].lower() == row["zfs_partuuid"], "Image and manifest disagree"
         )
-        members[member] = dict(
+        members[member] = Member(
             zfs_partuuid=row["zfs_partuuid"],
             esp_uuid=row["esp_uuid"],
             minimum_bytes=part["size"] * 512,
@@ -155,7 +157,9 @@ def save_pair(out, pair, root) -> dict[str, Any]:
     return record
 
 
-def accept_replacement(root, pair, replacement, confirmed):
+def accept_replacement(
+    root: Path, pair: str, replacement: str, confirmed: bool
+) -> None:
     # Advancing membership is an explicit operator acknowledgement of live recovery.
     require(
         confirmed,
