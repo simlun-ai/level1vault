@@ -4,8 +4,8 @@ variable "CI_ISO" { default = "build/ci-iso" }
 variable "ASSEMBLY_ID_1" { default = "" }
 variable "ASSEMBLY_ID_2" { default = "" }
 
-group "default" { targets = ["shell", "unit-pipeline", "unit-runtime", "unit-stages", "assembly", "account"] }
-group "ci" { targets = ["shell", "unit-pipeline", "unit-runtime", "unit-stages", "assembly", "account"] }
+group "default" { targets = ["ruff", "shell", "unit-pipeline", "unit-runtime", "unit-stages", "assembly", "account"] }
+group "ci" { targets = ["ruff", "shell", "unit-pipeline", "unit-runtime", "unit-stages", "assembly", "account"] }
 group "container" { targets = ["assembly", "account"] }
 group "exports" { targets = ["pair-export-1", "pair-export-2"] }
 
@@ -72,4 +72,10 @@ target "pair-export-2" {
   inherits = ["_pair-export"]
   args = { ASSEMBLY_ID = ASSEMBLY_ID_2 }
   output = ["type=local,dest=${CI_RESULTS}/export-2,platform-split=false"]
+}
+
+target "ruff" {
+  inherits = ["_source"]
+  target = "ruff"
+  no-cache-filter = ["ruff"]
 }

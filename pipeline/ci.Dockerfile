@@ -31,3 +31,13 @@ RUN --network=none python3 pipeline/test.py runtime
 
 FROM unit-source AS unit-stages
 RUN --network=none python3 pipeline/test.py stages
+
+# Keep the pinned linter separate from operational and unit-test environments.
+FROM python:3.14-slim AS lint-tools
+RUN pip install --no-cache-dir ruff==0.17.2
+WORKDIR /src
+
+FROM lint-tools AS ruff
+COPY --link . .
+RUN --network=none ruff check --no-cache pipeline stages runtime common integration-tests && \
+    ruff format --check --no-cache pipeline stages runtime common integration-tests

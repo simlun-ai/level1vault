@@ -1,11 +1,12 @@
 """Check CI sequencing and cleanup using disposable exporter fixtures, without Docker."""
+
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -15,13 +16,17 @@ class CoordinatorTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name)
-        tools = self.base / 'bin'
+        tools = self.base / "bin"
         tools.mkdir()
-        self.work = self.base / 'work'
+        self.work = self.base / "work"
         self.work.mkdir()
-        self.log = self.base / 'calls'
-        docker = tools / 'docker'
-        docker.write_text('#!' + sys.executable + '\n' + '''import json, os, pathlib, subprocess, sys
+        self.log = self.base / "calls"
+        docker = tools / "docker"
+        docker.write_text(
+            "#!"
+            + sys.executable
+            + "\n"
+            + """import json, os, pathlib, subprocess, sys
 args = sys.argv[1:]
 group = args[-1]
 assert '--allow=fs.write=' + os.environ['CI_RESULTS'] in args
@@ -54,34 +59,46 @@ else:
         export = results / ('export-' + str(pair))
         export.mkdir()
         subprocess.run(['tar', '--sparse', '-cf', str(export / 'pair.tar'), '-C', str(out), '.'], check=True)
-''')
+"""
+        )
         docker.chmod(0o755)
-        self.env = dict(os.environ, PATH=f'{tools}:{os.environ["PATH"]}',
-                        TMPDIR=str(self.work), CALLS=str(self.log), BUILDX_BUILDER='level1vault-fixture')
+        self.env = dict(
+            os.environ,
+            PATH=f"{tools}:{os.environ['PATH']}",
+            TMPDIR=str(self.work),
+            CALLS=str(self.log),
+            BUILDX_BUILDER="level1vault-fixture",
+        )
 
-    def run_ci(self, group='ci', **settings):
-        return subprocess.run(['bash', str(ROOT / 'pipeline/ci.sh'), group],
-                              env=dict(self.env, **settings), capture_output=True, text=True)
+    def run_ci(self, group="ci", **settings):
+        return subprocess.run(
+            ["bash", str(ROOT / "pipeline/ci.sh"), group],
+            env=dict(self.env, **settings),
+            capture_output=True,
+            text=True,
+        )
 
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()]
 
     def test_both_entrypoints_validate_exports_and_remove_temporary_outputs(self):
-        for group in ('ci', 'container'):
+        for group in ("ci", "container"):
             with self.subTest(group=group):
                 result = self.run_ci(group)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual([call[-1] for call in self.calls()][-2:], [group, 'exports'])
+                self.assertEqual(
+                    [call[-1] for call in self.calls()][-2:], [group, "exports"]
+                )
                 self.assertEqual(list(self.work.iterdir()), [])
 
     def test_failed_checks_stop_before_export_and_still_clean_up(self):
-        result = self.run_ci(FAIL_GROUP='ci')
+        result = self.run_ci(FAIL_GROUP="ci")
         self.assertEqual(result.returncode, 42, result.stderr)
         self.assertEqual(len(self.calls()), 1)
         self.assertEqual(list(self.work.iterdir()), [])
 
     def test_failed_export_or_reused_identity_is_not_success(self):
-        for settings in ({'FAIL_GROUP': 'exports'}, {'DUPLICATE': '1'}):
+        for settings in ({"FAIL_GROUP": "exports"}, {"DUPLICATE": "1"}):
             with self.subTest(settings=settings):
                 result = self.run_ci(**settings)
                 self.assertNotEqual(result.returncode, 0)

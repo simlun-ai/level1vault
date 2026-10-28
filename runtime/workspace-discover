@@ -1,22 +1,34 @@
 #!/usr/bin/env python3
 """Select a unique complete workspace mirror from offline labels, without importing."""
+
 import argparse
-from collections import defaultdict
-from pathlib import Path
 import re
 import subprocess
 import sys
+from collections import defaultdict
+from pathlib import Path
 
 
 def identity(text):
     # Require all readable label copies to agree on the mirror and this member.
     records = set()
-    for label in re.split(r'LABEL\s+[0-9]+', text):
+    for label in re.split(r"LABEL\s+[0-9]+", text):
         name = re.search(r"^\s*name:\s*'(level1-workspace-[1-9][0-9]*)'", label, re.M)
-        pool = re.search(r'^\s*pool_guid:\s*([0-9]+)', label, re.M)
-        leaf = re.search(r'^\s*guid:\s*([0-9]+)', label, re.M)
-        children = frozenset(re.findall(r"children\[[0-9]+\]:\s+type:\s*'disk'\s+id:\s*[0-9]+\s+guid:\s*([0-9]+)", label))
-        if name and pool and leaf and re.search(r"type:\s*'mirror'", label) and len(children) == 2:
+        pool = re.search(r"^\s*pool_guid:\s*([0-9]+)", label, re.M)
+        leaf = re.search(r"^\s*guid:\s*([0-9]+)", label, re.M)
+        children = frozenset(
+            re.findall(
+                r"children\[[0-9]+\]:\s+type:\s*'disk'\s+id:\s*[0-9]+\s+guid:\s*([0-9]+)",
+                label,
+            )
+        )
+        if (
+            name
+            and pool
+            and leaf
+            and re.search(r"type:\s*'mirror'", label)
+            and len(children) == 2
+        ):
             records.add((name[1], pool[1], leaf[1], children))
     return next(iter(records)) if len(records) == 1 else None
 
@@ -32,38 +44,53 @@ def select(devices, pair=None):
             groups[name, pool].append((device, leaf, children))
             names[name].add(pool)
     candidates = []
-    for (name, pool), members in groups.items():
+    for (name, _pool), members in groups.items():
         leaves = {leaf for _, leaf, _ in members}
-        if (len(names[name]) == 1 and len(members) == 2 and len(leaves) == 2
-                and all(children == leaves for _, _, children in members)):
-            candidates.append(name.removeprefix('level1-workspace-'))
+        if (
+            len(names[name]) == 1
+            and len(members) == 2
+            and len(leaves) == 2
+            and all(children == leaves for _, _, children in members)
+        ):
+            candidates.append(name.removeprefix("level1-workspace-"))
     if len(candidates) != 1:
-        available = ', '.join(sorted(candidates, key=int)) or 'none'
-        raise ValueError(f'Expected exactly one complete workspace pair; complete pairs: {available}. Connect both members or run sudo workspace-mount PAIR_ID explicitly.')
+        available = ", ".join(sorted(candidates, key=int)) or "none"
+        raise ValueError(
+            f"Expected exactly one complete workspace pair; complete pairs: {available}. Connect both members or run sudo workspace-mount PAIR_ID explicitly."
+        )
     return candidates[0]
 
 
 def discover(pair=None, guid=False):
     # Scan PARTUUID aliases as the mount helper does; label reads never import pools.
     devices = []
-    paths = sorted({path.resolve() for path in Path('/dev/disk/by-partuuid').glob('*')})
+    paths = sorted({path.resolve() for path in Path("/dev/disk/by-partuuid").glob("*")})
     for path in paths:
-        result = subprocess.run(['zdb', '-l', str(path)], capture_output=True, text=True)
+        result = subprocess.run(
+            ["zdb", "-l", str(path)], capture_output=True, text=True
+        )
         # zdb may return nonzero when only some label slots are readable.
         if result.stdout:
             devices.append((path, result.stdout))
     selected = select(devices, pair)
     if guid:
-        return next(identity(text)[1] for _, text in devices
-                    if identity(text) and identity(text)[0] == "level1-workspace-" + selected)
+        return next(
+            identity(text)[1]
+            for _, text in devices
+            if identity(text) and identity(text)[0] == "level1-workspace-" + selected
+        )
     return selected
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         parser = argparse.ArgumentParser(description=__doc__)
-        parser.add_argument("--pair", help="Require this complete pair even when others are connected")
-        parser.add_argument("--guid", action="store_true", help="Print the selected pool GUID")
+        parser.add_argument(
+            "--pair", help="Require this complete pair even when others are connected"
+        )
+        parser.add_argument(
+            "--guid", action="store_true", help="Print the selected pool GUID"
+        )
         args = parser.parse_args()
         if args.pair is not None and not re.fullmatch(r"[1-9][0-9]*", args.pair):
             parser.error("Invalid pair ID")

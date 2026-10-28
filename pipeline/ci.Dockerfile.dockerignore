@@ -1,6 +1,7 @@
 # Admit source and test fixtures only; production uses its own root allowlist.
 **
 !Makefile
+!pyproject.toml
 !pipeline/
 !pipeline/**
 !stages/

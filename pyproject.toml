@@ -1,0 +1,9 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+required-version = "==0.17.2"
+# Installed Python commands have no filename extension.
+extend-include = ["runtime/workspace-discover", "runtime/workspace-home", "runtime/workspace-replace", "runtime/workspace-sync", "runtime/workspace-transport-import"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
