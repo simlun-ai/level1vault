@@ -8,6 +8,7 @@ import tempfile
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from artifact_owner import publish
 from member_recovery import partition_table, require
@@ -98,7 +99,7 @@ def require_separate(root, staging):
     )
 
 
-def save_pair(out, pair, root):
+def save_pair(out, pair, root) -> dict[str, Any]:
     # Export only initialized identities; images are read once to record real bounds.
     staging = out.parent.parent if out.parent.name == "pairs" else out
     require_separate(root, staging)

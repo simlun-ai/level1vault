@@ -10,6 +10,7 @@ loader = importlib.machinery.SourceFileLoader(
     "workspace_discover", str(ROOT / "runtime/workspace-discover")
 )
 spec = importlib.util.spec_from_loader(loader.name, loader)
+assert spec is not None and spec.loader is not None
 discover = importlib.util.module_from_spec(spec)
 loader.exec_module(discover)
 

@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location(
     "prepare_pairs", ROOT / "pipeline/prepare-pairs.py"
 )
+assert spec is not None and spec.loader is not None
 batch = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(batch)
 

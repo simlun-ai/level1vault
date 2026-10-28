@@ -18,6 +18,7 @@ from upgrade_fixtures import make_boot, make_release  # noqa: E402 - resolve sha
 spec = importlib.util.spec_from_file_location(
     "os_upgrade", ROOT / "stages/06-upgrade-os/upgrade.py"
 )
+assert spec is not None and spec.loader is not None
 upgrade = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(upgrade)
 

@@ -10,12 +10,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location(
     "write_usb", ROOT / "stages/05-write-usb/write.py"
 )
+assert spec is not None and spec.loader is not None
 writer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(writer)
 
@@ -29,7 +31,7 @@ class WriteUsbTests(unittest.TestCase):
         (self.out / "WORKSPACE-INFO.txt").write_text("pair=4\nstate=replica\n")
         for name in ("usb-a.img", "usb-b.img", "images.json"):
             (self.out / name).write_text(name)
-        self.disks = [
+        self.disks: list[dict[str, Any]] = [
             dict(
                 name="/dev/sda",
                 device_id=1,

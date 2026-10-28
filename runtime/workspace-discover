@@ -74,11 +74,11 @@ def discover(pair=None, guid=False):
             devices.append((path, result.stdout))
     selected = select(devices, pair)
     if guid:
-        return next(
-            identity(text)[1]
-            for _, text in devices
-            if identity(text) and identity(text)[0] == "level1-workspace-" + selected
-        )
+        for _, text in devices:
+            found = identity(text)
+            if found is not None and found[0] == "level1-workspace-" + selected:
+                return found[1]
+        raise RuntimeError("Selected pool identity disappeared")
     return selected
 
 

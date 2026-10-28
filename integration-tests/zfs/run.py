@@ -96,6 +96,7 @@ def verify_live_home(base, dataset, existing=False):
         "workspace_home", str(ROOT / "runtime/workspace-home")
     )
     spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None and spec.loader is not None
     home = importlib.util.module_from_spec(spec)
     loader.exec_module(home)
     target = base / ("live-home-" + dataset.split("/")[0])
@@ -145,6 +146,7 @@ def verify_live_home(base, dataset, existing=False):
                 text=True,
             )
             try:
+                assert busy.stdout is not None
                 assert busy.stdout.readline().strip() == "ready"
                 try:
                     home.detach(dataset.split("/")[0])
@@ -273,6 +275,7 @@ def interrupted_transfer(send, destination, readonly):
         ],
         stdin=subprocess.PIPE,
     )
+    assert sender.stdout is not None and receiver.stdin is not None
     try:
         chunk = sender.stdout.read(2 * 1024 * 1024)
         receiver.stdin.write(chunk)
@@ -294,6 +297,7 @@ def verify_member_replacement(base):
         "integration_replace", str(ROOT / "runtime/workspace-replace")
     )
     spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None and spec.loader is not None
     replacement = importlib.util.module_from_spec(spec)
     loader.exec_module(replacement)
     import member_recovery
@@ -513,6 +517,7 @@ def main():
         "workspace_sync", str(ROOT / "runtime/workspace-sync")
     )
     spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None and spec.loader is not None
     sync = importlib.util.module_from_spec(spec)
     loader.exec_module(sync)
 
@@ -630,26 +635,26 @@ def main():
             real_transfer = sync.transfer
 
             # A new pair's full raw receive is interrupted and resumed.
-            sync.transfer = interrupted_transfer
+            vars(sync)["transfer"] = interrupted_transfer
             try:
                 sync.synchronize("1", "3")
                 raise AssertionError("Expected injected interruption")
             except RuntimeError as e:
                 assert str(e) == "Injected cable interruption", str(e)
             finally:
-                sync.transfer = real_transfer
+                vars(sync)["transfer"] = real_transfer
             helper("workspace-sync", "1", "3")
             assert get("level1-workspace-3/data", "receive_resume_token") == "-"
 
             # A later incremental receive resumes independently.
-            sync.transfer = interrupted_transfer
+            vars(sync)["transfer"] = interrupted_transfer
             try:
                 sync.synchronize("1", "2")
                 raise AssertionError("Expected injected interruption")
             except RuntimeError as e:
                 assert str(e) == "Injected cable interruption", str(e)
             finally:
-                sync.transfer = real_transfer
+                vars(sync)["transfer"] = real_transfer
             helper("workspace-sync", "1", "2")
 
             # Reject child datasets and verify a shared checkpoint across replicas.

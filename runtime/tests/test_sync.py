@@ -12,6 +12,7 @@ loader = importlib.machinery.SourceFileLoader(
     str(Path(__file__).resolve().parents[2] / "runtime/workspace-sync"),
 )
 spec = importlib.util.spec_from_loader(loader.name, loader)
+assert spec is not None and spec.loader is not None
 sync = importlib.util.module_from_spec(spec)
 loader.exec_module(sync)
 

@@ -13,6 +13,7 @@ from unittest.mock import patch
 SCRIPT = Path(__file__).resolve().parents[1] / "workspace-home"
 loader = importlib.machinery.SourceFileLoader("workspace_home", str(SCRIPT))
 spec = importlib.util.spec_from_loader(loader.name, loader)
+assert spec is not None and spec.loader is not None
 home = importlib.util.module_from_spec(spec)
 loader.exec_module(home)
 

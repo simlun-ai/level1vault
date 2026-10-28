@@ -29,7 +29,7 @@ export SUDO BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A D
 RUN = python3 pipeline/lifecycle.py shared
 
 # Expose the supported project lifecycle commands.
-.PHONY: lint-python ci ci-build ci-zfs stage-transport save-records confirm-replacement prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
+.PHONY: typecheck lint-python ci ci-build ci-zfs stage-transport save-records confirm-replacement prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
@@ -49,6 +49,7 @@ help:
 	  'make upgrade-os UPGRADE_DIR=... PAIR=2 DISK_A=/dev/sda DISK_B=/dev/sdb  Apply a prepared OS release' \
 	  'make prepare-replacement PAIR=1 MEMBER=A RECOVERY_DIR=build/recovery-1a  Build one empty replacement' \
 	  'make write-replacement PAIR=1 MEMBER=A RECOVERY_DIR=build/recovery-1a DISK=/dev/sda  Write one blank USB' \
+	  'make typecheck                   Check Python types targeting Python 3.10' \
 	  'make lint-python                 Check Python lint and formatting with pinned Ruff' \
 	  'make ci                          Run parallel containerized checks and host export validation' \
 	  'make test                        Run local lint and unit/behavior tests' \
@@ -122,6 +123,10 @@ test-unit:
 
 # Run the workstation-safe checks.
 test: lint test-unit
+
+# Check Python types using the pinned container toolchain.
+typecheck:
+	$(RUN) bash pipeline/buildkit.sh typecheck
 
 # Check Python lint and formatting with the same pinned Ruff as CI.
 lint-python:

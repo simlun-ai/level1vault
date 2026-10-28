@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 STAGE = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("package_zfs", STAGE / "package-zfs.py")
+assert spec is not None and spec.loader is not None
 packager = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(packager)
 

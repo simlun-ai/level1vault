@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location(
     "test_qemu_runner", ROOT / "stages/04-test-pair/run.py"
 )
+assert spec is not None and spec.loader is not None
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 
@@ -202,7 +203,9 @@ class QemuTests(unittest.TestCase):
                         pattern, child=child, newline=newline, status=status, **kwargs
                     ):
                         sent = child.sendline.call_args.args[0]
-                        marker = re.search(r"L1V_[a-f0-9]{32}", sent).group()
+                        match = re.search(r"L1V_[a-f0-9]{32}", sent)
+                        assert match is not None
+                        marker = match.group()
                         # Include echoed input before the actual guest result.
                         transcript = (
                             sent + newline + marker + ":" + str(status) + newline
