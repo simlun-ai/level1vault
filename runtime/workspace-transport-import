@@ -15,7 +15,6 @@ sys.path.insert(
     else "/usr/local/lib/level1vault",
 )
 from member_recovery import output  # noqa: E402 - resolve shared helpers after configuring their path
-
 from transport import import_transport, workspace_lock  # noqa: E402 - resolve shared helpers after configuring their path
 
 

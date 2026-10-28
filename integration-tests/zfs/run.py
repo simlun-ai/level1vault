@@ -168,6 +168,7 @@ def verify_os_upgrade(out, base):
     sys.path.insert(0, str(ROOT / "stages/06-upgrade-os"))
     sys.path.insert(0, str(ROOT / "stages/06-upgrade-os/tests"))
     import upgrade
+
     from upgrade_fixtures import make_boot, make_release
 
     release = base / "upgrade-release"
