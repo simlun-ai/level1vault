@@ -20,6 +20,10 @@ xorriso -osirrox on -indev "$BUILD_DIR/live-image-amd64.hybrid.iso" \
 unsquashfs -processors 1 -no-progress -d "$TASK_TMP/root" "$TASK_TMP/live/filesystem.squashfs" >/dev/null
 ROOT="$TASK_TMP/root"
 
+# Verify offline transport helpers are included in the live image.
+test -x "$ROOT/usr/local/sbin/workspace-transport-import"
+test -f "$ROOT/usr/local/lib/level1vault/transport.py"
+
 # Verify the ZFS module matches the packaged kernel.
 KERNEL=$(cat "$ROOT/usr/local/share/level1vault/kernel-version")
 chroot "$ROOT" modinfo -k "$KERNEL" zfs
@@ -82,6 +86,7 @@ chroot "$ROOT" sh -c "command -v sfdisk"
 chroot "$ROOT" /usr/local/sbin/workspace-prune --help >/dev/null
 chroot "$ROOT" /usr/local/sbin/workspace-activate --help >/dev/null
 chroot "$ROOT" python3 /usr/local/sbin/workspace-sync --help >/dev/null
+chroot "$ROOT" python3 /usr/local/sbin/workspace-transport-import --help >/dev/null
 for command in workspace-mount workspace-umount workspace-sync workspace-activate workspace-prune; do
   grep -Fq "sudo $command" "$ROOT/etc/motd"
 done

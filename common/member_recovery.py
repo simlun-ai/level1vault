@@ -117,3 +117,14 @@ def label_identity(text):
             identities.add((pool[1], guid[1], leaf[1]))
     require(len(identities) == 1, 'ZFS labels are missing or disagree about device identity')
     return next(iter(identities))
+
+
+def mirror_leaves(status):
+    # Reject extra top-level vdevs, spares and replacement trees rather than guessing.
+    config = status.split('config:', 1)[1].split('errors:', 1)[0]
+    rows = [match.groups() for match in re.finditer(
+        r'^([ \t]+)(\S+)[ \t]+(\S+)[ \t]+(\d+)[ \t]+(\d+)[ \t]+(\d+)(?:[ \t]+was[ \t]+.*)?[ \t]*$', config, re.M)]
+    require(len(rows) == 4 and len(rows[0][0]) < len(rows[1][0]) < len(rows[2][0]) == len(rows[3][0]),
+            'Expected exactly one two-member mirror; inspect interrupted replacement trees manually')
+    require(all(re.fullmatch(r'[0-9]+', row[1]) for row in rows[1:]), 'Expected numeric vdev GUIDs')
+    return rows[2:]

@@ -171,6 +171,15 @@ Before each exact deletion, the helper rechecks identity and eligibility under t
 
 Deletion removes those historical recovery points; it does not remove current files. Retained holds and shared blocks can limit reclaimed space. Keep external records of offsite copies and select a retention count that fits your recovery needs.
 
+## Temporary transport sibling
+
+`level1-workspace-N/transport` may coexist with `data` as an unencrypted, manually
+mounted sibling for [offline file transport](TRANSPORT.md). It is excluded from
+workspace replication. A replica may carry it without changing its role; import
+into the encrypted inbox requires an active writable workspace. Sync validates
+an existing destination transport dataset and preserves it. Export unmounts it
+as part of the normal pool export, refusing busy mounts.
+
 ## Encryption and compatibility
 
 Encryption is native ZFS AES-256-GCM on each data filesystem, not whole-device encryption: boot files, pool/snapshot names and some ZFS metadata remain visible. ZFS reads creation/unlock passphrases from stdin; no key file is saved. A terminal hides entry and confirms a new passphrase; redirected stdin supplies one line. The live login password `password` is independent of the workspace passphrase.

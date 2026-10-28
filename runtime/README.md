@@ -15,3 +15,8 @@ Behavior tests in `tests/` run with mocked system commands through `make test`. 
 
 `workspace-replace PAIR --fenced` restores one failed mirror member from the recovery record on a prepared replacement boot drive. Boot the new drive, connect the survivor, and follow [member recovery](../docs/RECOVERY.md#member-recovery). It shares the workspace lock, preserves encryption/state and requires verified final mirror health.
 
+
+`workspace-transport-import [PAIR]` verifies a staged transport package into a dated
+directory in the active encrypted inbox, then destroys transport. Mount the active
+workspace first. See [offline transport](../docs/TRANSPORT.md) for host staging,
+verification and retry behavior.

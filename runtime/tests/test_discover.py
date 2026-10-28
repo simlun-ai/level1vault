@@ -67,3 +67,8 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIsNone(discover.identity(label() + label(pool='200')))
         self.assertIsNone(discover.identity('not a ZFS label'))
         self.assertEqual(discover.identity(label() + label()), discover.identity(label()))
+
+    def test_explicit_pair_filters_other_complete_mirrors_but_requires_both_members(self):
+        self.assertEqual(discover.select(complete() + complete('2', '200'), '2'), '2')
+        with self.assertRaises(ValueError):
+            discover.select(complete() + complete('2', '200')[:1], '2')

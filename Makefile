@@ -29,10 +29,11 @@ export SUDO BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A D
 RUN = python3 pipeline/lifecycle.py shared
 
 # Expose the supported project lifecycle commands.
-.PHONY: save-records confirm-replacement prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
+.PHONY: stage-transport save-records confirm-replacement prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
+	  'make stage-transport PAIR=1       Copy transport/ onto a locked pair, replacing previous transport' \
 	  'make save-records PAIR=1         Export recovery records from existing initialized images' \
 	  'make confirm-replacement PAIR=1 REPLACEMENT=... CONFIRMED=yes  Record successful live recovery' \
 	  'make check-host                  Check build, USB and test dependencies; print apt fixes' \
@@ -164,3 +165,8 @@ save-records:
 confirm-replacement:
 	@test "$$CONFIRMED" = yes || { echo 'Set CONFIRMED=yes only after successful live recovery and read-check' >&2; exit 2; }
 	$(RUN) python3 pipeline/records.py accept --pair "$$PAIR" --replacement "$$REPLACEMENT" --confirmed
+
+# Stage generic files without unlocking or mounting the encrypted workspace.
+stage-transport:
+	@[[ '$(origin PAIR)' == 'command line' || '$(origin PAIR)' == environment ]] || { echo 'Set PAIR explicitly, e.g. PAIR=1' >&2; exit 2; }
+	$(RUN) $(SUDO) python3 pipeline/stage-transport.py --pair "$$PAIR"

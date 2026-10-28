@@ -264,6 +264,64 @@ def verify_member_replacement(base):
             command('losetup', '-d', device)
 
 
+def verify_transport(base):
+    # Stage and replace packages with keys unloaded, then verify real encrypted inbox IO.
+    source = base / 'transport-source'
+    source.mkdir()
+    (source / 'README.md').write_text('transfer instructions')
+    (source / '.hidden').write_bytes(b'payload\x00')
+    (source / 'empty').mkdir()
+    (source / 'link').symlink_to('/etc/shadow')
+    pool = 'level1-workspace-1'
+    command('zpool', 'export', pool)
+    stage = ['python3', str(ROOT / 'pipeline/stage-transport.py'), '--pair', '1', '--source', str(source)]
+    command(*stage, input='yes\n', text=True)
+    assert pool not in run('zpool', 'list', '-H', '-o', 'name').splitlines()
+    (source / 'README.md').write_text('replacement instructions')
+    command(*stage, input='yes\n', text=True)
+    command('zpool', 'import', '-N', '-d', '/dev/disk/by-partuuid', '-o', 'cachefile=none', pool)
+    assert get(pool + '/data', 'keystatus') == 'unavailable'
+    assert get(pool + '/data', 'mounted') == 'no'
+    assert get(pool + '/transport', 'encryption') == 'off'
+    helper('workspace-mount', '1', input=KEY + '\n')
+
+    # A corrupt delivery must survive a refused import; restaging repairs it.
+    transport_mount = base / 'transport-mounted'
+    transport_mount.mkdir()
+    command('mount', '-t', 'zfs', pool + '/transport', str(transport_mount))
+    (transport_mount / 'files/README.md').write_text('corrupted')
+    command('umount', str(transport_mount))
+    helper('workspace-transport-import', '1', ok=False)
+    assert get(pool + '/transport', 'encryption') == 'off'
+    helper('workspace-umount', '1')
+    command(*stage, input='yes\n', text=True)
+    helper('workspace-mount', '1', input=KEY + '\n')
+    helper('workspace-transport-import', '1')
+    deliveries = list(Path('/mnt/workspace/inbox').glob('[0-9]*'))
+    assert len(deliveries) == 1
+    delivery = deliveries[0]
+    assert (delivery / 'README.md').read_text() == 'replacement instructions'
+    assert (delivery / '.hidden').read_bytes() == b'payload\x00'
+    assert (delivery / 'empty').is_dir()
+    assert (delivery / 'link').readlink() == Path('/etc/shadow')
+    for path in [delivery, delivery / 'README.md', delivery / 'link']:
+        info = path.lstat()
+        assert (info.st_uid, info.st_gid) == (1000, 1000)
+    assert pool + '/transport' not in run('zfs', 'list', '-H', '-o', 'name').splitlines()
+    command('zfs', 'unmount', pool + '/data')
+    command('zfs', 'unload-key', pool + '/data')
+
+    # Transport on a replica never changes its role, and may coexist with later raw receives.
+    command('zpool', 'export', 'level1-workspace-2')
+    stage[stage.index('--pair') + 1] = '2'
+    command(*stage, input='yes\n', text=True)
+    helper('workspace-mount', '2', input=KEY + '\n')
+    helper('workspace-transport-import', '2', ok=False)
+    assert get('level1-workspace-2', 'org.level1vault:state') == 'replica'
+    command('zfs', 'unmount', 'level1-workspace-2/data')
+    command('zfs', 'unload-key', 'level1-workspace-2/data')
+
+
 def main():
     assert os.geteuid() == 0 and os.environ.get('LEVEL1VAULT_DISPOSABLE_TEST_VM') == '1'
     command('modprobe', 'zfs')
@@ -317,6 +375,8 @@ def main():
                     assert not os.path.ismount('/mnt/workspace')
                     command('zpool', 'import', '-N', '-d', '/dev', '-o', 'cachefile=none', pool)
 
+            verify_transport(base)
+
             # Verify passphrase unlock and workspace ownership.
             helper('workspace-mount', '1', input='incorrect-passphrase\n', ok=False)
             assert not os.path.ismount('/mnt/workspace')
@@ -333,6 +393,7 @@ def main():
             helper('workspace-sync', '1', '2', '10')  # shared full checkpoint, source key unloaded
             assert get('level1-workspace-2/data', 'readonly') == 'on'
             assert get('level1-workspace-2/data', 'keystatus') == 'unavailable'
+            assert get('level1-workspace-2/transport', 'encryption') == 'off'
             helper('workspace-mount', '1', input=KEY + '\n')
             Path('/mnt/workspace/user-file').write_text('second')
             helper('workspace-sync', '1', '2')

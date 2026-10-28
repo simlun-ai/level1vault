@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Select a unique complete workspace mirror from offline labels, without importing."""
+import argparse
 from collections import defaultdict
 from pathlib import Path
 import re
@@ -20,13 +21,13 @@ def identity(text):
     return next(iter(records)) if len(records) == 1 else None
 
 
-def select(devices):
+def select(devices, pair=None):
     # Count physical partitions once and reject duplicate member or pool identities.
     groups = defaultdict(list)
     names = defaultdict(set)
     for device, text in devices:
         record = identity(text)
-        if record:
+        if record and (pair is None or record[0] == "level1-workspace-" + pair):
             name, pool, leaf, children = record
             groups[name, pool].append((device, leaf, children))
             names[name].add(pool)
@@ -42,7 +43,7 @@ def select(devices):
     return candidates[0]
 
 
-def discover():
+def discover(pair=None, guid=False):
     # Scan PARTUUID aliases as the mount helper does; label reads never import pools.
     devices = []
     paths = sorted({path.resolve() for path in Path('/dev/disk/by-partuuid').glob('*')})
@@ -51,11 +52,21 @@ def discover():
         # zdb may return nonzero when only some label slots are readable.
         if result.stdout:
             devices.append((path, result.stdout))
-    return select(devices)
+    selected = select(devices, pair)
+    if guid:
+        return next(identity(text)[1] for _, text in devices
+                    if identity(text) and identity(text)[0] == "level1-workspace-" + selected)
+    return selected
 
 
 if __name__ == '__main__':
     try:
-        print(discover())
+        parser = argparse.ArgumentParser(description=__doc__)
+        parser.add_argument("--pair", help="Require this complete pair even when others are connected")
+        parser.add_argument("--guid", action="store_true", help="Print the selected pool GUID")
+        args = parser.parse_args()
+        if args.pair is not None and not re.fullmatch(r"[1-9][0-9]*", args.pair):
+            parser.error("Invalid pair ID")
+        print(discover(args.pair, args.guid))
     except (ValueError, OSError) as error:
         sys.exit(str(error))
