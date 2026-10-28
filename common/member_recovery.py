@@ -7,9 +7,12 @@ import re
 import subprocess
 import tempfile
 import uuid
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, cast
 
+from contracts import Disk, PartitionTable, RecoveryRecord
 from usb_devices import (
     descendants,
     describe_disk,
@@ -22,17 +25,17 @@ ESP_TYPE = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
 ZFS_TYPE = "6a898cc3-1dd2-11b2-99a6-080020736631"
 
 
-def output(*args):
+def output(*args: str | Path) -> str:
     return subprocess.check_output(
         list(map(str, args)), text=True, env=dict(os.environ, LC_ALL="C")
     ).strip()
 
 
-def command(*args):
+def command(*args: str | Path) -> None:
     subprocess.run(list(map(str, args)), check=True)
 
 
-def validate_record(record):
+def validate_record(record: Mapping[str, Any]) -> RecoveryRecord:
     require(
         record["format"] == 1 and record["member"] in ("a", "b"),
         "Invalid recovery record",
@@ -62,10 +65,10 @@ def validate_record(record):
         isinstance(record["minimum_bytes"], int) and record["minimum_bytes"] > 0,
         "Invalid partition size",
     )
-    return record
+    return cast(RecoveryRecord, record)
 
 
-def partition_table(path):
+def partition_table(path: str | Path) -> PartitionTable:
     table = json.loads(output("sfdisk", "--json", path))["partitiontable"]
     parts = table["partitions"]
     require(
@@ -80,38 +83,40 @@ def partition_table(path):
         table.get("sectorsize", 512) == 512,
         "Only 512-byte logical sectors are supported",
     )
-    return table
+    return cast(PartitionTable, table)
 
 
-def empty_partition(path):
+def empty_partition(path: str | Path) -> None:
     signatures = json.loads(output("wipefs", "--json", "--no-act", path))["signatures"]
     require(not signatures, f"Expected an empty replacement partition: {path}")
 
 
-def connected_identities(record, recovering):
+def connected_identities(record: Mapping[str, Any], recovering: bool) -> None:
     # A PARTUUID symlink alone hides duplicate physical/image copies.
     devices = json.loads(
         output("lsblk", "--json", "--paths", "--output", "NAME,PARTUUID,UUID")
     )["blockdevices"]
-    rows = [row for disk in devices for row in descendants(disk)]
+    rows: list[Disk] = [row for disk in devices for row in descendants(disk)]
     for key in ("failed_partuuid", "survivor_partuuid", "new_partuuid"):
         count = sum(
-            row.get("partuuid", "").lower() == record[key]
+            (row.get("partuuid") or "").lower() == record[key]
             for row in rows
-            if row.get("partuuid")
+            if row.get("partuuid", None)
         )
         expected = int(recovering and key != "failed_partuuid")
         require(
             count == expected,
             f"Unexpected connected copies of {key}; disconnect failed/duplicate/original members as required",
         )
-    count = sum(row.get("uuid") == record["esp_uuid"] for row in rows)
+    count = sum(row.get("uuid", None) == record["esp_uuid"] for row in rows)
     require(
         count == int(recovering), "Unexpected copies of the replacement FAT filesystem"
     )
 
 
-def inspect_replacement(disk, record, boot=False, empty=True):
+def inspect_replacement(
+    disk: Path, record: RecoveryRecord, boot: bool = False, empty: bool = True
+) -> tuple[Disk, PartitionTable]:
     info = describe_disk(disk, output)
     table = partition_table(info["name"])
     esp, data = table["partitions"]
@@ -128,7 +133,7 @@ def inspect_replacement(disk, record, boot=False, empty=True):
             and "ro" in options.split(","),
             "Boot the prepared replacement with its live medium mounted read-only",
         )
-        for child in checked.get("children", []):
+        for child in checked.get("children") or ():
             if child["name"] == esp["node"]:
                 require(
                     set(filter(None, child.get("mountpoints", [])))
@@ -163,7 +168,7 @@ def inspect_replacement(disk, record, boot=False, empty=True):
 
 
 @contextmanager
-def mounted_readonly(esp):
+def mounted_readonly(esp: str | Path) -> Generator[Path, None, None]:
     directory = Path(tempfile.mkdtemp(prefix="level1vault-member-"))
     active = False
     try:
@@ -176,8 +181,8 @@ def mounted_readonly(esp):
         directory.rmdir()
 
 
-def label_identity(text):
-    identities = set()
+def label_identity(text: str) -> tuple[str, str, str]:
+    identities: set[tuple[str, str, str]] = set()
     for label in re.split(r"LABEL\s+[0-9]+", text):
         pool = re.search(r"^\s*name:\s*'([^']+)'", label, re.M)
         guid = re.search(r"^\s*pool_guid:\s*([0-9]+)", label, re.M)
@@ -194,7 +199,7 @@ def label_identity(text):
     return next(iter(identities))
 
 
-def mirror_leaves(status):
+def mirror_leaves(status: str) -> list[tuple[str, ...]]:
     # Reject extra top-level vdevs, spares and replacement trees rather than guessing.
     config = status.split("config:", 1)[1].split("errors:", 1)[0]
     rows = [

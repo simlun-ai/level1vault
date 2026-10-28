@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 
-def open_metadata(path):
+def open_metadata(path: Path) -> int:
     parts = path.absolute().parts
     parent = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
     try:
@@ -24,7 +24,7 @@ def open_metadata(path):
         os.close(parent)
 
 
-def publish(*paths):
+def publish(*paths: str | Path) -> None:
     # Change only explicit regular files/directories; never follow symlink ancestors.
     if os.geteuid() != 0 or "SUDO_UID" not in os.environ:
         return

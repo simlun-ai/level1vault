@@ -2,15 +2,18 @@
 
 import json
 import stat
+from collections.abc import Iterator
 from pathlib import Path
 
+from contracts import Disk, Query
 
-def require(condition, message):
+
+def require(condition: object, message: str) -> None:
     if not condition:
         raise ValueError(message)
 
 
-def describe_disk(path, query):
+def describe_disk(path: Path, query: Query) -> Disk:
     path = path.resolve(strict=True)
     require(stat.S_ISBLK(path.stat().st_mode), f"Not a block device: {path}")
     devices = json.loads(
@@ -33,16 +36,16 @@ def describe_disk(path, query):
     return info
 
 
-def descendants(info):
+def descendants(info: Disk) -> Iterator[Disk]:
     yield info
-    for child in info.get("children", []):
+    for child in info.get("children") or ():
         yield from descendants(child)
 
 
-def validate_idle(info, imported):
+def validate_idle(info: Disk, imported: set[Path]) -> None:
     # Reject partitions, non-USB disks and devices still in use.
     require(
-        info["type"] == "disk" and info.get("tran") == "usb",
+        info["type"] == "disk" and info.get("tran", None) == "usb",
         f"Select a whole USB disk: {info['name']}",
     )
     for device in descendants(info):
@@ -50,9 +53,9 @@ def validate_idle(info, imported):
         require(
             device["type"] in ("disk", "part"), f"Device has active holders: {name}"
         )
-        require(not device.get("ro"), f"Read-only device: {name}")
+        require(not device.get("ro", False), f"Read-only device: {name}")
         require(
-            not any(device.get("mountpoints") or []),
+            not any(device.get("mountpoints", None) or []),
             f"Mounted filesystem or swap on {name}; unmount it first",
         )
         require(
@@ -61,9 +64,9 @@ def validate_idle(info, imported):
         )
 
 
-def imported_devices(query):
+def imported_devices(query: Query) -> set[Path]:
     # Identify imported members without importing or changing any pool.
-    devices = set()
+    devices: set[Path] = set()
     for pool in query("zpool", "list", "-H", "-o", "name").splitlines():
         for line in query("zpool", "status", "-LP", pool).splitlines():
             fields = line.split()

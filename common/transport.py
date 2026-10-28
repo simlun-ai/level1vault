@@ -10,9 +10,11 @@ import shutil
 import stat
 import tempfile
 import uuid
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
+from contracts import Entry, Manifest
 from member_recovery import command, mirror_leaves, output, require
 
 POLICY = {
@@ -27,17 +29,17 @@ POLICY = {
 DELIVERY = r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{32}"
 
 
-def prop(dataset, name):
+def prop(dataset: str, name: str) -> str:
     return output("zfs", "get", "-H", "-p", "-o", "value", name, dataset)
 
 
-def pair_pool(pair):
+def pair_pool(pair: str) -> str:
     require(re.fullmatch(r"[1-9][0-9]*", pair) is not None, "Invalid pair ID")
     return "level1-workspace-" + pair
 
 
 @contextmanager
-def workspace_lock():
+def workspace_lock() -> Generator[None, None, None]:
     require(os.geteuid() == 0, "Run with sudo")
     with open("/run/lock/level1vault-workspace.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -48,13 +50,13 @@ def workspace_lock():
         yield
 
 
-def datasets(pool):
+def datasets(pool: str) -> list[str]:
     return output(
         "zfs", "list", "-H", "-o", "name", "-t", "filesystem,volume", "-r", pool
     ).splitlines()
 
 
-def validate_transport(pool):
+def validate_transport(pool: str) -> str:
     # A narrowly defined sibling may coexist with encrypted workspace replication.
     transport = pool + "/transport"
     for name, expected in POLICY.items():
@@ -74,7 +76,7 @@ def validate_transport(pool):
     return transport
 
 
-def validate_pair(pool, pair):
+def validate_pair(pool: str, pair: str) -> str:
     data = pool + "/data"
     require(prop(pool, "org.level1vault:pair") == pair, "Pair identity mismatch")
     require(
@@ -96,7 +98,7 @@ def validate_pair(pool, pair):
 
 
 @contextmanager
-def mounted_transport(pool, readonly=False):
+def mounted_transport(pool: str, readonly: bool = False) -> Generator[Path, None, None]:
     transport = validate_transport(pool)
     require(
         prop(transport, "mounted") == "no", "Unmount transport before this operation"
@@ -122,7 +124,7 @@ def mounted_transport(pool, readonly=False):
         directory.rmdir()
 
 
-def regular_bytes(path, limit=64 * 1024 * 1024):
+def regular_bytes(path: Path, limit: int = 64 * 1024 * 1024) -> bytes:
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "rb") as source:
         require(
@@ -134,14 +136,14 @@ def regular_bytes(path, limit=64 * 1024 * 1024):
         return data
 
 
-def walk_tree(source, destination=None):
+def walk_tree(source: Path, destination: Path | None = None) -> list[Entry]:
     # Directory-relative, no-follow opens keep symlinks inert, including during source changes.
-    entries = []
+    entries: list[Entry] = []
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     root_fd = os.open(source, flags)
     device = os.fstat(root_fd).st_dev
 
-    def walk(fd, prefix, target):
+    def walk(fd: int, prefix: str, target: Path | None) -> None:
         for name in sorted(os.listdir(fd)):
             path = prefix + name
             info = os.stat(name, dir_fd=fd, follow_symlinks=False)
@@ -206,13 +208,13 @@ def walk_tree(source, destination=None):
     return entries
 
 
-def canonical(manifest):
+def canonical(manifest: object) -> bytes:
     return (json.dumps(manifest, sort_keys=True, ensure_ascii=True) + "\n").encode(
         "ascii"
     )
 
 
-def sync_directory(directory):
+def sync_directory(directory: Path) -> None:
     fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         os.fsync(fd)
@@ -220,14 +222,14 @@ def sync_directory(directory):
         os.close(fd)
 
 
-def write_metadata(path, data):
+def write_metadata(path: Path, data: bytes) -> None:
     with path.open("xb") as stream:
         stream.write(data)
         stream.flush()
         os.fsync(stream.fileno())
 
 
-def package(source, destination, entries):
+def package(source: Path, destination: Path, entries: list[Entry]) -> Manifest:
     # Hash the source before copying, then verify the staged bytes before declaring completion.
     files = destination / "files"
     files.mkdir(mode=0o700)
@@ -236,7 +238,7 @@ def package(source, destination, entries):
         "Source changed or staged copy differs; rerun staging",
     )
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    manifest = {
+    manifest: Manifest = {
         "format": 1,
         "delivery": stamp + "-" + uuid.uuid4().hex,
         "entries": entries,
@@ -250,7 +252,7 @@ def package(source, destination, entries):
     return manifest
 
 
-def read_package(source):
+def read_package(source: Path) -> Manifest:
     require(
         set(os.listdir(source)) == {"files", "manifest.json", "READY"},
         "Incomplete or unexpected transport package",
@@ -277,7 +279,7 @@ def read_package(source):
     return manifest
 
 
-def private_directory(path, owner=0):
+def private_directory(path: Path, owner: int = 0) -> None:
     if not path.exists() and not path.is_symlink():
         path.mkdir(mode=0o700)
     info = path.lstat()
@@ -289,7 +291,7 @@ def private_directory(path, owner=0):
     )
 
 
-def publish_inbox(source, workspace, pool):
+def publish_inbox(source: Path, workspace: Path, pool: str) -> Path:
     # Keep receipts separate from user payloads; verify an existing delivery before retrying cleanup.
     manifest = read_package(source)
     inbox = workspace / "inbox"
@@ -351,12 +353,12 @@ def publish_inbox(source, workspace, pool):
     return final
 
 
-def stage(pair, source, discover):
+def stage(pair: str, source: Path, discover: Path) -> None:
     pool = pair_pool(pair)
     # Inspect all source data and connected identities before replacing any existing delivery.
     entries = walk_tree(source)
     require(bool(entries), "Transport directory is empty; nothing staged")
-    size = sum(entry.get("size", 0) for entry in entries)
+    size = sum(entry["size"] for entry in entries if entry["type"] == "file")
     require(
         pool not in output("zpool", "list", "-H", "-o", "name").splitlines(),
         "Export the selected pair before staging",
@@ -418,7 +420,7 @@ def stage(pair, source, discover):
     print("Pair exported; safe to disconnect.")
 
 
-def import_transport(pair):
+def import_transport(pair: str) -> None:
     pool = pair_pool(pair)
     require(
         pool in output("zpool", "list", "-H", "-o", "name").splitlines(),

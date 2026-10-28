@@ -44,6 +44,7 @@ cp "$SOURCE_DIR/stages/01-build-live/build-packages.list" config/includes.chroot
 cp "$SOURCE_DIR/stages/01-build-live/package-zfs.py" config/includes.chroot/usr/local/lib/level1vault/build/
 cp "$SOURCE_DIR/stages/01-build-live/prune-build-packages.py" config/includes.chroot/usr/local/lib/level1vault/build/
 cp -a "$SOURCE_DIR/stages/01-build-live/user-config" config/includes.chroot/usr/local/lib/level1vault/build/
+install -m 0644 "$SOURCE_DIR/common/contracts.py" config/includes.chroot/usr/local/lib/level1vault/contracts.py
 install -m 0644 "$SOURCE_DIR/common/transport.py" config/includes.chroot/usr/local/lib/level1vault/transport.py
 install -m 0755 "$SOURCE_DIR/runtime/workspace-transport-import" config/includes.chroot/usr/local/sbin/workspace-transport-import
 install -m 0644 "$SOURCE_DIR/common/member_recovery.py" config/includes.chroot/usr/local/lib/level1vault/member_recovery.py

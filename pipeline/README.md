@@ -97,11 +97,20 @@ Its isolated Python 3.10 environment installs only the pinned pexpect dependency
 and ptyprocess; it never launches QEMU. Check execution disables networking,
 while tool/dependency preparation is cached. Warnings fail the command too.
 
-The initial policy is Pyright **basic**, across all Python source and tests,
+The default policy is Pyright **basic**, across all Python source and tests,
+with **strict** checking enforced for every file under `common/`,
 including explicit extensionless runtime commands. Unlike homelab-hsm's strict
-policy, it permits existing unannotated functions; adopting strict mode requires
-a separate annotation migration. There are no baseline ignores or disabled
+policy, it permits existing unannotated functions; the remaining owners migrate to strict checking separately. There are no baseline ignores or disabled
 error rules. Extra import paths resolve shared helpers and upgrade test fixtures.
 Dynamic imports and subprocess pipes are explicitly narrowed where needed;
 heterogeneous JSON test data is annotated at its boundary. No checker tools or
 dependencies are installed in the live image by this target.
+
+
+Shared contracts in `common/contracts.py` describe disk/partition metadata,
+recovery membership, release payloads and transport inventory variants. Runtime
+validation remains authoritative: TypedDict annotations do not validate JSON.
+The existing recovery validators accept dynamic mappings at their input boundary
+and expose typed records only after the original checks. The contracts module
+is installed beside the live runtime helpers. `common/` has no suppressed strict
+diagnostics; all other source and tests retain basic checking during migration.
