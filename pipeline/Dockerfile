@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1-labs
+# syntax=docker/dockerfile:1
 ARG DEBIAN_IMAGE=debian:trixie
 
 # Install the build environment shared by the artifact stages.

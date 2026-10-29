@@ -22,7 +22,7 @@ No host `/dev`, `/lib/modules`, Docker socket or checkout/build bind mounts are 
 
 ## Requirements and commands
 
-Install GNU tar (the `tar` package on Debian/Ubuntu) and Docker Engine with the Buildx plugin; verify `docker buildx version` as your normal user. The Dockerfile uses the `docker/dockerfile:1-labs` frontend for the privileged RUN. The wrapper uses named contexts, metadata export and stage-specific cache controls. CI installs current Buildx. An older distribution Docker package without Buildx is insufficient; see [Docker's installation instructions](https://docs.docker.com/engine/install/).
+Install GNU tar (the `tar` package on Debian/Ubuntu) and Docker Engine with the Buildx plugin; verify `docker buildx version` as your normal user. The artifact Dockerfile uses the stable `docker/dockerfile:1` frontend; `RUN --security=insecure` is stable starting with Dockerfile frontend 1.20, so the labs channel is no longer needed. The wrapper uses named contexts, metadata export and stage-specific cache controls. CI installs current Buildx. An older distribution Docker package without Buildx is insufficient; see [Docker's installation instructions](https://docs.docker.com/engine/install/).
 
 ```bash
 make builder                       # create/bootstrap the dedicated builder
