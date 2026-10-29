@@ -119,3 +119,10 @@ Leaving `data` locked protects its plaintext, but the workstation can still
 modify or destroy pool structures and boot files. This workflow assumes you
 trust the workstation with drive integrity. Encryption is per dataset, not for
 the entire ZFS partition; normal pool metadata remains visible.
+
+## Git repository payloads
+
+The independent [Git bundle helpers](GIT-BUNDLES.md) prepare full repositories in
+`transport/git-bundles/` and restore or update working checkouts from the imported
+inbox directory. Transport staging and inbox import remain explicit, separate
+commands.

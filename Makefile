@@ -22,6 +22,8 @@ DISK ?=
 RECORDS_DIR ?= records
 REPLACEMENT ?=
 CONFIRMED ?=
+REPO ?=
+export REPO
 RECOVERY_DIR ?=
 export RECORDS_DIR REPLACEMENT CONFIRMED
 export SUDO BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A DISK_B N UPGRADE_DIR MEMBER DISK RECOVERY_DIR
@@ -29,10 +31,11 @@ export SUDO BUILD_DIR OUT PAIR ACTIVE BUILDX_BUILDER DEBIAN_IMAGE FRESH DISK_A D
 RUN = python3 pipeline/lifecycle.py shared
 
 # Expose the supported project lifecycle commands.
-.PHONY: typecheck lint-python ci ci-build ci-zfs stage-transport save-records confirm-replacement prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
+.PHONY: add-transport-git-bundle typecheck lint-python ci ci-build ci-zfs stage-transport save-records confirm-replacement prepare-replacement write-replacement help check-host add-pair prepare-upgrade prepare-pairs build builder assemble initialize lint test-unit test test-container test-zfs test-qemu write-usb upgrade-os check-build clean cache-clean
 # Show the common build, test, and cleanup commands.
 help:
 	@printf '%s\n' \
+	  'make add-transport-git-bundle REPO=<url>  Prepare a full offline Git bundle in transport/git-bundles/' \
 	  'make stage-transport PAIR=1       Copy transport/ onto a locked pair, replacing previous transport' \
 	  'make save-records PAIR=1         Export recovery records from existing initialized images' \
 	  'make confirm-replacement PAIR=1 REPLACEMENT=... CONFIRMED=yes  Record successful live recovery' \
@@ -192,3 +195,8 @@ confirm-replacement:
 stage-transport:
 	@[[ '$(origin PAIR)' == 'command line' || '$(origin PAIR)' == environment ]] || { echo 'Set PAIR explicitly, e.g. PAIR=1' >&2; exit 2; }
 	$(RUN) $(SUDO) python3 pipeline/stage-transport.py --pair "$$PAIR"
+
+# Prepare repository bundles without mounting or writing a USB pair.
+add-transport-git-bundle:
+	@test -n "$$REPO" || { echo 'Set REPO to a Git repository URL' >&2; exit 2; }
+	$(RUN) python3 pipeline/add-transport-git-bundle.py --repo "$$REPO"

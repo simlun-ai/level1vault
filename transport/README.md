@@ -35,3 +35,8 @@ still has write access to the pool and boot media. Only attach these drives to a
 workstation you trust with their integrity.
 
 See [transport operations and retries](../docs/TRANSPORT.md) for details.
+
+For Git repositories, prepare complete bundles with
+`make add-transport-git-bundle REPO=<url>`. After the normal transport import, run
+`workspace-transport-import-git-bundles /mnt/workspace/inbox/<delivery>/git-bundles`
+as simlun. See [offline Git updates](../docs/GIT-BUNDLES.md).
