@@ -8,14 +8,16 @@ Historical results below do **not** certify the current source revision. Record 
 
 | Layer | Command or procedure | What it establishes |
 | --- | --- | --- |
-| Local | `make test` | Shell lint/syntax and mocked behavior, including refusal paths and retention policy |
+| Local | `make test` | Shell lint/syntax and unit/behavior tests, including refusal paths and retention policy |
 | Containers | `make test-container` | Actual GPT/FAT/GRUB assembly, fresh exported identities, account/PAM login and shell configuration |
 | Disposable ZFS environment | `make test-zfs LEVEL1VAULT_DISPOSABLE_TEST_VM=1` | Encrypted full/incremental replication, interruption/resumption, holds, retention, failover, home binding and OS partition preservation |
+| Pair preparation | `make prepare-pairs N=3` | Full live build and inspection, three unique pairs, active-pair encryption, initial replica seeding and recovery-record export |
+| CI checks | `make ci` | Ruff lint/formatting, strict Pyright, shell checks, all unit suites, container assembly/account tests and host export validation |
 | Full build | `make build` then `make check-build` | Actual Debian ISO, matching packaged kernel/ZFS module, initramfs, shipped helpers and manual-only pool policy |
 | Workstation QEMU | [Automated and manual checks](QEMU.md) | Boot, root autologin, persistent home, reboot reset, degraded writes and mirror rejoin on disposable copies |
 | Physical devices | Checklist below | Intended hardware, actual USB transport and sustained device behavior |
 
-CI runs the first two layers together through `make ci`, with ZFS and the full build in separate jobs; it never launches VMs. Real ZFS integration requires an explicitly disposable environment, not the normal build workstation. No automated suite writes physical USB drives. See [development](DEVELOPMENT.md#local-tests-on-linux) for dependencies and commands.
+`make ci` runs Ruff lint/formatting, strict Pyright, shell checks, the pipeline/runtime/stage unit suites, and container assembly/account tests through BuildKit Bake, followed by host export validation. Real ZFS integration and the full Debian build run in separate CI jobs; CI never launches VMs. Real ZFS integration requires an explicitly disposable environment, not the normal build workstation. No automated suite writes physical USB drives. See [development](DEVELOPMENT.md#local-tests-on-linux) for dependencies and commands.
 
 ## Workstation acceptance before permanent use
 
@@ -44,12 +46,16 @@ Always export before moving workspace drives. Keep the running boot stick connec
 
 On **2026-10-31**, the operator also reported that all of the following commands passed:
 
-- `make prepare-pairs N=3`
-- `make test`
-- `make test-container`
-- `make ci`
+| Passed command | Coverage established by the reported run |
+| --- | --- |
+| `make prepare-pairs N=3` | Built and inspected the live OS, assembled three pairs with distinct identities, initialized one encrypted active workspace and two replicas, populated the replicas through initial replication, and exported recovery records for all three pairs |
+| `make test` | Passed shell lint/syntax and unit/behavior tests, including safety refusals and failure handling |
+| `make test-container` | Passed real GPT/FAT/GRUB assembly, account/PAM login and shell configuration tests, plus exported-image identity and sparse-extraction checks |
+| `make ci` | Passed Ruff lint/formatting, strict Pyright, shell checks, all unit suites, container assembly/account tests, and host export validation |
 
-These record successful three-pair preparation, local checks, container tests, and the containerized CI checks. Individual command revisions and logs were not supplied; the QEMU checkout revision below applies specifically to that QEMU run.
+The separate `make test-qemu` pass below establishes actual guest boot, encrypted unlock, ownership/permissions, persistent home, root-overlay reset, degraded writes, mirror recovery/scrub, and clean export. Together these results cover provisioning through VM acceptance. Initial replica seeding is covered by pair preparation; subsequent operational sync, rotation and failover require separate acceptance.
+
+Individual command revisions and logs were not supplied for the four commands above; the QEMU checkout revision below applies specifically to that QEMU run.
 
 ## Recorded workstation QEMU acceptance
 
@@ -64,6 +70,15 @@ The reported results directory was:
 ```
 
 Evidence available here is the operator's terminal transcript; the successful run's `result.json` and scenario logs were not supplied. The source revision embedded in the previously built images was not recorded in that transcript, so `36b8764` identifies the test checkout, not a verified image build revision. This run does not establish physical USB acceptance, OS-upgrade acceptance, or the separate interactive `start`/tmux checks, and does not certify later revisions.
+
+## Remaining acceptance
+
+The 2026-10-31 reports leave these checks to complete for the intended deployment:
+
+- **Physical USB:** run whole-image writing and readback verification on the intended drives, including the new pre-write metadata cleanup; boot each member and exercise the [physical acceptance checklist](#physical-acceptance). Virtio QEMU tests do not exercise USB transport or the physical writer.
+- **Interactive sessions:** exercise `start`, tmux exit/detach/reattach, both Y/n prompts, and refusal to export with remaining sessions or jobs. Follow [home and session behavior](HOME.md).
+- **OS upgrades:** run QEMU acceptance with `--upgrade-release`, confirm the guest release revision, and test the physical update procedure while preserving workspace data and saved home settings. Follow [upgrade acceptance](UPGRADES.md#workstation-qemu-acceptance).
+- **Multi-pair operation:** test later incremental sync and rotation, interrupted receives, independent holds, retention, fenced failover and rebinding on disposable data. Three-pair preparation establishes initial replica seeding; the [operational workflow](PAIRS.md) and current [disposable ZFS integration suite](#current-revision) provide separate coverage.
 
 ## Historical evidence
 
