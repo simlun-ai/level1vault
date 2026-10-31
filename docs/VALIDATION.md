@@ -40,6 +40,17 @@ Use the intended UEFI computers with Secure Boot disabled and disposable test da
 
 Always export before moving workspace drives. Keep the running boot stick connected until shutdown. Record model/serials and results outside the pools.
 
+## Recorded build and source checks
+
+On **2026-10-31**, the operator also reported that all of the following commands passed:
+
+- `make prepare-pairs N=3`
+- `make test`
+- `make test-container`
+- `make ci`
+
+These record successful three-pair preparation, local checks, container tests, and the containerized CI checks. Individual command revisions and logs were not supplied; the QEMU checkout revision below applies specifically to that QEMU run.
+
 ## Recorded workstation QEMU acceptance
 
 On **2026-10-31**, the operator reported a successful `make test-qemu` run for pair 1 on `simlun-x1`, using QEMU/KVM (the default accelerator). The runner and shared guest checks were from [commit `36b8764`](https://github.com/simlun-ai/level1vault/commit/36b876416c872e2ac9bcd5237a3b9499f324dfab).
