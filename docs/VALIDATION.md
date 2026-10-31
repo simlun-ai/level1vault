@@ -40,6 +40,31 @@ Use the intended UEFI computers with Secure Boot disabled and disposable test da
 
 Always export before moving workspace drives. Keep the running boot stick connected until shutdown. Record model/serials and results outside the pools.
 
+## Recorded build and source checks
+
+On **2026-10-31**, the operator also reported that all of the following commands passed:
+
+- `make prepare-pairs N=3`
+- `make test`
+- `make test-container`
+- `make ci`
+
+These record successful three-pair preparation, local checks, container tests, and the containerized CI checks. Individual command revisions and logs were not supplied; the QEMU checkout revision below applies specifically to that QEMU run.
+
+## Recorded workstation QEMU acceptance
+
+On **2026-10-31**, the operator reported a successful `make test-qemu` run for pair 1 on `simlun-x1`, using QEMU/KVM (the default accelerator). The runner and shared guest checks were from [commit `36b8764`](https://github.com/simlun-ai/level1vault/commit/36b876416c872e2ac9bcd5237a3b9499f324dfab).
+
+All five scenarios passed: `both-reboot`, `a-alone`, `rejoin-a`, `b-alone`, and `rejoin-b`. This establishes UEFI boot and root autologin, workspace and home persistence across reboot, ephemeral root-overlay reset, independent member boots, degraded writes from each member, and mirror rejoin/resilver and scrub checks on the disposable virtio disk copies. The runner finished with `QEMU acceptance passed; original images were not modified.`
+
+The reported results directory was:
+
+```text
+/home/simlun/Dev/level1vault/build/default/validation/20261031T202844Z-0b9fb58e
+```
+
+Evidence available here is the operator's terminal transcript; the successful run's `result.json` and scenario logs were not supplied. The source revision embedded in the previously built images was not recorded in that transcript, so `36b8764` identifies the test checkout, not a verified image build revision. This run does not establish physical USB acceptance, OS-upgrade acceptance, or the separate interactive `start`/tmux checks, and does not certify later revisions.
+
 ## Historical evidence
 
 These records describe earlier implementations, not acceptance of subsequent changes:
