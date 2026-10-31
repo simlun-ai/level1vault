@@ -226,10 +226,9 @@ class Guest:
         self.expected_revision = expected_revision
 
     def login(self):
-        # Require root autologin on the serial console.
+        # Wait past agetty's "login: root (automatic login)" banner for the shell.
         prompt = r"root@[^\r\n]*# "
-        result = self.child.expect([r"login: ", prompt], timeout=self.timeout)
-        require(result == 1, "Expected automatic root console login")
+        self.child.expect(prompt, timeout=self.timeout)
         self.run('test "$(id -un)" = root')
         if self.expected_revision is not None:
             self.run(
