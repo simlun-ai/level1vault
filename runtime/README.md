@@ -2,6 +2,25 @@
 
 These files are installed into `/usr/local/sbin` by stage 1. They are shipped software, independent of host-side build and provisioning stages.
 
+`workspace-rsync [rsync options...] SOURCE TARGET` copies with sudo and preserves
+permissions, modification times, numeric ownership, symbolic and hard links, ACLs,
+extended attributes and sparse files where supported. Checksums decide which files
+need copying: repeated runs read both sides but skip unchanged file data. Extra
+rsync options go before the two paths, which are passed through unchanged.
+
+```bash
+workspace-rsync -n /mnt/vault0/ /mnt/workspace/vault0/  # preview
+workspace-rsync /mnt/vault0/ /mnt/workspace/vault0/     # copy contents
+# Alternatively, copy the directory itself into /mnt/workspace/vault0/:
+workspace-rsync /mnt/vault0 /mnt/workspace/
+```
+
+A trailing slash on SOURCE copies its contents into TARGET; without it, rsync
+copies the directory itself. Mount the source and writable workspace first.
+Destination-only files remain by default. **`--delete` deletes destination entries
+absent from the source**; preview with
+`workspace-rsync -n --delete SOURCE TARGET` before applying it.
+
 `start [PAIR_ID]` is the live root-console entrypoint: mount the active workspace and its persistent home, enter a simlun login environment in the named `workspace` tmux session, then offer export and poweroff when the tmux client returns. Export failure prevents the poweroff prompt. EOF declines prompts. See [home/session operations](../docs/HOME.md).
 
 `workspace-home` is an internal Python helper for verified bind mounts, atomic first-use seeding, session checks and nonforced home unmounts. Home attachment is enabled only when the live image marker exists; host-checkout workspace operations retain their existing behavior. The helper must remain beside mount/export/start commands.

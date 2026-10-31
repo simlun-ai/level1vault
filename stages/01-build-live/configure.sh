@@ -60,6 +60,7 @@ install -m 0755 "$SOURCE_DIR/runtime/workspace-umount" config/includes.chroot/us
 install -m 0755 "$SOURCE_DIR/runtime/workspace-activate" config/includes.chroot/usr/local/sbin/workspace-activate
 install -m 0755 "$SOURCE_DIR/runtime/workspace-prune" config/includes.chroot/usr/local/sbin/workspace-prune
 install -m 0755 "$SOURCE_DIR/runtime/workspace-sync" config/includes.chroot/usr/local/sbin/workspace-sync
+install -m 0755 "$SOURCE_DIR/runtime/workspace-rsync" config/includes.chroot/usr/local/sbin/workspace-rsync
 install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/50-account.hook.chroot" config/hooks/live/50-account.hook.chroot
 install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/60-repository.hook.chroot" config/hooks/live/60-repository.hook.chroot
 install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/90-zfs.hook.chroot" config/hooks/live/90-zfs.hook.chroot
