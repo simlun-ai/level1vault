@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Copy SOURCE to TARGET, preserving metadata.
+# SOURCE/ copies its contents into TARGET; SOURCE copies the directory itself.
+# Preview changes: workspace-rsync -n SOURCE TARGET
+# --delete deletes destination entries absent from the source; preview first.
+set -euo pipefail
+
+# Explain the required paths and optional preview or deletion flags.
+if (( $# < 2 )); then
+    cat >&2 <<'EOF'
+Usage: workspace-rsync [rsync options...] SOURCE TARGET
+
+Source trailing slash controls directory placement:
+  workspace-rsync /mnt/vault0/ /mnt/workspace/vault0/
+    Copies vault0's contents directly into /mnt/workspace/vault0/.
+
+  workspace-rsync /mnt/vault0 /mnt/workspace/
+    Copies the vault0 directory into /mnt/workspace/vault0/.
+
+Dry run: workspace-rsync -n SOURCE TARGET
+WARNING: --delete deletes destination entries absent from the source.
+Preview deletions: workspace-rsync -n --delete SOURCE TARGET
+EOF
+    exit 2
+fi
+
+# Keep caller options separate from the two unchanged paths.
+options=()
+while (( $# > 2 )); do
+    options+=("$1")
+    shift
+done
+
+# -a: Recurse; preserve symlinks, permissions, mtimes, owners, groups and special files.
+# -H: Preserve hard links within the copied tree.
+# -A: Preserve access control lists.
+# -X: Preserve extended attributes.
+# -S: Store sparse files efficiently.
+# --numeric-ids: Preserve numeric UID/GID values without name mapping.
+# --checksum: Compare file contents to decide whether data needs copying.
+# --itemize-changes: Report each changed file and its changed attributes.
+# --info=progress2: Display overall transfer progress.
+# "${options[@]}": Forward caller-supplied rsync options, including -n or --delete.
+# --: End option parsing so paths are treated as operands.
+# "$1": Pass the source unchanged, preserving trailing-slash semantics.
+# "$2": Pass the target unchanged, preserving trailing-slash semantics.
+exec sudo rsync -a -H -A -X -S \
+    --numeric-ids \
+    --checksum \
+    --itemize-changes \
+    --info=progress2 \
+    "${options[@]}" \
+    -- \
+    "$1" \
+    "$2"

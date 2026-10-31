@@ -89,6 +89,8 @@ test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-discover"
 test -x "$ROOT/usr/local/sbin/workspace-umount"
 test -x "$ROOT/usr/local/sbin/workspace-sync"
+test -x "$ROOT/usr/local/sbin/workspace-rsync"
+chroot "$ROOT" su - simlun -c 'command -v workspace-rsync && rsync --version'
 test -x "$ROOT/usr/local/sbin/workspace-activate"
 test -x "$ROOT/usr/local/sbin/workspace-prune"
 chroot "$ROOT" /usr/local/sbin/workspace-replace --help >/dev/null
