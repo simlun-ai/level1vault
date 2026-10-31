@@ -90,7 +90,8 @@ case $PHASE in
   write)
     # Write workspace data and a marker that must disappear after reboot.
     printf '%s\n' "$VALUE" > "$CHECK"
-    sudo -iu simlun sh -c 'printf "%s\n" "$1" > "$HOME/.level1vault-home-check"' sh "$VALUE"
+    # Send data on stdin so sudo's login shell cannot expand marker contents.
+    printf '%s\n' "$VALUE" | sudo -iu simlun tee /home/simlun/.level1vault-home-check >/dev/null
     verify_markers
     printf 'ephemeral\n' | sudo tee "$RESET" >/dev/null
     ;;

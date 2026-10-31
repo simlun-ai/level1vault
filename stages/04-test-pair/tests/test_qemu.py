@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -375,6 +376,51 @@ class QemuTests(unittest.TestCase):
                         self.assertIn("expected initial, got", result.stderr)
                     self.assertNotIn("PASS:", result.stdout)
                     marker.write_text("initial\n")
+
+    def test_guest_home_write_survives_sudo_login_shell_expansion(self):
+        workspace = self.base / "workspace"
+        home = self.base / "home"
+        commands = self.base / "bin"
+        for directory in (workspace, home, commands):
+            directory.mkdir()
+
+        # Model sudo -i's command escaping and shell pass without changing users.
+        sudo = commands / "sudo"
+        sudo.write_text(
+            f"#!{sys.executable}\n"
+            "import os, re, sys\n"
+            "args = sys.argv[1:]\n"
+            "if args[:2] == ['-iu', 'simlun']:\n"
+            "    command = ' '.join(re.sub(r'([^a-zA-Z0-9_$-])', "
+            "r'\\\\\\1', arg) for arg in args[2:])\n"
+            "    os.execv('/bin/sh', ['sh', '-c', command])\n"
+            "os.execvp(args[0], args)\n"
+        )
+        sudo.chmod(0o755)
+        checks = (
+            runner.GUEST.read_text()
+            .replace("/mnt/workspace", str(workspace))
+            .replace("/home/simlun", str(home))
+            .replace("/etc/.level1vault-qemu-", str(self.base / ".reset-"))
+        )
+        env = dict(os.environ, PATH=f"{commands}:{os.environ['PATH']}", HOME=str(home))
+
+        # Exercise the actual write and verify phases, including literal shell text.
+        for value in ("initial", "from-a", "from-b", '$1 "$HOME" $(false) \\'):
+            for phase in ("write", "verify"):
+                with self.subTest(value=value, phase=phase):
+                    result = subprocess.run(
+                        ["bash", "-s", "--", phase, "1", "0123456789abcdef", value],
+                        input=checks,
+                        text=True,
+                        capture_output=True,
+                        env=env,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(f"PASS: {phase}", result.stdout)
+                    self.assertEqual(
+                        (home / ".level1vault-home-check").read_text(), value + "\n"
+                    )
 
 
 if __name__ == "__main__":
