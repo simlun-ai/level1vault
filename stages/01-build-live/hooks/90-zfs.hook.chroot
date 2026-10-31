@@ -68,7 +68,7 @@ case "$(modinfo -k "$kernel_version" -F vermagic zfs)" in
     *) echo 'ERROR: packaged ZFS kernel version mismatch' >&2; exit 1;;
 esac
 modprobe --show-depends --set-version "$kernel_version" zfs
-for tool in cc gcc g++ c++ clang make dkms; do
+for tool in cc gcc g++ c++ clang dkms; do
     if command -v "$tool" >/dev/null 2>&1; then
         echo "ERROR: unexpected build tool in live image: $tool" >&2; exit 1
     fi

@@ -9,14 +9,14 @@ from pathlib import Path
 
 
 def build_package(name: str):
-    # Retain the GCC version metadata needed by runtime libraries.
+    # Retain GCC runtime metadata; make is also a runtime offline-install dependency.
     name = name.split(":", 1)[0]
     if re.fullmatch(r"gcc-\d+-base", name):
         return False
 
     # Reject toolchains regardless of when or why live-build installed them.
     return (
-        name in {"build-essential", "dkms", "zfs-dkms", "dpkg-dev", "make"}
+        name in {"build-essential", "dkms", "zfs-dkms", "dpkg-dev"}
         or re.fullmatch(r"(?:gcc|g\+\+|cpp|clang)(?:-.*)?", name) is not None
         or name.startswith(("linux-headers-", "linux-kbuild-", "binutils"))
         or name.endswith("-dev")

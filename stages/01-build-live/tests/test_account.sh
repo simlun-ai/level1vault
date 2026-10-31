@@ -105,3 +105,8 @@ finally:
     os.close(fd)
 PYLOGIN
 
+
+# Verify access does not depend on simlun owning the active login seat.
+id -nG simlun | tr ' ' '\n' | grep -qx yubikey
+grep -Fq 'GROUP="yubikey", MODE="0660"' /etc/udev/rules.d/70-level1vault-yubikey.rules
+grep -Fq 'ATTRS{idVendor}=="1050"' /etc/udev/rules.d/70-level1vault-yubikey.rules

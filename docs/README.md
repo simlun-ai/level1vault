@@ -37,3 +37,5 @@ Start with the [quick start](../README.md) to build and use the first pair. Thes
 
 
 - [Generated output: what to keep and what to delete](ARTIFACTS.md)
+
+- [YubiKey HSM and pass custody](HSM.md) — offline installation, key storage, pipelines and acceptance.

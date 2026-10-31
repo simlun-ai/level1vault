@@ -37,6 +37,8 @@ iputils-ping
 ifupdown
 isc-dhcp-client
 python3
+python3-venv
+make
 pass
 cryptsetup
 git
