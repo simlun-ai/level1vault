@@ -184,17 +184,47 @@ class QemuTests(unittest.TestCase):
 
     def test_login_requires_root_autologin(self):
         child = Mock()
-        child.expect.return_value = 1
+        transcript = "level1vault login: root (automatic login)\r\r\n"
+
+        def expect_console(pattern: str | list[str], *, timeout: float):
+            patterns = [pattern] if isinstance(pattern, str) else pattern
+            matches = [
+                (match.start(), index)
+                for index, candidate in enumerate(patterns)
+                if (match := re.search(candidate, transcript)) is not None
+            ]
+            if not matches:
+                raise TimeoutError("No shell prompt")
+            return min(matches)[1]
+
+        child.expect.side_effect = expect_console
         guest = runner.Guest(child, Mock(), 10)
         guest.run = Mock()
-        guest.login()
-        self.assertRegex(
-            "root@level1vault:~# ", child.expect.call_args_list[0].args[0][1]
-        )
-        guest.run.assert_any_call('test "$(id -un)" = root')
-        child.expect.return_value = 0
-        with self.assertRaisesRegex(RuntimeError, "automatic root console login"):
+
+        # The autologin banner alone must not be accepted or rejected as a login.
+        with self.assertRaises(TimeoutError):
             guest.login()
+        guest.run.assert_not_called()
+
+        # Once the shell appears, verify root identity before preparing checks.
+        transcript += "root@level1vault:~# "
+        guest.login()
+        self.assertEqual(guest.run.call_args_list[0].args, ('test "$(id -un)" = root',))
+
+        # An ordinary login prompt or a different user's shell must time out.
+        for incomplete in ("level1vault login: ", "simlun@level1vault:~$ "):
+            transcript = incomplete
+            guest.run.reset_mock()
+            with self.assertRaises(TimeoutError):
+                guest.login()
+            guest.run.assert_not_called()
+
+        # A failed identity check must stop guest setup.
+        transcript = "root@level1vault:~# "
+        guest.run.side_effect = RuntimeError("wrong user")
+        with self.assertRaisesRegex(RuntimeError, "wrong user"):
+            guest.login()
+        self.assertEqual(guest.run.call_count, 1)
 
     def test_command_status_accepts_serial_line_endings_and_rejects_failed_checks(self):
         for newline in ("\n", "\r\n", "\r\r\n"):
