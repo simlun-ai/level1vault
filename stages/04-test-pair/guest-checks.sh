@@ -12,6 +12,21 @@ DATASET=$POOL/data
 CHECK=/mnt/workspace/.level1vault-qemu-$RUN
 RESET=/etc/.level1vault-qemu-$RUN
 
+# Identify which test marker is unreadable or differs from the expected write.
+verify_markers() {
+  local path actual
+  for path in "$CHECK" /home/simlun/.level1vault-home-check; do
+    if ! actual=$(cat "$path"); then
+      printf 'FAIL: %s: cannot read marker %s\n' "$PHASE" "$path" >&2
+      return 1
+    fi
+    if [[ $actual != "$VALUE" ]]; then
+      printf 'FAIL: %s: marker %s: expected %q, got %q\n' "$PHASE" "$path" "$VALUE" "$actual" >&2
+      return 1
+    fi
+  done
+}
+
 case $PHASE in
   boot)
     # Verify the stateless live system and manual-only workspace policy.
@@ -48,12 +63,12 @@ case $PHASE in
     # Write workspace data and a marker that must disappear after reboot.
     printf '%s\n' "$VALUE" > "$CHECK"
     sudo -iu simlun sh -c 'printf "%s\n" "$1" > "$HOME/.level1vault-home-check"' sh "$VALUE"
+    verify_markers
     printf 'ephemeral\n' | sudo tee "$RESET" >/dev/null
     ;;
   verify)
     # Verify that the previous workspace write survived.
-    [[ $(cat "$CHECK") == "$VALUE" ]]
-    [[ $(cat /home/simlun/.level1vault-home-check) == "$VALUE" ]]
+    verify_markers
     ;;
   rejoin)
     # Verify mirror recovery and a clean scrub with both members present.

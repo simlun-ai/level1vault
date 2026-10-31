@@ -330,6 +330,52 @@ class QemuTests(unittest.TestCase):
             self.assertEqual(scenario["steps"][0], ["boot"])
             self.assertEqual(scenario["steps"][-1], ["export"])
 
+    def test_guest_marker_checks_identify_missing_and_mismatched_values(self):
+        run_id = "0123456789abcdef"
+        workspace = self.base / "workspace"
+        home = self.base / "home"
+        workspace.mkdir()
+        home.mkdir()
+        markers = [
+            workspace / f".level1vault-qemu-{run_id}",
+            home / ".level1vault-home-check",
+        ]
+        checks = (
+            runner.GUEST.read_text()
+            .replace("/mnt/workspace", str(workspace))
+            .replace("/home/simlun", str(home))
+        )
+
+        def verify():
+            return subprocess.run(
+                ["bash", "-s", "--", "verify", "1", run_id, "initial"],
+                input=checks,
+                text=True,
+                capture_output=True,
+            )
+
+        for marker in markers:
+            marker.write_text("initial\n")
+        result = verify()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PASS: verify", result.stdout)
+
+        for marker in markers:
+            for value in ("wrong\n", "", None):
+                with self.subTest(marker=marker.name, value=value):
+                    if value is None:
+                        marker.unlink()
+                    else:
+                        marker.write_text(value)
+                    result = verify()
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("FAIL: verify:", result.stderr)
+                    self.assertIn(str(marker), result.stderr)
+                    if value is not None:
+                        self.assertIn("expected initial, got", result.stderr)
+                    self.assertNotIn("PASS:", result.stdout)
+                    marker.write_text("initial\n")
+
 
 if __name__ == "__main__":
     unittest.main()
