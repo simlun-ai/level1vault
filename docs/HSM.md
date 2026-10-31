@@ -68,8 +68,11 @@ else
 fi
 ```
 
-Run creation deliberately once. Never use `pass insert --force` or answer yes to
-an unexpected overwrite prompt. Stop on any failure. A failure to decrypt an
+Run the complete guarded creation block deliberately, with only one creation
+process at a time. **With piped stdin, pass can overwrite without prompting even
+without `--force`.** Do not run the bare generation/insertion pipeline against an
+existing item; the existence check above is required. Never use `--force`. Stop
+on any failure. A failure to decrypt an
 existing entry is a retrieval problem, not evidence that it is absent. Check the
 configured store before creation; do not switch stores to bypass a failure.
 The generator cannot know whether a generation already exists.
