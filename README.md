@@ -93,6 +93,7 @@ workstation, then run `make stage-transport PAIR=1`. This replaces the pair's
 offline live session, run `sudo workspace-transport-import 1` after `start 1`.
 It verifies the copied files in the encrypted inbox before deleting transport.
 [Workflow, security boundary and retries →](docs/TRANSPORT.md)
+For repository payloads, use [the independent Git bundle helpers](docs/GIT-BUNDLES.md).
 
 ## Prepare and apply an OS upgrade
 

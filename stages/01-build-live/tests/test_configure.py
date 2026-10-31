@@ -77,7 +77,7 @@ class ScriptTests(unittest.TestCase):
                 sys.executable,
                 "-I",
                 "-c",
-                f"import sys; sys.path.insert(0, {str(library)!r}); import contracts, transport, member_recovery, usb_devices",
+                f"import sys; sys.path.insert(0, {str(library)!r}); import contracts, transport, member_recovery, usb_devices, git_bundles",
             ],
             check=True,
         )
@@ -97,6 +97,7 @@ class ScriptTests(unittest.TestCase):
             "workspace-prune",
             "workspace-replace",
             "workspace-transport-import",
+            "workspace-transport-import-git-bundles",
         ):
             self.assertEqual(
                 (target.parent / name).read_bytes(),

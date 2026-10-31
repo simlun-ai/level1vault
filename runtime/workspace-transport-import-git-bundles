@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Update managed offline Git checkouts from a git-bundles directory in the inbox."""
+
+import argparse
+import fcntl
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import cast
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(
+    0,
+    str(ROOT / "common")
+    if (ROOT / "common").is_dir()
+    else "/usr/local/lib/level1vault",
+)
+from git_bundles import import_bundles, require  # noqa: E402 - resolve shared helpers after configuring their path
+from member_recovery import output  # noqa: E402 - resolve shared helpers after configuring their path
+from transport import prop, validate_pair  # noqa: E402 - resolve shared helpers after configuring their path
+
+
+def validate_workspace(source: Path) -> Path:
+    workspace = Path("/mnt/workspace")
+    mounted = output("findmnt", "-n", "-o", "SOURCE", "--mountpoint", str(workspace))
+    match = re.fullmatch(r"(level1-workspace-([1-9][0-9]*))/data", mounted)
+    require(
+        match is not None,
+        "Mount the active workspace with start or workspace-mount first",
+    )
+    assert match is not None
+    pool, pair = match.groups()
+    data = validate_pair(pool, pair)
+    require(
+        prop(pool, "org.level1vault:state") == "active"
+        and prop(data, "readonly") == "off",
+        "Git import requires the active writable workspace",
+    )
+    require(
+        source.is_relative_to(workspace / "inbox") and source.is_dir(),
+        "Choose a git-bundles directory inside the encrypted inbox",
+    )
+    require(
+        output("findmnt", "-n", "-o", "SOURCE", "--target", str(source)) == data,
+        "Bundle source must be on the encrypted data filesystem",
+    )
+    destination = workspace / "git"
+    require(
+        not destination.is_symlink(), "Workspace git directory must not be a symlink"
+    )
+    require(
+        output(
+            "findmnt",
+            "-n",
+            "-o",
+            "SOURCE",
+            "--target",
+            str(destination if destination.exists() else workspace),
+        )
+        == data,
+        "Git destination must be on the encrypted data filesystem",
+    )
+    return destination
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("directory", type=Path)
+    args = parser.parse_args()
+    require(os.geteuid() == 1000, "Run as simlun in your start session (without sudo)")
+    source = cast("Path", args.directory).resolve(strict=True)
+    # flock accepts an exclusive lock on a read descriptor; mounting creates this root-owned file.
+    with open("/run/lock/level1vault-workspace.lock") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        destination = validate_workspace(source)
+        if not import_bundles(source, destination):
+            raise ValueError(
+                "One or more repositories failed; completed repositories stay updated. Rerun to retry."
+            )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        sys.exit(f"Git bundle import stopped: {error}")

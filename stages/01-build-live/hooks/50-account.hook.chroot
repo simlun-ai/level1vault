@@ -92,6 +92,8 @@ Pair IDs below are examples; use the IDs printed on your USB pairs.
                                  Active: writable. Replica: read-only.
   sudo workspace-transport-import 1
                                  Verify staged files into encrypted inbox, then remove transport.
+  workspace-transport-import-git-bundles /mnt/workspace/inbox/<delivery>/git-bundles
+                                 As simlun: update offline checkouts in /mnt/workspace/git/.
   sudo workspace-sync 1 2        Copy active pair 1 to unmounted replica pair 2.
                                  Add more replica IDs to update them too; rerun to resume.
   sudo workspace-prune 1 --keep 10

@@ -20,3 +20,8 @@ Behavior tests in `tests/` run with mocked system commands through `make test`. 
 directory in the active encrypted inbox, then destroys transport. Mount the active
 workspace first. See [offline transport](../docs/TRANSPORT.md) for host staging,
 verification and retry behavior.
+
+`workspace-transport-import-git-bundles DIRECTORY` runs as simlun after normal
+transport import. It restores full Git bundles into `/mnt/workspace/git/` and
+fast-forwards clean managed default-branch checkouts. See
+[offline Git updates](../docs/GIT-BUNDLES.md) for update policies and limitations.
