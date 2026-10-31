@@ -226,6 +226,40 @@ class QemuTests(unittest.TestCase):
             guest.login()
         self.assertEqual(guest.run.call_count, 1)
 
+    def test_reboot_waits_for_fresh_autologin_without_kernel_banner(self):
+        child = Mock()
+        guest = runner.Guest(child, Mock(), 10)
+        guest.login = Mock()
+        transcript = "root@level1vault:~# "
+
+        def expect_console(pattern: str, *, timeout: float):
+            nonlocal transcript
+            match = re.search(pattern, transcript)
+            if match is None:
+                raise TimeoutError("No new boot")
+            transcript = transcript[match.end() :]
+            return 0
+
+        child.expect.side_effect = expect_console
+
+        # A buffered shell prompt from the old boot must not count as a reboot.
+        with self.assertRaises(TimeoutError):
+            guest.reboot()
+        guest.login.assert_not_called()
+
+        # The observed boot reaches autologin without a Linux version line.
+        transcript += (
+            "sudo reboot\r\nreboot: Restarting system\r\n"
+            "Loading, please wait...\r\n"
+            "Debian GNU/Linux 13 level1vault ttyS0\r\n"
+            "level1vault login: root (automatic login)\r\n"
+            "root@level1vault:~# "
+        )
+        guest.reboot()
+        child.sendline.assert_called_with("sudo reboot")
+        guest.login.assert_called_once_with()
+        self.assertEqual(transcript, "\r\nroot@level1vault:~# ")
+
     def test_command_status_accepts_serial_line_endings_and_rejects_failed_checks(self):
         for newline in ("\n", "\r\n", "\r\r\n"):
             for status in (0, 1):

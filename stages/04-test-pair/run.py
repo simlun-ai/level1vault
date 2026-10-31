@@ -273,9 +273,9 @@ class Guest:
             self.child.logfile_read = log
 
     def reboot(self):
-        # Require a new kernel boot before accepting the next login prompt.
+        # Require a fresh autologin banner despite reduced kernel console logging.
         self.child.sendline("sudo reboot")
-        self.child.expect(r"Linux version ", timeout=self.timeout)
+        self.child.expect(r"login: root \(automatic login\)", timeout=self.timeout)
         self.login()
 
     def poweroff(self):
