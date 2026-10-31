@@ -180,10 +180,12 @@ class WriterTests(unittest.TestCase):
                     patch.object(writer, "output", side_effect=self.output),
                     patch.object(writer, "imported_devices", return_value=set()),
                     patch.object(writer, "write_image") as write,
+                    patch.object(writer.subprocess, "run") as run,
                 ):
                     with self.assertRaises(ValueError):
                         writer.write(self.out, "1", "a", Path("/dev/sda"))
                 write.assert_not_called()
+                run.assert_not_called()
 
     def test_source_pair_member_or_initialized_marker_refuses_device_access(self):
         for pair, member in (("2", "a"), ("1", "b")):
@@ -204,6 +206,7 @@ class WriterTests(unittest.TestCase):
                 writer, "write_image", side_effect=ValueError("readback mismatch")
             ),
             patch.object(writer, "command") as command,
+            patch.object(writer.subprocess, "run"),
         ):
             with self.assertRaisesRegex(ValueError, "readback"):
                 writer.write(self.out, "1", "a", Path("/dev/sda"))
@@ -219,6 +222,9 @@ class WriterTests(unittest.TestCase):
         def record_command(*args: str | Path):
             return events.append(args[0])
 
+        def record_cleanup(cmd: list[str], **kwargs: object):
+            return events.append(tuple(cmd))
+
         with (
             patch.object(writer, "describe_disk", return_value=self.disk),
             patch.object(writer, "output", side_effect=self.output),
@@ -230,6 +236,11 @@ class WriterTests(unittest.TestCase):
             ),
             patch.object(writer, "command", side_effect=record_command),
             patch.object(
+                writer.subprocess,
+                "run",
+                side_effect=record_cleanup,
+            ),
+            patch.object(
                 writer,
                 "inspect_replacement",
                 return_value=(self.disk, dict(partitions=[dict(node="/dev/sda1")])),
@@ -240,7 +251,16 @@ class WriterTests(unittest.TestCase):
         ):
             writer.write(self.out, "1", "a", Path("/dev/sda"))
         self.assertEqual(
-            events, ["readback", "sgdisk", "sfdisk", "partprobe", "udevadm"]
+            events,
+            [
+                ("wipefs", "-a", "/dev/sda"),
+                ("sgdisk", "--zap-all", "/dev/sda"),
+                "readback",
+                "sgdisk",
+                "sfdisk",
+                "partprobe",
+                "udevadm",
+            ],
         )
         self.assertEqual(
             json.loads((self.out / "write-report.json").read_text())["status"],
@@ -261,6 +281,28 @@ class WriterTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Disconnect"):
                 writer.write(self.out, "1", "a", Path("/dev/sda"))
         disk.assert_not_called()
+
+    def test_cleanup_failure_prevents_image_write_and_completion(self):
+        for tool in ("wipefs", "sgdisk"):
+            with self.subTest(tool=tool):
+
+                def fail_cleanup(cmd: list[str], tool: str = tool, **kwargs: object):
+                    if cmd[0] == tool:
+                        raise subprocess.CalledProcessError(1, cmd)
+
+                with (
+                    patch.object(writer, "describe_disk", return_value=self.disk),
+                    patch.object(writer, "output", side_effect=self.output),
+                    patch.object(writer, "imported_devices", return_value=set()),
+                    patch.object(writer.subprocess, "run", side_effect=fail_cleanup),
+                    patch.object(writer, "write_image") as write,
+                    patch.object(writer, "command") as command,
+                ):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        writer.write(self.out, "1", "a", Path("/dev/sda"))
+                write.assert_not_called()
+                command.assert_not_called()
+                self.assertFalse((self.out / "write-report.json").exists())
 
     def test_missing_make_arguments_fail_before_sudo(self):
         for target in ("prepare-replacement", "write-replacement"):

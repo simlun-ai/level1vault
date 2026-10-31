@@ -7,6 +7,7 @@ import argparse
 import fcntl
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -25,7 +26,7 @@ from member_recovery import (  # noqa: E402 - resolve shared helpers after confi
     validate_record,
 )
 from usb_devices import descendants, describe_disk, imported_devices, validate_idle  # noqa: E402 - resolve shared helpers after configuring their path
-from usb_io import write_image  # noqa: E402 - resolve shared helpers after configuring their path
+from usb_io import prepare_disk, write_image  # noqa: E402 - resolve shared helpers after configuring their path
 
 
 def write(out: Path, pair: str, member: str, disk: Path):
@@ -87,6 +88,7 @@ def write(out: Path, pair: str, member: str, disk: Path):
 
     # Verify the exact written bytes before relocating the backup GPT.
     target = Path(info["name"])
+    prepare_disk(target)
     write_image(image, target)
     command("sgdisk", "-e", target)
     command("sfdisk", "--verify", target)
@@ -124,6 +126,8 @@ def main():
     parser.add_argument("--disk", required=True, type=Path)
     args = parser.parse_args()
     require(os.geteuid() == 0, "Run through make write-replacement with sudo")
+    for tool in ("wipefs", "sgdisk"):
+        require(shutil.which(tool) is not None, f"Missing host tool: {tool}")
     with open("/run/lock/level1vault-write-usb.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         write(args.out.resolve(), args.pair, args.member, args.disk)
@@ -134,5 +138,5 @@ if __name__ == "__main__":
         main()
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         sys.exit(
-            f"Replacement write stopped: {error}. If writing started, inspect the destination before retrying."
+            f"Replacement write stopped: {error}. If disk cleanup or writing started, inspect the destination before retrying."
         )
