@@ -24,8 +24,8 @@ sys.dont_write_bytecode = True
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "common"))
 from usb_devices import describe_disk, imported_devices, validate_idle  # noqa: E402 - resolve shared helpers after configuring their path
+from usb_io import prepare_disk, write_image  # noqa: E402 - resolve shared helpers after configuring their path
 from usb_io import readback as readback  # noqa: E402 - resolve shared helpers after configuring their path
-from usb_io import write_image  # noqa: E402 - resolve shared helpers after configuring their path
 
 
 def output(*args: str | Path):
@@ -97,6 +97,7 @@ def write_pair(out: Path, pair: str, disk_a: Path, disk_b: Path):
 
     # Verify each write before GPT relocation intentionally changes disk bytes.
     for image, disk in zip(images, paths, strict=False):
+        prepare_disk(disk)
         write_image(image, disk)
         subprocess.run(["sgdisk", "-e", str(disk)], check=True)
         subprocess.run(["sfdisk", "--verify", str(disk)], check=True)
@@ -122,6 +123,7 @@ def main():
         "losetup",
         "zpool",
         "blockdev",
+        "wipefs",
         "sgdisk",
         "sfdisk",
         "sync",
@@ -138,5 +140,5 @@ if __name__ == "__main__":
         main()
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         sys.exit(
-            f"USB writing stopped: {error}. If any write started, inspect both disks before retrying."
+            f"USB writing stopped: {error}. If disk cleanup or writing started, inspect both disks before retrying."
         )

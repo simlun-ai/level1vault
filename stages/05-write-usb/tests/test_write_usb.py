@@ -97,9 +97,13 @@ class WriteUsbTests(unittest.TestCase):
         self.assertEqual(
             events,
             [
+                ("wipefs", "-a", "/dev/sda"),
+                ("sgdisk", "--zap-all", "/dev/sda"),
                 ("write", "sda"),
                 ("sgdisk", "-e", "/dev/sda"),
                 ("sfdisk", "--verify", "/dev/sda"),
+                ("wipefs", "-a", "/dev/sdb"),
+                ("sgdisk", "--zap-all", "/dev/sdb"),
                 ("write", "sdb"),
                 ("sgdisk", "-e", "/dev/sdb"),
                 ("sfdisk", "--verify", "/dev/sdb"),
@@ -203,7 +207,37 @@ class WriteUsbTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "readback mismatch"):
                 self.write()
         self.assertEqual(write.call_count, 1)
-        run.assert_not_called()
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [["wipefs", "-a", "/dev/sda"], ["sgdisk", "--zap-all", "/dev/sda"]],
+        )
+
+    def test_cleanup_failure_stops_before_writing_or_touching_second_disk(self):
+        for failed_command in ("wipefs", "sgdisk"):
+            with self.subTest(command=failed_command):
+                commands: list[list[str]] = []
+
+                def fail_cleanup(
+                    cmd: list[str],
+                    commands: list[list[str]] = commands,
+                    failed_command: str = failed_command,
+                    **kwargs: object,
+                ):
+                    commands.append(cmd)
+                    if cmd[0] == failed_command:
+                        raise subprocess.CalledProcessError(1, cmd)
+
+                with (
+                    patch.object(writer, "output", side_effect=self.output),
+                    patch.object(writer, "disk_info", side_effect=self.disks),
+                    patch.object(writer, "write_image") as write,
+                    patch.object(writer.subprocess, "run", side_effect=fail_cleanup),
+                ):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        self.write()
+                write.assert_not_called()
+                self.assertEqual(commands[0], ["wipefs", "-a", "/dev/sda"])
+                self.assertTrue(all(cmd[-1] == "/dev/sda" for cmd in commands))
 
     def test_stream_write_fsync_flush_and_readback_exact_extent(self):
         image = self.out / "usb-a.img"

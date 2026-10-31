@@ -9,6 +9,12 @@ from pathlib import Path
 from usb_devices import require
 
 
+def prepare_disk(disk: Path) -> None:
+    # Clear whole-disk signatures and both GPT copies on a validated destination.
+    subprocess.run(["wipefs", "-a", str(disk)], check=True)
+    subprocess.run(["sgdisk", "--zap-all", str(disk)], check=True)
+
+
 def readback(disk: Path, size: int, expected: str) -> None:
     # Read exactly the written extent after flushing the device cache.
     subprocess.run(["blockdev", "--flushbufs", str(disk)], check=True)
