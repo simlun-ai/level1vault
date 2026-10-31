@@ -112,7 +112,8 @@ submodule fetching, hooks, filesystem-monitor hooks and automatic maintenance,
 and ignore system/global Git configuration. New repositories use an empty Git
 template. Existing repositories with configured content filters or partial-clone
 settings are refused. Import never builds or runs repository code or installs
-the software it carries.
+the software it carries. Keep generated environments outside imported checkouts;
+see [offline HSM installation](HSM.md) for an example.
 
 Bundles contain full history, including any secrets ever committed in reachable
 history. They are plaintext while in local `transport/` and the USB transport

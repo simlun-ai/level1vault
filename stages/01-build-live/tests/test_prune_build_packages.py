@@ -23,7 +23,6 @@ class BuildCleanupTests(unittest.TestCase):
             "gcc-14",
             "gcc-14-x86-64-linux-gnu",
             "cpp-14",
-            "make",
             "dpkg-dev",
             "libc6-dev:amd64",
             "linux-libc-dev",
@@ -48,6 +47,8 @@ class BuildCleanupTests(unittest.TestCase):
             "zfsutils-linux",
             "zfs-zed",
             "python3",
+            "python3-venv",
+            "make",
             "kmod",
             "initramfs-tools",
         ]

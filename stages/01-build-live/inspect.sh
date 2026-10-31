@@ -26,6 +26,14 @@ test -f "$ROOT/usr/local/lib/level1vault/git_bundles.py"
 test -x "$ROOT/usr/local/sbin/workspace-transport-import"
 test -f "$ROOT/usr/local/lib/level1vault/transport.py"
 
+# Verify offline HSM prerequisites remain after build-package pruning.
+chroot "$ROOT" sh -c 'command -v make'
+chroot "$ROOT" python3 -m venv /tmp/hsm-inspection-venv
+chroot "$ROOT" /tmp/hsm-inspection-venv/bin/python -m pip --version
+rm -rf "$ROOT/tmp/hsm-inspection-venv"
+chroot "$ROOT" id -nG simlun | tr ' ' '\n' | grep -qx yubikey
+grep -Fq 'GROUP="yubikey", MODE="0660"' "$ROOT/etc/udev/rules.d/70-level1vault-yubikey.rules"
+
 # Verify the ZFS module matches the packaged kernel.
 KERNEL=$(cat "$ROOT/usr/local/share/level1vault/kernel-version")
 chroot "$ROOT" modinfo -k "$KERNEL" zfs
@@ -38,7 +46,7 @@ CANONICAL=$(chroot "$ROOT" readlink -f "$MODULE")
 [[ $CANONICAL == "/usr/lib/modules/$KERNEL/extra/level1vault/"* ]]
 chroot "$ROOT" dpkg-query -S "$CANONICAL" | grep -q '^level1vault-zfs-modules:'
 chroot "$ROOT" modprobe --show-depends --set-version "$KERNEL" zfs
-for tool in cc gcc g++ c++ clang make dkms; do
+for tool in cc gcc g++ c++ clang dkms; do
   if chroot "$ROOT" sh -c "command -v \"\$1\"" sh "$tool"; then
     echo "Unexpected build tool: $tool" >&2; exit 1
   fi

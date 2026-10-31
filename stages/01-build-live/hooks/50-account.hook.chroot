@@ -10,8 +10,16 @@ fi
 
 # Create the live user with the expected identity and password.
 groupadd --gid 1000 simlun
-useradd --uid 1000 --gid 1000 --create-home --shell /usr/bin/zsh --groups sudo simlun
+groupadd --system yubikey
+useradd --uid 1000 --gid 1000 --create-home --shell /usr/bin/zsh --groups sudo,yubikey simlun
 printf 'simlun:password\n' | chpasswd
+
+# Grant OTP HID access after root autologin and switching to simlun in tmux.
+install -d -m 0755 /etc/udev/rules.d
+cat > /etc/udev/rules.d/70-level1vault-yubikey.rules <<'UDEV'
+# Inventory OTP-capable Standard and YubiKey 5 USB products; no world access.
+ACTION=="add|change", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1050", ATTRS{idProduct}=="0010|0407", GROUP="yubikey", MODE="0660"
+UDEV
 
 # Provide the requested command and manual-page names for Debian's renamed tools.
 install -d -m 0755 /usr/local/bin /usr/local/share/man/man1

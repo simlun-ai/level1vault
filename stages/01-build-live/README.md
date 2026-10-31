@@ -18,7 +18,7 @@ Run `make build` to execute stages 1 and 2, then `make check-build` to inspect t
 
 A failed build leaves diagnostic logs. Inspect those and retry with a fresh run directory; do not reuse a partially completed directory. BuildKit may reuse valid cached stages.
 
-Tests live in `tests/`: `make test` runs configuration behavior checks and builds/extracts a real Debian module-package fixture, and `make test-container` verifies the real account/password/login setup in a disposable Debian build stage. `make check-build` requires a real completed ISO and verifies standalone module ownership plus the absence of build tools and headers. Module loadability is tested separately on the workstation.
+Tests live in `tests/`: `make test` runs configuration behavior checks and builds/extracts a real Debian module-package fixture, and `make test-container` verifies the real account/password/login setup in a disposable Debian build stage. `make check-build` requires a real completed ISO and verifies standalone module ownership plus the absence of compilers and development headers (GNU Make remains for offline installers). Module loadability is tested separately on the workstation.
 
 The live OS includes `man-db`, the standard Linux `manpages`, and the `less` pager for offline documentation (for example, `man ls`, `man proc`, and `man zpool`). Manual pages supplied by installed packages remain available. Image inspection verifies representative pages render as the live user after package cleanup.
 
@@ -28,3 +28,7 @@ Container account tests exercise Zsh login, the workspace command path, the inte
 
 See [build details](../../docs/BUILD.md), [BuildKit](../../docs/BUILDKIT.md), and the [documentation index](../../docs/README.md).
 
+
+The live image includes `python3-venv` and GNU Make for offline HSM installation.
+The `yubikey` group grants simlun restricted OTP HID access independently of the
+root login seat. See [HSM and pass custody](../../docs/HSM.md).
