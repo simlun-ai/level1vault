@@ -143,18 +143,31 @@ def check():
     if not re.fullmatch(r"level1-workspace-[1-9][0-9]*/data", dataset):
         raise RuntimeError("Mount an active workspace before starting simlun")
     verify_mount(current, dataset, "/")
-    verify_mount(mounted(HOME), dataset, "/home/simlun")
-    for prop, target, expected in [
-        ("readonly", dataset, "off"),
-        ("org.level1vault:state", dataset.split("/")[0], "active"),
+
+    # Explain replica inspection before requiring an active home attachment.
+    properties: dict[str, str] = {}
+    for prop, target in [
+        ("readonly", dataset),
+        ("org.level1vault:state", dataset.split("/")[0]),
     ]:
         value = subprocess.check_output(
             ["zfs", "get", "-H", "-o", "value", prop, target], text=True
         ).strip()
-        if value != expected:
-            raise RuntimeError(
-                "start requires a writable active pair; inspect replicas from root"
-            )
+        properties[prop] = value
+    if properties == {"readonly": "on", "org.level1vault:state": "replica"}:
+        pair = dataset.split("/")[0].removeprefix("level1-workspace-")
+        raise RuntimeError(
+            f"Pair {pair} is a read-only backup replica. start requires a writable "
+            "active pair. Booting or syncing a replica does not activate it.\n"
+            "The backup is mounted at /mnt/workspace; inspect files from root, "
+            "including the saved home at /mnt/workspace/home/simlun.\n"
+            f"When finished, run: cd / && workspace-umount {pair}"
+        )
+    if properties != {"readonly": "off", "org.level1vault:state": "active"}:
+        raise RuntimeError(
+            "start requires a writable active pair; inspect pair state and readonly policy"
+        )
+    verify_mount(mounted(HOME), dataset, "/home/simlun")
 
 
 def main():
