@@ -34,3 +34,19 @@ From root, run `workspace-mount [PAIR_ID]`, then `sudo -iu simlun` for a plain w
 Before unlocking, `/home/simlun` is a temporary fallback home. Do not begin a simlun session there before mounting: home attachment refuses while simlun processes are running. Changes made in that fallback home are not automatically copied to the saved home. Root remains available if the workspace cannot be unlocked or its home needs repair.
 
 Mounting a read-only replica does not initialize or attach its home. Inspect saved files at `/mnt/workspace/home/simlun` from root, then export normally. Host-side workspace helpers run from a checkout do not attach homes; the behavior is enabled only inside an installed live image.
+
+To check a backup such as pair 2, stay at the root console:
+
+```sh
+workspace-mount 2
+ls -la /mnt/workspace
+ls -la /mnt/workspace/home/simlun
+cd /
+workspace-umount 2
+```
+
+Booting or syncing a replica does not activate it. If you run `start` on a replica,
+it leaves the backup mounted read-only and explains how to inspect and export it.
+Activation is unnecessary for backup checks; use the explicit fenced activation
+procedure in [pair operations](PAIRS.md#fail-over-to-the-next-numbered-pair) only
+when deliberately changing the writable working pair.
