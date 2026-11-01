@@ -171,7 +171,9 @@ class HomeTests(unittest.TestCase):
         self.dataset = "level1-workspace-2/data"
         self.mounts[str(self.workspace)] = self.record("/", self.dataset)
         self.properties = {"readonly": "on", "org.level1vault:state": "replica"}
-        with self.assertRaisesRegex(RuntimeError, "Pair 2 is a read-only backup") as error:
+        with self.assertRaisesRegex(
+            RuntimeError, "Pair 2 is a read-only backup"
+        ) as error:
             home.check()
         message = str(error.exception)
         self.assertIn("/mnt/workspace/home/simlun", message)
