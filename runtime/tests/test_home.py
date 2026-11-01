@@ -166,3 +166,14 @@ class HomeTests(unittest.TestCase):
             with patch.dict(self.properties, {prop: value}):
                 with self.assertRaisesRegex(RuntimeError, "writable active"):
                     home.check()
+
+    def test_replica_without_home_explains_backup_inspection(self):
+        self.dataset = "level1-workspace-2/data"
+        self.mounts[str(self.workspace)] = self.record("/", self.dataset)
+        self.properties = {"readonly": "on", "org.level1vault:state": "replica"}
+        with self.assertRaisesRegex(RuntimeError, "Pair 2 is a read-only backup") as error:
+            home.check()
+        message = str(error.exception)
+        self.assertIn("/mnt/workspace/home/simlun", message)
+        self.assertIn("cd / && workspace-umount 2", message)
+        self.assertFalse(any(c[0] in ("mount", "chown") for c in self.calls))
