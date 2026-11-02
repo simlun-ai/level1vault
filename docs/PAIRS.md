@@ -51,6 +51,24 @@ Sources and destinations are explicit. One command can update any number of dest
 sudo workspace-sync 1 2 3 4
 ```
 
+If import refuses a pool because it was previously in use on another system,
+an unclean shutdown combined with the live OS's per-boot host ID can cause this.
+Normal sync keeps ZFS's active-host guard and reports recovery guidance. Confirm
+that **neither member of every requested pair is owned by another machine/VM**,
+fence those other owners, and disconnect duplicate image/physical copies before
+explicitly allowing the import:
+
+```bash
+sudo workspace-sync --force-import 1 2
+```
+
+This permits `zpool import -f -N` for the requested source and destinations that
+are not already imported. It does not force a receive, change roles, bypass mirror
+health or history checks, or mount/unlock a replica. It is not needed after clean
+exports. Sync leaves pools imported even on failure; use `workspace-umount` before
+disconnecting. For inspecting pool GUIDs and manual import recovery, see
+[import recovery](RECOVERY.md#mounting-and-clean-shutdown).
+
 This creates **one source snapshot checkpoint** and sends it to all listed destinations. The first receive is a full raw encrypted stream; later receives are incremental. Every completed destination has the same endpoint snapshot GUID. This shared checkpoint is particularly useful for failover: a newly activated pair can continue sending to the others from that common history.
 
 For separate offsite rotations, connect one replica at a time and run, for example:

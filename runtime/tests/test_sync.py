@@ -7,7 +7,7 @@ import importlib.machinery
 import importlib.util
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 loader = importlib.machinery.SourceFileLoader(
     "workspace_sync",
@@ -81,6 +81,129 @@ class TransferTests(unittest.TestCase):
         sender.stdout.close.assert_called_once()
         sender.terminate.assert_called_once()
         sender.wait.assert_called_once()
+
+
+class ImportTests(unittest.TestCase):
+    def test_import_requires_explicit_force_and_still_checks_identity(self):
+        for force in (False, True):
+            with (
+                self.subTest(force=force),
+                patch.object(sync, "run", return_value=""),
+                patch.object(sync.subprocess, "check_output", return_value="") as imp,
+                patch.object(sync, "prop", return_value="2"),
+            ):
+                self.assertEqual(sync.import_pair("2", force), "level1-workspace-2")
+                args = imp.call_args.args[0]
+                self.assertEqual("-f" in args, force)
+                self.assertIn("-N", args)
+                self.assertEqual(args[-1], "level1-workspace-2")
+                self.assertEqual(imp.call_args.kwargs["env"]["LC_ALL"], "C")
+            with (
+                patch.object(sync, "run", return_value=""),
+                patch.object(sync.subprocess, "check_output", return_value=""),
+                patch.object(sync, "prop", return_value="3"),
+                self.assertRaisesRegex(RuntimeError, "identity"),
+            ):
+                sync.import_pair("2", force)
+
+    def test_already_imported_pair_is_not_reimported(self):
+        with (
+            patch.object(sync, "run", return_value="level1-workspace-2"),
+            patch.object(sync.subprocess, "check_output") as imp,
+            patch.object(sync, "prop", return_value="2"),
+        ):
+            sync.import_pair("2", True)
+            imp.assert_not_called()
+
+    def test_foreign_owner_failure_explains_fencing_without_retrying(self):
+        for detail in (
+            "pool was previously in use from another system",
+            "pool may be in use from other system",
+        ):
+            with (
+                self.subTest(detail=detail),
+                patch.object(sync, "run", return_value=""),
+                patch.object(
+                    sync.subprocess,
+                    "check_output",
+                    side_effect=sync.subprocess.CalledProcessError(
+                        1, "zpool", output=detail
+                    ),
+                ) as imp,
+                patch.object(sync, "prop") as prop,
+                self.assertRaisesRegex(
+                    RuntimeError, "neither mirror member.*--force-import"
+                ),
+            ):
+                sync.import_pair("2")
+            imp.assert_called_once()
+            prop.assert_not_called()
+
+    def test_other_import_failures_preserve_diagnostic_without_force_hint(self):
+        with (
+            patch.object(sync, "run", return_value=""),
+            patch.object(
+                sync.subprocess,
+                "check_output",
+                side_effect=sync.subprocess.CalledProcessError(
+                    1, "zpool", output="no such pool"
+                ),
+            ) as imp,
+            self.assertRaisesRegex(RuntimeError, "no such pool") as error,
+        ):
+            sync.import_pair("2")
+        self.assertNotIn("--force-import", str(error.exception))
+        imp.assert_called_once()
+
+    def test_force_import_does_not_bypass_destination_health(self):
+        with (
+            patch.object(
+                sync,
+                "import_pair",
+                side_effect=["level1-workspace-1", "level1-workspace-2"],
+            ) as imp,
+            patch.object(sync, "run", side_effect=["guid1", "guid2", "DEGRADED"]),
+            patch.object(sync, "transfer") as transfer,
+            self.assertRaisesRegex(RuntimeError, "both mirror members"),
+        ):
+            sync.synchronize("1", "2", force_import=True)
+        self.assertEqual(imp.call_args_list[0].kwargs, {"force_import": True})
+        self.assertEqual(imp.call_args_list[1].kwargs, {"force_import": True})
+        transfer.assert_not_called()
+
+    def test_cli_forwards_force_import_to_source_targets_and_pending_retry(self):
+        for force in (False, True):
+            argv = (
+                ["workspace-sync"]
+                + (["--force-import"] if force else [])
+                + ["1", "2", "3"]
+            )
+            with (
+                self.subTest(force=force),
+                patch.object(sync.sys, "argv", argv),
+                patch.object(sync.os, "geteuid", return_value=0),
+                patch.object(sync, "open", mock_open(), create=True),
+                patch.object(sync.fcntl, "flock"),
+                patch.object(sync.os.path, "exists", return_value=False),
+                patch.object(sync, "command"),
+                patch.object(
+                    sync, "import_pair", return_value="level1-workspace-1"
+                ) as imp,
+                patch.object(sync, "validate_data"),
+                patch.object(sync, "prop", side_effect=["active", "off"]),
+                patch.object(sync, "create_checkpoint", return_value="new"),
+                patch.object(
+                    sync, "synchronize", side_effect=["pending", "new", "new"]
+                ) as transfer,
+            ):
+                sync.main()
+            imp.assert_called_once_with("1", force_import=force)
+            self.assertEqual(transfer.call_count, 3)
+            self.assertEqual(
+                [c.args[1] for c in transfer.call_args_list], ["2", "2", "3"]
+            )
+            for call in transfer.call_args_list:
+                self.assertEqual(call.kwargs, {"force_import": force})
 
 
 class PairTests(unittest.TestCase):
