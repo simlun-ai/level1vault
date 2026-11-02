@@ -96,8 +96,8 @@ Path(sys.argv[1]).write_text(str(os.getpid()))
 while True:
     time.sleep(60)
 DAEMON
-  printf -v command 'gpg --list-keys >/dev/null && gpgconf --launch gpg-agent && ssh-agent -s > %q/ssh.env && python3 %q/daemon.py %q/pid && touch %q/ready' \
-    "$directory" "$directory" "$directory" "$directory"
+  printf -v command 'gpg --list-keys >/dev/null && gpgconf --launch gpg-agent && python3 %q/daemon.py %q/pid && touch %q/ready' \
+    "$directory" "$directory" "$directory"
   tmux -N -S "$socket" respawn-pane -k -t workspace "$command"
   for _ in {1..100}; do
     [[ -f $directory/ready && -s $directory/pid ]] && break
@@ -112,8 +112,7 @@ DAEMON
   processes=("$(cat "$directory/pid")" "$before")
   # Inspect agents without invoking GPG outside the managed service.
   while IFS= read -r pid; do processes+=("$pid"); done < <(pgrep -u 1000 -x gpg-agent)
-  while IFS= read -r pid; do processes+=("$pid"); done < <(pgrep -u 1000 -x ssh-agent)
-  [[ ${#processes[@]} -ge 4 ]]
+  [[ ${#processes[@]} -ge 3 ]]
   group=$(systemctl show "$unit" --property=ControlGroup --value)
   [[ -n $group ]]
   for pid in "${processes[@]}"; do
