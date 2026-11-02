@@ -19,7 +19,7 @@ make test-qemu
 
 Run as your normal user with read access to the initialized images and access to `/dev/kvm`. Enter the workspace passphrase at the hidden prompt. It stays in the runner's memory during the suite and is sent to the guest's unlock prompt; it is not passed in command arguments or saved in logs. The complete unlock exchange is omitted from the serial log. For unattended test-only provisioning, `QEMU_ARGS=--passphrase-stdin` accepts one line on stdin; do not put a real passphrase in shell history or environment variables.
 
-No extra arguments are needed for pair 1. The runner creates a unique private results directory under `BUILD_DIR/validation/`; if permissions prevent that, it automatically uses `~/level1vault-qemu/<test-run>/`. Run as your desktop user, without sudo. For another pair, use `make test-qemu PAIR=2`.
+No extra arguments are needed for pair 1. `BUILD_DIR` defaults to `build/default`, and `OUT` defaults to `BUILD_DIR/pairs/PAIR`: these select the original initialized pair images. The runner derives its unique private results directory from `OUT`; with the standard layout it uses `BUILD_DIR/validation/`. If permissions prevent that, it automatically uses `~/level1vault-qemu/<test-run>/`. Run as your desktop user, without sudo. For another pair, use `make test-qemu PAIR=2`.
 
 The selected directory holds disposable disks as well as logs. To choose another filesystem with enough free space, pass an explicit new directory:
 
@@ -31,7 +31,7 @@ The runner checks that it can create private results storage before checking ima
 
 The suite boots both drives, checks manual-only import, account settings, encryption, ownership, persistence and RAM-overlay reset across reboot. It then boots A alone, writes while degraded, rejoins and scrubs; repeats for B alone; and verifies both writes survived. Every boot starts without an imported pool. Each VM shuts down after a successful export. These are the same [shared acceptance checks](../stages/04-test-pair/README.md) used by the manual procedure.
 
-For an OS upgrade acceptance run, add `QEMU_ARGS='--upgrade-release /path/to/release'`. The runner applies that release only to disposable copies before the same guest checks; see [OS upgrades](UPGRADES.md#workstation-qemu-acceptance).
+For an OS upgrade acceptance run, add `QEMU_ARGS='--upgrade-release /path/to/release'`. The runner applies that release only to disposable copies before the same guest checks. This option leaves the source image and default results locations unchanged. To save results with the release, also pass `--results /path/to/release/validation/<new-test-run>`. Keep `BUILD_DIR` pointing to the build containing the initialized source pair; an OS-only upgrade release contains no pair images. See the complete [OS upgrade test example](UPGRADES.md#workstation-qemu-acceptance).
 
 The test copies retain the real UEFI loaders and live system. Only their external GRUB configuration is changed to add a serial console; the originals and build configuration are untouched. Each scenario uses fresh OVMF variables, no network, and no host directory sharing. These are virtio-disk tests, not USB transport tests.
 

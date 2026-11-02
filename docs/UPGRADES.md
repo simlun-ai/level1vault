@@ -62,10 +62,31 @@ A failed release build preserves diagnostics but has no `UPGRADE-READY` marker. 
 Before touching physical disks, build an inspected payload without applying it:
 
 ```bash
-make prepare-upgrade BUILD_DIR=build/upgrade-test
+release="build/$(date +%F)"
+make prepare-upgrade BUILD_DIR="$release"
+
 # Use an initialized active source pair; all mutations below are on disposable copies.
-make test-qemu QEMU_ARGS='--upgrade-release build/upgrade-test'
+source_build=build/default       # directory containing the original pairs/1 images
+results="$release/validation/$(date -u +%Y%m%dT%H%M%SZ)"
+make test-qemu BUILD_DIR="$source_build" \
+  QEMU_ARGS="--upgrade-release $release --results $results"
 ```
+
+If the release is already prepared, reuse its path in `release` and skip `make prepare-upgrade`. Choose a new results directory for each test run.
+
+The build and test commands use `BUILD_DIR` for different inputs and outputs:
+
+| Option | Purpose |
+| --- | --- |
+| `prepare-upgrade BUILD_DIR="$release"` | Build the new OS-only release in this directory. |
+| `test-qemu BUILD_DIR="$source_build"` | Read the original initialized images from `$source_build/pairs/1` (`PAIR=1` by default). |
+| `test-qemu OUT=...` | Override the source pair image directory directly. |
+| `--upgrade-release $release` | Apply the prepared OS payload to disposable copies of the source images. |
+| `--results $results` | Store test logs and temporary disposable disks in a new directory under the release. |
+
+Set `source_build` to the directory where you originally prepared the pair images. An OS-only release has no initialized `pairs/1` images, so using `BUILD_DIR="$release"` for the test would make it look in a directory that preparation does not create. The `BUILD_DIR` assignment on `make prepare-upgrade` applies only to that invocation.
+
+Without `--results`, the runner derives the results location from the source pair directory. With the standard layout, this is `$source_build/validation/<test-run>` (usually `build/default/validation/`), even when `--upgrade-release` selects a dated release. If permissions prevent creating that default directory, it falls back to `~/level1vault-qemu/<test-run>/`. An explicit `--results` path must be new and writable; it does not use the fallback. Disposable disks are removed after the run; logs and `result.json` remain.
 
 The runner checks readiness and copies the original images, replaces only the FAT payload in the disposable copies, checks boot-file preservation, enables the test serial console, and runs the same [boot, reboot, degraded-write and rejoin checks](../stages/04-test-pair/README.md). If you already have a freshly built ISO for the intended revision, `bash pipeline/buildkit.sh release build/default build/default/upgrade-test` exports/inspects a payload from it without rebuilding or transferring workspace images. Both wrapper routes publish `UPGRADE-READY` after inspection and extraction. After the QEMU test passes, select that same directory with `UPGRADE_DIR=...` when upgrading physical pairs; the updater validates metadata and paths before copying and verifies the written USB payload afterward.
 
