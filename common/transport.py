@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import tempfile
 import uuid
 from collections.abc import Generator
@@ -420,28 +421,95 @@ def stage(pair: str, source: Path, discover: Path) -> None:
     print("Pair exported; safe to disconnect.")
 
 
-def import_transport(pair: str) -> None:
-    pool = pair_pool(pair)
+def active_destination() -> str:
+    # Resolve the destination from the actual workspace mount, not connected USBs.
+    data = output("findmnt", "-n", "-o", "SOURCE", "--mountpoint", "/mnt/workspace")
+    match = re.fullmatch(r"(level1-workspace-([1-9][0-9]*))/data", data)
     require(
-        pool in output("zpool", "list", "-H", "-o", "name").splitlines(),
+        match is not None,
         "Mount the active workspace with start or workspace-mount first",
     )
-    data = validate_pair(pool, pair)
+    assert match is not None
+    pool, pair = match.groups()
+    require(validate_pair(pool, pair) == data, "Destination dataset identity mismatch")
     require(
         prop(pool, "org.level1vault:state") == "active"
         and prop(data, "readonly") == "off",
-        "Transport import requires the active writable pair; replicas are refused",
+        "Transport import requires an active writable destination; replicas are refused",
     )
     require(
         prop(data, "mounted") == "yes"
         and prop(data, "mountpoint") == "/mnt/workspace"
-        and output("findmnt", "-n", "-o", "SOURCE", "--mountpoint", "/mnt/workspace")
-        == data,
-        "Mount the selected active workspace at /mnt/workspace first",
+        and prop(data, "keystatus") == "available",
+        "Mount the active workspace at /mnt/workspace first",
     )
-    with mounted_transport(pool, readonly=True) as directory:
-        final = publish_inbox(directory, Path("/mnt/workspace"), pool)
-    # The verified destination is durable before exact, nonrecursive source deletion.
-    command("zfs", "destroy", validate_transport(pool))
-    command("zpool", "sync", pool)
-    print(f"Imported and verified {final}; transport dataset removed.")
+    return pool
+
+
+@contextmanager
+def transport_source(
+    pool: str, pair: str, destination: str, discover: Path | None
+) -> Generator[None, None, None]:
+    if pool == destination:
+        yield
+        return
+
+    # Own a temporary import of the external source, leaving its encrypted data locked.
+    require(
+        pool not in output("zpool", "list", "-H", "-o", "name").splitlines(),
+        "Export the transport source pair before importing its delivery",
+    )
+    require(discover is not None, "Source pair discovery helper is required")
+    assert discover is not None
+    guid = output("python3", discover, "--pair", pair, "--guid")
+    require(
+        re.fullmatch(r"[1-9][0-9]*", guid) is not None, "Invalid discovered pool GUID"
+    )
+    command(
+        "zpool",
+        "import",
+        "-N",
+        "-d",
+        "/dev/disk/by-partuuid",
+        "-o",
+        "cachefile=none",
+        guid,
+    )
+    try:
+        require(
+            output("zpool", "get", "-H", "-o", "value", "guid", pool) == guid,
+            "Imported pool identity differs",
+        )
+        data = validate_pair(pool, pair)
+        require(
+            prop(data, "mounted") == "no" and prop(data, "keystatus") == "unavailable",
+            "Source workspace must remain locked and unmounted",
+        )
+        leaves = mirror_leaves(output("zpool", "status", "-g", pool))
+        require(
+            output("zpool", "list", "-H", "-o", "health", pool) == "ONLINE"
+            and all(row[2:] == ("ONLINE", "0", "0", "0") for row in leaves),
+            "Require both source mirror members ONLINE without device errors",
+        )
+        yield
+    finally:
+        try:
+            command("zpool", "export", pool)
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise RuntimeError(
+                f"Failed to export {pool}; inspect pool/export status before disconnecting"
+            ) from error
+    print(f"{pool} exported; safe to disconnect its drives.")
+
+
+def import_transport(pair: str | None = None, discover: Path | None = None) -> None:
+    destination = active_destination()
+    pair = pair if pair is not None else destination.removeprefix("level1-workspace-")
+    pool = pair_pool(pair)
+    with transport_source(pool, pair, destination, discover):
+        with mounted_transport(pool, readonly=True) as directory:
+            final = publish_inbox(directory, Path("/mnt/workspace"), destination)
+        # The destination pool is durable before exact, nonrecursive source deletion.
+        command("zfs", "destroy", validate_transport(pool))
+        command("zpool", "sync", pool)
+        print(f"Imported and verified {final}; transport dataset removed.")

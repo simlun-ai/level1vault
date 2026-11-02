@@ -40,3 +40,8 @@ For Git repositories, prepare complete bundles with
 `make add-transport-git-bundle REPO=<url>`. After the normal transport import, run
 `workspace-transport-import-git-bundles /mnt/workspace/inbox/<delivery>/git-bundles`
 as simlun. See [offline Git updates](../docs/GIT-BUNDLES.md).
+
+To carry files on pair 2 into a running pair 1 session, stage with `PAIR=2`,
+move both source members over, then run `sudo workspace-transport-import 2`.
+The carrier’s encrypted data stays locked; wait for successful export before
+disconnecting it. With no source argument, import uses the mounted active pair.

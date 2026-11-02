@@ -92,6 +92,9 @@ workstation, then run `make stage-transport PAIR=1`. This replaces the pair's
 **unencrypted** transport dataset without unlocking its workspace. During the next
 offline live session, run `sudo workspace-transport-import 1` after `start 1`.
 It verifies the copied files in the encrypted inbox before deleting transport.
+To use pair 2 as a carrier while pair 1 remains running, stage with `PAIR=2`,
+move both members over, and run `sudo workspace-transport-import 2` in pair 1’s
+session. The carrier stays locked and is exported after import.
 [Workflow, security boundary and retries →](docs/TRANSPORT.md)
 For repository payloads, use [the independent Git bundle helpers](docs/GIT-BUNDLES.md).
 
