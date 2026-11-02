@@ -145,11 +145,13 @@ def transfer(send: list[str], destination: str, readonly: str):
 
 
 # Import and validate the requested numbered pair.
-def import_pair(pair: str):
+def import_pair(pair: str, force_import: bool = False):
     pool = pool_name(pair)
     imported = run("zpool", "list", "-H", "-o", "name").splitlines()
     if pool not in imported:
-        command(
+        # Force only after the operator has fenced every other owner of both
+        # members. This bypasses host ownership, never receive/history checks.
+        args = [
             "zpool",
             "import",
             "-N",
@@ -157,8 +159,31 @@ def import_pair(pair: str):
             "/dev/disk/by-partuuid",
             "-o",
             "cachefile=none",
-            pool,
-        )
+        ]
+        if force_import:
+            args.append("-f")
+        args.append(pool)
+        try:
+            subprocess.check_output(
+                args,
+                text=True,
+                stderr=subprocess.STDOUT,
+                env=dict(os.environ, LC_ALL="C"),
+            )
+        except subprocess.CalledProcessError as error:
+            detail = str(error.output or "").strip()
+            hint = ""
+            if not force_import and (
+                "pool was previously in use from another system" in detail
+                or "pool may be in use from other system" in detail
+            ):
+                hint = (
+                    "\nConfirm neither mirror member is owned by another machine/VM "
+                    "and disconnect duplicate image/physical copies. Then rerun "
+                    "workspace-sync with --force-import, or follow docs/RECOVERY.md "
+                    "for a deliberate manual import."
+                )
+            raise RuntimeError(f"{pool}: import failed: {detail}{hint}") from error
     require(
         prop(pool, PROPERTY + "pair") == pair,
         f"{pool}: pair identity does not match {pair}",
@@ -187,10 +212,11 @@ def synchronize(
     target_pair: str,
     rebind: bool = False,
     checkpoint: str | None = None,
+    force_import: bool = False,
 ):
     require(source_pair != target_pair, "Source and destination IDs must differ")
-    source_pool = import_pair(source_pair)
-    target_pool = import_pair(target_pair)
+    source_pool = import_pair(source_pair, force_import=force_import)
+    target_pool = import_pair(target_pair, force_import=force_import)
     source = source_pool + "/data"
     target = target_pool + "/data"
     source_guid = run("zpool", "get", "-H", "-o", "value", "guid", source_pool)
@@ -467,8 +493,8 @@ def prune(pair: str, keep: int, apply: bool = False):
 def discover_pairs():
     names = run("zpool", "list", "-H", "-o", "name").splitlines()
 
-    # Import listings are discovery only: import_pair still uses normal active-
-    # host protection and never forces ambiguous/foreign ownership.
+    # Import listings are discovery only; activation keeps normal active-host
+    # protection and requires manual recovery for a foreign-owner import.
     listing = subprocess.check_output(
         ["zpool", "import", "-d", "/dev/disk/by-partuuid"],
         text=True,
@@ -603,6 +629,12 @@ def main():
     else:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument(
+            "--force-import",
+            action="store_true",
+            help="allow imports last used by another host; acknowledges all other "
+            "owners of both members are fenced and duplicate copies disconnected",
+        )
+        parser.add_argument(
             "--rebind",
             action="store_true",
             help="after failover, change source binding only with a verified common latest destination snapshot",
@@ -648,7 +680,7 @@ def main():
                 pair = candidates[0]
             activate(pair, args.fenced)
         else:
-            source_pool = import_pair(args.source)
+            source_pool = import_pair(args.source, force_import=args.force_import)
             source = source_pool + "/data"
             validate_data(source)
             require(
@@ -670,11 +702,23 @@ def main():
 
             # Complete pending transfers and bring every target to the shared checkpoint.
             for target in args.targets:
-                completed = synchronize(args.source, target, args.rebind, checkpoint)
+                completed = synchronize(
+                    args.source,
+                    target,
+                    args.rebind,
+                    checkpoint,
+                    force_import=args.force_import,
+                )
                 if completed != checkpoint:
                     # Finish a saved interrupted endpoint, then catch up to the
                     # shared checkpoint chosen for this whole invocation.
-                    synchronize(args.source, target, args.rebind, checkpoint)
+                    synchronize(
+                        args.source,
+                        target,
+                        args.rebind,
+                        checkpoint,
+                        force_import=args.force_import,
+                    )
 
 
 if __name__ == "__main__":

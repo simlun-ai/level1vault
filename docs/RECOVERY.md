@@ -28,6 +28,13 @@ sudo zpool import -f -N -d /dev/disk/by-partuuid -o cachefile=none VERIFIED_POOL
 sudo workspace-mount 1
 ```
 
+When this happens during `workspace-sync`, the same ownership and duplicate-copy
+checks are required. After fencing all other owners of both members of every
+requested pair, `sudo workspace-sync --force-import 1 2` explicitly permits the
+imports without changing replication safety checks. See [pair operations](PAIRS.md).
+A clean `workspace-umount` before disconnecting or shutdown avoids leaving the
+pool marked potentially active; sync deliberately leaves its pools imported.
+
 For additional pairs, periodic `workspace-sync SOURCE_ID TARGET_ID...`, snapshot retention and ordered in-place failover, use [pair operations](PAIRS.md).
 
 For online/replacement procedures and divergent-history restrictions, see [member recovery](#member-recovery). Never run `zpool create` on a surviving member, `zpool add` to replace a mirror member, or `zpool upgrade` just to dismiss the expected feature warning. Do not unplug the running boot medium: SquashFS is still read from it unless explicitly copied to RAM.
