@@ -53,6 +53,7 @@ install -m 0644 "$SOURCE_DIR/common/member_recovery.py" config/includes.chroot/u
 install -m 0644 "$SOURCE_DIR/common/usb_devices.py" config/includes.chroot/usr/local/lib/level1vault/usb_devices.py
 install -m 0755 "$SOURCE_DIR/runtime/workspace-replace" config/includes.chroot/usr/local/sbin/workspace-replace
 install -m 0755 "$SOURCE_DIR/runtime/workspace-discover" config/includes.chroot/usr/local/sbin/workspace-discover
+install -m 0755 "$SOURCE_DIR/runtime/workspace-clock-status" config/includes.chroot/usr/local/sbin/workspace-clock-status
 install -m 0755 "$SOURCE_DIR/runtime/start" config/includes.chroot/usr/local/sbin/start
 install -m 0755 "$SOURCE_DIR/runtime/workspace-home" config/includes.chroot/usr/local/sbin/workspace-home
 install -m 0755 "$SOURCE_DIR/runtime/workspace-mount" config/includes.chroot/usr/local/sbin/workspace-mount
@@ -63,6 +64,7 @@ install -m 0755 "$SOURCE_DIR/runtime/workspace-sync" config/includes.chroot/usr/
 install -m 0755 "$SOURCE_DIR/runtime/workspace-rsync" config/includes.chroot/usr/local/sbin/workspace-rsync
 install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/50-account.hook.chroot" config/hooks/live/50-account.hook.chroot
 install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/60-repository.hook.chroot" config/hooks/live/60-repository.hook.chroot
+install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/70-clock.hook.chroot" config/hooks/live/70-clock.hook.chroot
 install -m 0755 "$SOURCE_DIR/stages/01-build-live/hooks/90-zfs.hook.chroot" config/hooks/live/90-zfs.hook.chroot
 printf 'Configured in %s. Now run: sudo lb build\n' "$PWD"
 

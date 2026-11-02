@@ -47,3 +47,7 @@ verification and retry behavior.
 transport import. It restores full Git bundles into `/mnt/workspace/git/` and
 fast-forwards clean managed default-branch checkouts. See
 [offline Git updates](../docs/GIT-BUNDLES.md) for update policies and limitations.
+
+`workspace-clock-status` shows local/UTC time, chrony tracking and GPS source
+selection/sample age. It does not change the clock or require a mounted workspace.
+See [offline clock operations](../docs/CLOCK.md).

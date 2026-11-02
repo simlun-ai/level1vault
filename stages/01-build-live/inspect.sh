@@ -84,6 +84,13 @@ test -d "$ROOT/usr/local/share/level1vault/home-default/level1vault/.git"
 test -x "$ROOT/usr/local/sbin/start"
 test -x "$ROOT/usr/local/sbin/workspace-home"
 
+# Verify GPS-only synchronization policy and parser after image cleanup.
+test -x "$ROOT/usr/local/sbin/workspace-clock-status"
+chroot "$ROOT" /usr/local/sbin/workspace-clock-status --help >/dev/null
+cp "$(dirname -- "${BASH_SOURCE[0]}")/tests/test_clock.sh" "$ROOT/tmp/level1vault-test-clock.sh"
+chroot "$ROOT" bash /tmp/level1vault-test-clock.sh
+rm "$ROOT/tmp/level1vault-test-clock.sh"
+
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-discover"

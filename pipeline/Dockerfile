@@ -59,9 +59,11 @@ RUN --network=none mkdir /results && TEST_ISO_OUTPUT=/results/live-image-amd64.h
 FROM source AS test-account
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     zsh neovim fd-find bat man-db tmux starship zoxide fzf pass gnupg \
-    zsh-autosuggestions zsh-syntax-highlighting && rm -rf /var/lib/apt/lists/*
+    zsh-autosuggestions zsh-syntax-highlighting chrony gpsd gpsd-clients systemd && rm -rf /var/lib/apt/lists/*
 RUN --network=none bash /src/stages/01-build-live/tests/test_account.sh && \
-    bash /src/stages/01-build-live/tests/test_pass.sh && mkdir /results && touch /results/account-passed
+    bash /src/stages/01-build-live/tests/test_pass.sh && \
+    sh /src/stages/01-build-live/hooks/70-clock.hook.chroot && \
+    bash /src/stages/01-build-live/tests/test_clock.sh && mkdir /results && touch /results/account-passed
 FROM scratch AS test-assembly-results
 COPY --from=test-assembly /results/ /
 FROM scratch AS test-results

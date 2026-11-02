@@ -67,6 +67,9 @@ class ScriptTests(unittest.TestCase):
         self.assertTrue(
             (self.base / "config/hooks/live/60-repository.hook.chroot").is_file()
         )
+        self.assertTrue(
+            (self.base / "config/hooks/live/70-clock.hook.chroot").is_file()
+        )
         library = self.base / "config/includes.chroot/usr/local/lib/level1vault"
         self.assertEqual(
             (library / "contracts.py").read_bytes(),
@@ -94,6 +97,7 @@ class ScriptTests(unittest.TestCase):
         for name in (
             "start",
             "workspace-home",
+            "workspace-clock-status",
             "workspace-rsync",
             "workspace-prune",
             "workspace-replace",

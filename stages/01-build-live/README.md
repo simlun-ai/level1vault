@@ -32,3 +32,8 @@ See [build details](../../docs/BUILD.md), [BuildKit](../../docs/BUILDKIT.md), an
 The live image includes `python3-venv` and GNU Make for offline HSM installation.
 The `yubikey` group grants simlun restricted OTP HID access independently of the
 root login seat. See [HSM and pass custody](../../docs/HSM.md).
+
+The image ships `chrony`, `gpsd` and `gpsd-clients`. The clock hook enables
+GPS-only synchronization for the u-blox 7 USB identity `1546:01a7`, masks competing
+GPS/time services, and configures UTC hardware time. See [offline clock
+operations](../../docs/CLOCK.md) for device verification and acceptance.

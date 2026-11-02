@@ -47,3 +47,6 @@ pinentry-curses
 restic
 rsync
 yubikey-manager
+chrony
+gpsd
+gpsd-clients
