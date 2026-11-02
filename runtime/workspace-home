@@ -115,6 +115,14 @@ def attach(dataset: str):
     verify_mount(mounted(HOME), dataset, "/home/simlun")
 
 
+def stop_session():
+    # Keep live service cleanup separate from the host-testable mount operations.
+    subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("workspace-session")), "stop"],
+        check=True,
+    )
+
+
 def detach(pool: str):
     # Leave homes belonging to other selected pools untouched.
     current = mounted(HOME)
@@ -128,10 +136,7 @@ def detach(pool: str):
         return
     verify_mount(current, pool + "/data", "/home/simlun")
     # End managed background jobs only after verifying this is the home being exported.
-    subprocess.run(
-        [sys.executable, str(Path(__file__).with_name("workspace-session")), "stop"],
-        check=True,
-    )
+    stop_session()
     # Unmanaged sessions and jobs still block unmount even without open home files.
     require_idle()
     result = subprocess.run(["umount", str(HOME)])

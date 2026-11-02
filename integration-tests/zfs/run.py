@@ -118,7 +118,12 @@ def verify_live_home(base: Path, dataset: str, existing: bool = False):
     defaults.mkdir()
     (defaults / ".zshrc").write_text("image defaults")
     base.chmod(0o711)
-    with patch.object(home, "HOME", target), patch.object(home, "DEFAULTS", defaults):
+    # This host test owns real mounts but no live tmux service. QEMU checks service cleanup.
+    with (
+        patch.object(home, "HOME", target),
+        patch.object(home, "DEFAULTS", defaults),
+        patch.object(home, "stop_session"),
+    ):
         try:
             home.attach(dataset)
             assert (
