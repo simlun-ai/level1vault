@@ -27,6 +27,80 @@ verify_markers() {
   done
 }
 
+# Exercise real service membership, detached-session refusal, and agent shutdown.
+check_session_cleanup() {
+  local socket=/run/level1vault-session/tmux.sock unit=level1vault-session.service
+  local before directory group pid command
+  local -a processes
+  python3 /usr/local/sbin/workspace-session prepare
+  before=$(systemctl show "$unit" --property=MainPID --value)
+  [[ $before =~ ^[1-9][0-9]*$ ]]
+  # prepare leaves an unattached session: it must be preserved on export refusal.
+  if workspace-umount "$PAIR"; then
+    echo 'FAIL: export accepted a detached tmux session' >&2
+    return 1
+  fi
+  mountpoint -q /home/simlun
+  python3 /usr/local/sbin/workspace-session prepare
+  [[ $(systemctl show "$unit" --property=MainPID --value) == "$before" ]]
+
+  # A double-forked process deliberately ignores TERM and keeps the home busy.
+  directory=$(mktemp -d /tmp/level1vault-session-check.XXXXXXXX)
+  chown 1000:1000 "$directory"
+  cat > "$directory/daemon.py" <<'DAEMON'
+import os
+import signal
+import sys
+import time
+from pathlib import Path
+
+if os.fork():
+    sys.exit(0)
+os.setsid()
+if os.fork():
+    os._exit(0)
+with open(os.devnull, "r+b", buffering=0) as null:
+    for fd in (0, 1, 2):
+        os.dup2(null.fileno(), fd)
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+os.chdir("/home/simlun")
+Path(sys.argv[1]).write_text(str(os.getpid()))
+while True:
+    time.sleep(60)
+DAEMON
+  printf -v command 'gpg --list-keys >/dev/null && gpgconf --launch gpg-agent && ssh-agent -s > %q/ssh.env && python3 %q/daemon.py %q/pid && touch %q/ready' \
+    "$directory" "$directory" "$directory" "$directory"
+  tmux -N -S "$socket" respawn-pane -k -t workspace "$command"
+  for _ in {1..100}; do
+    [[ -f $directory/ready && -s $directory/pid ]] && break
+    sleep 0.1
+  done
+  [[ -f $directory/ready && -s $directory/pid ]]
+  for _ in {1..100}; do
+    [[ $(tmux -N -S "$socket" display-message -p '#{server_sessions}') == 0 ]] && break
+    sleep 0.1
+  done
+  [[ $(tmux -N -S "$socket" display-message -p '#{server_sessions}') == 0 ]]
+  processes=("$(cat "$directory/pid")" "$before")
+  # Inspect agents without invoking GPG outside the managed service.
+  while IFS= read -r pid; do processes+=("$pid"); done < <(pgrep -u 1000 -x gpg-agent)
+  while IFS= read -r pid; do processes+=("$pid"); done < <(pgrep -u 1000 -x ssh-agent)
+  [[ ${#processes[@]} -ge 4 ]]
+  group=$(systemctl show "$unit" --property=ControlGroup --value)
+  [[ -n $group ]]
+  for pid in "${processes[@]}"; do
+    grep -Fxq "0::$group" "/proc/$pid/cgroup"
+  done
+
+  # The ordinary export path must terminate agents and the TERM-resistant daemon.
+  cd /
+  workspace-umount "$PAIR"
+  for pid in "${processes[@]}"; do
+    [[ ! -e /proc/$pid ]]
+  done
+  rm -rf -- "$directory"
+}
+
 case $PHASE in
   boot)
     # Verify the stateless live system and manual-only workspace policy.
@@ -82,7 +156,7 @@ case $PHASE in
   export)
     # Export the workspace before reboot, shutdown, or drive removal.
     cd /
-    sudo workspace-umount "$PAIR"
+    check_session_cleanup
     [[ -z $(sudo zpool list -H -o name) ]]
     ;;
   *) echo 'Unknown guest check' >&2; exit 2 ;;
