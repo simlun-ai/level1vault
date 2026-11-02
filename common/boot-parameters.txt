@@ -1,1 +1,1 @@
-boot=live components nopersistence noeject hostname=level1vault username=root live-config.nocomponents=user-setup,sudo loglevel=4
+boot=live components nopersistence noeject hostname=level1vault username=root live-config.nocomponents=user-setup,sudo loglevel=4 timezone=Europe/Stockholm locales=en_US.UTF-8 keyboard-model=pc105 keyboard-layouts=us utc=yes

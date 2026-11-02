@@ -67,6 +67,9 @@ class ScriptTests(unittest.TestCase):
         self.assertTrue(
             (self.base / "config/hooks/live/60-repository.hook.chroot").is_file()
         )
+        self.assertTrue(
+            (self.base / "config/hooks/live/70-clock.hook.chroot").is_file()
+        )
         library = self.base / "config/includes.chroot/usr/local/lib/level1vault"
         self.assertEqual(
             (library / "contracts.py").read_bytes(),
@@ -94,6 +97,7 @@ class ScriptTests(unittest.TestCase):
         for name in (
             "start",
             "workspace-home",
+            "workspace-clock-status",
             "workspace-session",
             "workspace-rsync",
             "workspace-prune",
@@ -114,6 +118,16 @@ class ScriptTests(unittest.TestCase):
         self.assertTrue(
             (target.parent.parent / "lib/level1vault/transport.py").is_file()
         )
+        self.assertTrue(
+            (self.base / "config/hooks/live/40-region.hook.chroot").is_file()
+        )
+        for parameter in (
+            "timezone=Europe/Stockholm",
+            "locales=en_US.UTF-8",
+            "keyboard-layouts=us",
+            "utc=yes",
+        ):
+            self.assertIn(parameter, self.calls())
         self.assertIn("username=root", self.calls())
         self.assertIn("linux-image", self.calls())
         self.assertNotIn("linux-headers", self.calls())

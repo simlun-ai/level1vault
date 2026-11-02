@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Explain the available evidence without equating holdover with live GPS reception.
+case ${1:-} in
+  -h|--help)
+    echo 'Usage: workspace-clock-status'
+    echo 'Show UTC/local time and chrony tracking, GPS selection and sample age.'
+    exit 0 ;;
+  '') ;;
+  *) echo 'Usage: workspace-clock-status' >&2; exit 2 ;;
+esac
+printf 'Local time: %s\n' "$(date --iso-8601=seconds)"
+printf 'UTC time:   %s\n' "$(date -u --iso-8601=seconds)"
+printf '\nChrony tracking (Ref time is the last reference update):\n'
+chronyc -n tracking
+printf '\nSources (LastRx is sample age; #* GPS means selected):\n'
+chronyc -n sources -v
+printf '\nCheck sample age as well as selection: GPS may be disconnected or in holdover.\n'
+printf 'No selected GPS source means GPS is not currently selected for synchronization.\n'

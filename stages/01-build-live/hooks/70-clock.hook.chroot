@@ -1,0 +1,44 @@
+#!/bin/sh
+set -eu
+
+# Reserve GPS access for the device-bound service instead of Debian's broad probing.
+systemctl mask gpsd.service gpsd.socket gpsdctl@.service systemd-timesyncd.service
+install -d -m 0755 /etc/default /etc/chrony /etc/udev/rules.d /etc/systemd/system
+cat > /etc/default/gpsd <<'CONFIG'
+START_DAEMON="false"
+USBAUTO="false"
+CONFIG
+
+# Accept only this receiver family; a physical unit must confirm its USB identity.
+cat > /etc/udev/rules.d/99-level1vault-gps.rules <<'UDEV'
+ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a7", TAG+="systemd", ENV{SYSTEMD_WANTS}+="level1vault-gpsd@%k.service"
+UDEV
+cat > /etc/systemd/system/level1vault-gpsd@.service <<'UNIT'
+[Unit]
+Description=Offline GPS clock receiver on %I
+BindsTo=dev-%i.device
+Requires=chrony.service
+After=dev-%i.device chrony.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/gpsd -N -n /dev/%I
+Restart=on-failure
+RestartSec=2
+UNIT
+
+# Use serial GPS time without PPS, external servers, or an NTP listener.
+cat > /etc/chrony/chrony.conf <<'CHRONY'
+refclock SHM 0 refid GPS precision 1e-1 poll 3
+# Receiver latency must be measured before adding an offset correction.
+driftfile /var/lib/chrony/chrony.drift
+makestep 1 3
+rtcsync
+port 0
+bindcmdaddress 127.0.0.1
+bindcmdaddress ::1
+CHRONY
+systemctl enable chrony.service
+
+# Keep hardware time in UTC independently of the displayed local timezone.
+printf '0.0 0 0.0\n0\nUTC\n' > /etc/adjtime

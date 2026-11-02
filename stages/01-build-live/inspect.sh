@@ -85,6 +85,18 @@ test -x "$ROOT/usr/local/sbin/start"
 test -x "$ROOT/usr/local/sbin/workspace-home"
 test -x "$ROOT/usr/local/sbin/workspace-session"
 
+# Verify GPS-only synchronization policy and parser after image cleanup.
+test -x "$ROOT/usr/local/sbin/workspace-clock-status"
+chroot "$ROOT" /usr/local/sbin/workspace-clock-status --help >/dev/null
+cp "$(dirname -- "${BASH_SOURCE[0]}")/tests/test_clock.sh" "$ROOT/tmp/level1vault-test-clock.sh"
+chroot "$ROOT" bash /tmp/level1vault-test-clock.sh
+rm "$ROOT/tmp/level1vault-test-clock.sh"
+
+# Verify regional defaults and generated console/locale data after cleanup.
+cp "$(dirname -- "${BASH_SOURCE[0]}")/tests/test_region.sh" "$ROOT/tmp/level1vault-test-region.sh"
+chroot "$ROOT" bash /tmp/level1vault-test-region.sh
+rm "$ROOT/tmp/level1vault-test-region.sh"
+
 # Verify workspace helpers and live account settings.
 test -x "$ROOT/usr/local/sbin/workspace-mount"
 test -x "$ROOT/usr/local/sbin/workspace-discover"
