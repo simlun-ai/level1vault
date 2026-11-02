@@ -71,7 +71,8 @@ def require_idle():
     if processes.returncode == 0:
         raise RuntimeError(
             "simlun still has running processes (possibly detached tmux). "
-            "Exit all simlun sessions and jobs before changing the home mount. "
+            f"Inspect with: ps -u {UID} -o pid,ppid,args. "
+            "Exit unmanaged simlun sessions and jobs before changing the home mount. "
             "If home is already attached, run start to reattach to tmux."
         )
     if processes.returncode != 1:
@@ -114,6 +115,14 @@ def attach(dataset: str):
     verify_mount(mounted(HOME), dataset, "/home/simlun")
 
 
+def stop_session():
+    # Keep live service cleanup separate from the host-testable mount operations.
+    subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("workspace-session")), "stop"],
+        check=True,
+    )
+
+
 def detach(pool: str):
     # Leave homes belonging to other selected pools untouched.
     current = mounted(HOME)
@@ -126,7 +135,9 @@ def detach(pool: str):
             )
         return
     verify_mount(current, pool + "/data", "/home/simlun")
-    # Detached tmux and background jobs may still need the home even without open files.
+    # End managed background jobs only after verifying this is the home being exported.
+    stop_session()
+    # Unmanaged sessions and jobs still block unmount even without open home files.
     require_idle()
     result = subprocess.run(["umount", str(HOME)])
     if result.returncode:

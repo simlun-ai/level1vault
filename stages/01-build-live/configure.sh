@@ -55,6 +55,7 @@ install -m 0755 "$SOURCE_DIR/runtime/workspace-replace" config/includes.chroot/u
 install -m 0755 "$SOURCE_DIR/runtime/workspace-discover" config/includes.chroot/usr/local/sbin/workspace-discover
 install -m 0755 "$SOURCE_DIR/runtime/workspace-clock-status" config/includes.chroot/usr/local/sbin/workspace-clock-status
 install -m 0755 "$SOURCE_DIR/runtime/start" config/includes.chroot/usr/local/sbin/start
+install -m 0755 "$SOURCE_DIR/runtime/workspace-session" config/includes.chroot/usr/local/sbin/workspace-session
 install -m 0755 "$SOURCE_DIR/runtime/workspace-home" config/includes.chroot/usr/local/sbin/workspace-home
 install -m 0755 "$SOURCE_DIR/runtime/workspace-mount" config/includes.chroot/usr/local/sbin/workspace-mount
 install -m 0755 "$SOURCE_DIR/runtime/workspace-umount" config/includes.chroot/usr/local/sbin/workspace-umount

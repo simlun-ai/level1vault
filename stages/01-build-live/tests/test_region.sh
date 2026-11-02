@@ -23,7 +23,9 @@ done
 # Check the US keyboard policy and the cached console keymap without loading it.
 grep -qx 'XKBLAYOUT="us"' /etc/default/keyboard
 grep -qx 'XKBVARIANT=""' /etc/default/keyboard
-mapfile -t keymaps < <(find /etc/console-setup -name 'cached*.kmap.gz')
+# Image inspection has no /dev/fd, so avoid process substitution here.
+shopt -s nullglob
+keymaps=(/etc/console-setup/cached*.kmap.gz)
 [[ ${#keymaps[@]} -gt 0 ]]
 gzip -t "${keymaps[@]}"
 systemctl is-enabled keyboard-setup.service | grep -qx enabled

@@ -98,6 +98,7 @@ class ScriptTests(unittest.TestCase):
             "start",
             "workspace-home",
             "workspace-clock-status",
+            "workspace-session",
             "workspace-rsync",
             "workspace-prune",
             "workspace-replace",

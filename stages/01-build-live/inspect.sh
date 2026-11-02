@@ -83,6 +83,7 @@ test -r "$ROOT/usr/local/share/level1vault/home-default/.zshrc"
 test -d "$ROOT/usr/local/share/level1vault/home-default/level1vault/.git"
 test -x "$ROOT/usr/local/sbin/start"
 test -x "$ROOT/usr/local/sbin/workspace-home"
+test -x "$ROOT/usr/local/sbin/workspace-session"
 
 # Verify GPS-only synchronization policy and parser after image cleanup.
 test -x "$ROOT/usr/local/sbin/workspace-clock-status"
