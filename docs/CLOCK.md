@@ -5,6 +5,20 @@ No internet or mounted workspace is required. Booting without a receiver remains
 supported: the machine starts from its hardware clock (RTC), with no external
 synchronization until GPS reception is established.
 
+## Regional defaults
+
+The image uses `Europe/Stockholm` for local time, `en_US.UTF-8` for the locale,
+`en_US:en` for language preference, and the standard US (`us`, model `pc105`,
+no variant/options) console keyboard. These defaults apply before mounting a
+workspace and to root and simlun login sessions. `LC_ALL` is not set, so individual
+locale categories remain overridable. Existing personal shell configuration can
+still override the locale. The RTC and GPS time remain UTC.
+
+The region hook generates the locale and cached console keymap at image build
+time. Shared ISO/USB boot parameters and live-config defaults agree with those
+settings. The ZFS hook's final initramfs refresh includes the console settings.
+Existing USB pairs receive these defaults through a normal OS upgrade.
+
 ## Receiver and first use
 
 The initial target is the Geekstory VK-162 G-Mouse (Amazon product B078Y52FGQ),
@@ -42,7 +56,7 @@ There is no automatic workspace/session restart or blocking boot prompt.
   (approximately every 11 minutes while synchronized), so a successful GPS fix
   does not mean the RTC was immediately written. After synchronization and once
   the correction has settled, run `sudo hwclock --systohc --utc` if shutting down
-  before the periodic write. Local display time depends on the OS timezone.
+  before the periodic write. Local display time uses `Europe/Stockholm` (CET in winter, CEST in summer).
 - Drift estimates live in the temporary OS, not the encrypted workspace. They
   reset on reboot; the RTC retains its time across pair changes on the same
   computer. No per-computer calibration is persisted in this first version.
@@ -90,6 +104,9 @@ Hardware acceptance is still required:
 - Correct a deliberately inaccurate clock before starting a session; confirm the
   initial step and subsequent gradual correction behavior.
 - Check the RTC after synchronization/write and after shutdown/reboot without GPS.
+- Confirm `date` shows Stockholm time and `locale` shows US English UTF-8 in root
+  and simlun sessions. Check US punctuation keys on the physical console; a serial
+  terminal's input is governed by its own host keyboard layout.
 
 References: [GPSD time service](https://gpsd.io/gpsd-time-service-howto.html),
 [chrony configuration](https://chrony-project.org/doc/4.6/chrony.conf.html).

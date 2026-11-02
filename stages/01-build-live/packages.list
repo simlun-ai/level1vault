@@ -6,6 +6,9 @@ systemd-sysv
 initramfs-tools
 sudo
 locales
+tzdata
+keyboard-configuration
+console-setup
 man-db
 manpages
 less

@@ -37,3 +37,11 @@ The image ships `chrony`, `gpsd` and `gpsd-clients`. The clock hook enables
 GPS-only synchronization for the u-blox 7 USB identity `1546:01a7`, masks competing
 GPS/time services, and configures UTC hardware time. See [offline clock
 operations](../../docs/CLOCK.md) for device verification and acceptance.
+
+Regional defaults are `Europe/Stockholm` (automatic CET/CEST), `en_US.UTF-8`
+with English language preference, and a US console keyboard (`us`, `pc105`).
+The region hook generates locale/keymap data before the final initramfs refresh;
+shared ISO/USB boot parameters preserve the same settings at live boot. The RTC
+remains UTC. Container and built-image checks verify both DST offsets, generated
+UTF-8 locale, login environments and the cached keymap. Physical keyboard behavior
+still requires boot acceptance. See [clock operations](../../docs/CLOCK.md).

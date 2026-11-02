@@ -117,6 +117,16 @@ class ScriptTests(unittest.TestCase):
         self.assertTrue(
             (target.parent.parent / "lib/level1vault/transport.py").is_file()
         )
+        self.assertTrue(
+            (self.base / "config/hooks/live/40-region.hook.chroot").is_file()
+        )
+        for parameter in (
+            "timezone=Europe/Stockholm",
+            "locales=en_US.UTF-8",
+            "keyboard-layouts=us",
+            "utc=yes",
+        ):
+            self.assertIn(parameter, self.calls())
         self.assertIn("username=root", self.calls())
         self.assertIn("linux-image", self.calls())
         self.assertNotIn("linux-headers", self.calls())
