@@ -3,7 +3,7 @@ target-version = "py310"
 line-length = 88
 required-version = "==0.17.2"
 # Installed Python commands have no filename extension.
-extend-include = ["runtime/workspace-discover", "runtime/workspace-home", "runtime/workspace-replace", "runtime/workspace-sync", "runtime/workspace-transport-import", "runtime/workspace-transport-import-git-bundles"]
+extend-include = ["runtime/workspace-discover", "runtime/workspace-home", "runtime/workspace-session", "runtime/workspace-replace", "runtime/workspace-sync", "runtime/workspace-transport-import", "runtime/workspace-transport-import-git-bundles"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
@@ -13,7 +13,7 @@ select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
 known-first-party = ["artifact_owner", "live_payload", "member_recovery", "pair_records", "transport", "usb_devices", "usb_io", "upgrade_fixtures", "contracts", "git_bundles"]
 
 [tool.pyright]
-include = ["common", "pipeline", "stages", "runtime", "integration-tests", "runtime/workspace-discover", "runtime/workspace-home", "runtime/workspace-replace", "runtime/workspace-sync", "runtime/workspace-transport-import", "runtime/workspace-transport-import-git-bundles"]
+include = ["common", "pipeline", "stages", "runtime", "integration-tests", "runtime/workspace-discover", "runtime/workspace-home", "runtime/workspace-session", "runtime/workspace-replace", "runtime/workspace-sync", "runtime/workspace-transport-import", "runtime/workspace-transport-import-git-bundles"]
 extraPaths = ["common", "stages/06-upgrade-os", "stages/06-upgrade-os/tests"]
 pythonVersion = "3.10"
 pythonPlatform = "Linux"

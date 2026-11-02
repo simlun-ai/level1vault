@@ -91,6 +91,7 @@ Run start to unlock your workspace and work as simlun in tmux.
   start 1                       Select pair 1 explicitly (also for degraded use).
 Exit all tmux panes to return to root and choose export, then poweroff.
 Detaching leaves tmux running; run start to reattach before exporting.
+Export stops remaining managed background jobs after all tmux sessions exit.
 Root's home and OS changes are temporary. simlun's mounted home persists.
 
 Manual operations (sudo is optional at the root console):
@@ -113,7 +114,8 @@ Pair IDs below are examples; use the IDs printed on your USB pairs.
                                  Then mount the promoted pair using its own ID.
   sudo -iu simlun                Open a login shell after mounting the active pair.
   cd /; sudo workspace-umount    Sync and export all imported workspace pairs.
-                                 Exit simlun sessions, tmux and background jobs first.
+                                 Exit tmux and unmanaged simlun sessions/jobs first.
+                                 Managed session agents/jobs are stopped automatically.
 
 Export successfully before removing workspace drives; keep the boot USB
 connected until shutdown. OS changes reset on reboot; workspace data persists.

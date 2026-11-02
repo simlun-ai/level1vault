@@ -56,8 +56,8 @@ class StartTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         order = [
             "workspace-mount 2",
-            "workspace-home check",
-            "sudo -iu simlun tmux new-session -A -s workspace -c /home/simlun",
+            "workspace-session prepare",
+            "sudo -iu simlun tmux -N -S /run/level1vault-session/tmux.sock attach-session -t workspace",
             "workspace-umount",
             "poweroff",
         ]

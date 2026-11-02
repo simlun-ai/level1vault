@@ -14,7 +14,7 @@ Exactly one pair is the writable working copy. Others are read-only replicas. `o
 
 Every pair uses `/mnt/workspace`, so only one dataset is mounted there at a time. `sudo workspace-mount 2` selects pair 2 explicitly and asks for the passphrase if its key is unloaded. It is writable only when pair 2 is active. Booting a replica's stick does not automatically activate it.
 
-On the live OS, mounting an active pair also attaches `/mnt/workspace/home/simlun` at `/home/simlun`. The home is part of the same encrypted `data` dataset and is included in every normal checkpoint and replication. Read-only replica inspection leaves the temporary home untouched. Exit all simlun sessions and tmux/background processes before exporting an active home; run export from root in `/`. See [home and sessions](HOME.md).
+On the live OS, mounting an active pair also attaches `/mnt/workspace/home/simlun` at `/home/simlun`. The home is part of the same encrypted `data` dataset and is included in every normal checkpoint and replication. Read-only replica inspection leaves the temporary home untouched. Exit all tmux sessions before exporting an active home; export automatically stops their managed background jobs. Unmanaged simlun sessions/jobs must be stopped separately. Run export from root in `/`. See [home and sessions](HOME.md).
 
 ## Provision N fresh pairs
 

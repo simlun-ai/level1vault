@@ -94,6 +94,7 @@ class ScriptTests(unittest.TestCase):
         for name in (
             "start",
             "workspace-home",
+            "workspace-session",
             "workspace-rsync",
             "workspace-prune",
             "workspace-replace",

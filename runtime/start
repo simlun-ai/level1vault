@@ -10,8 +10,8 @@ cd /
 
 # Unlock the workspace and enter a fresh simlun login environment inside tmux.
 "$HELPERS/workspace-mount" "$@"
-python3 "$HELPERS/workspace-home" check
-if ! sudo -iu simlun tmux new-session -A -s workspace -c /home/simlun; then
+python3 "$HELPERS/workspace-session" prepare
+if ! sudo -iu simlun tmux -N -S /run/level1vault-session/tmux.sock attach-session -t workspace; then
     echo 'tmux failed; workspace remains mounted. Run start to retry or workspace-umount to export.' >&2
     exit 1
 fi

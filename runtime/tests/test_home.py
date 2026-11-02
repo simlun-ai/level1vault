@@ -138,6 +138,39 @@ class HomeTests(unittest.TestCase):
             home.detach("level1-workspace-1")
         self.assertFalse(any(c[0] == "umount" for c in self.calls))
 
+    def test_cleanup_precedes_idle_check_and_unmount_for_matching_home(self):
+        home.attach(self.dataset)
+        self.calls.clear()
+        home.detach("level1-workspace-1")
+        cleanup = next(i for i, c in enumerate(self.calls) if c[-1] == "stop")
+        idle = next(i for i, c in enumerate(self.calls) if c[0] == "pgrep")
+        unmount = next(i for i, c in enumerate(self.calls) if c[0] == "umount")
+        self.assertLess(cleanup, idle)
+        self.assertLess(idle, unmount)
+
+    def test_unexpected_home_mount_never_triggers_cleanup(self):
+        home.attach(self.dataset)
+        self.calls.clear()
+        self.mounts[str(self.home)] = self.record("/unexpected")
+        with self.assertRaisesRegex(RuntimeError, "Unexpected"):
+            home.detach("level1-workspace-1")
+        self.assertFalse(any(c[-1] == "stop" for c in self.calls))
+
+    def test_cleanup_failure_preserves_home_mount(self):
+        home.attach(self.dataset)
+        original = self.command
+
+        def fail_cleanup(args: list[str], **kwargs: object):
+            if args[-1] == "stop":
+                raise subprocess.CalledProcessError(1, args)
+            return original(args, **kwargs)
+
+        with patch.object(home.subprocess, "run", side_effect=fail_cleanup):
+            with self.assertRaises(subprocess.CalledProcessError):
+                home.detach("level1-workspace-1")
+        self.assertIn(str(self.home), self.mounts)
+        self.assertFalse(any(c[0] == "umount" for c in self.calls))
+
     def test_process_inspection_failure_blocks_detach(self):
         home.attach(self.dataset)
         self.process_status = 2
@@ -155,7 +188,7 @@ class HomeTests(unittest.TestCase):
         home.attach(self.dataset)
         home.detach("level1-workspace-2")
         self.assertIn(str(self.home), self.mounts)
-        self.assertFalse(any(c[0] == "umount" for c in self.calls))
+        self.assertFalse(any(c[0] == "umount" or c[-1] == "stop" for c in self.calls))
 
     def test_start_requires_matching_home_and_active_writable_dataset(self):
         with self.assertRaisesRegex(RuntimeError, "Unexpected"):
