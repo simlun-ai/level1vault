@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -163,6 +164,57 @@ class PackageTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             t.publish_inbox(self.package, self.workspace, "pool")
 
+    def test_cross_pair_cleanup_retry_flushes_destination_before_source_deletion(self):
+        destination, source = "level1-workspace-1", "level1-workspace-2"
+        events: list[object] = []
+        fail_cleanup = True
+        publish = t.publish_inbox
+
+        @contextmanager
+        def imported_source(*args: object):
+            try:
+                yield
+            finally:
+                events.append("export")
+
+        @contextmanager
+        def mounted(*args: object, **kwargs: object):
+            try:
+                yield self.package
+            finally:
+                events.append("unmount")
+
+        def command(*args: str | Path):
+            events.append(args)
+            if args == ("zfs", "destroy", source + "/transport") and fail_cleanup:
+                raise OSError("cleanup interrupted")
+
+        def publish_to_test_workspace(directory: Path, workspace: Path, pool: str):
+            self.assertEqual(workspace, Path("/mnt/workspace"))
+            self.assertEqual(pool, destination)
+            return publish(directory, self.workspace, pool)
+
+        self.commands.side_effect = command
+        with (
+            patch.object(t, "active_destination", return_value=destination),
+            patch.object(t, "transport_source", side_effect=imported_source),
+            patch.object(t, "mounted_transport", side_effect=mounted),
+            patch.object(t, "validate_transport", return_value=source + "/transport"),
+            patch.object(t, "publish_inbox", side_effect=publish_to_test_workspace),
+        ):
+            with self.assertRaisesRegex(OSError, "cleanup interrupted"):
+                t.import_transport("2", Path("/discover"))
+            self.assertEqual(events[:2], [("zpool", "sync", destination)] * 2)
+            self.assertLess(
+                events.index("unmount"),
+                events.index(("zfs", "destroy", source + "/transport")),
+            )
+            self.assertEqual(events[-1], "export")
+            fail_cleanup = False
+            t.import_transport("2", Path("/discover"))
+        self.assertEqual(len(list((self.workspace / "inbox").glob("[0-9]*"))), 1)
+        self.assertEqual(events[-2:], [("zpool", "sync", source), "export"])
+
     def test_two_deliveries_do_not_overwrite_same_filenames(self):
         first = t.publish_inbox(self.package, self.workspace, "pool")
         other = self.base / "other"
@@ -195,7 +247,7 @@ class ZFSLifecycleTests(unittest.TestCase):
             "readonly": "off",
             "mounted": "yes",
             "mountpoint": "/mnt/workspace",
-            "keystatus": "unavailable",
+            "keystatus": "available",
         }
 
         def read_property(ds: str, name: str):
@@ -287,8 +339,161 @@ class ZFSLifecycleTests(unittest.TestCase):
                 t.import_transport("1")
             self.commands.assert_not_called()
 
+    def test_no_argument_uses_mounted_pair_without_discovery(self):
+        with (
+            patch.object(t, "mounted_transport", side_effect=self.mounted) as mount,
+            patch.object(t, "publish_inbox", return_value=Path("/inbox/delivery")),
+        ):
+            t.import_transport()
+        mount.assert_called_once_with(self.pool, readonly=True)
+        self.assertFalse(
+            any(c.args[:2] == ("zpool", "import") for c in self.commands.call_args_list)
+        )
+
+    def cross_pair_patches(self):
+        source = "level1-workspace-2"
+        original = self.output
+
+        def data_for_pair(pool: str, pair: str):
+            return pool + "/data"
+
+        def transport_for_pool(pool: str):
+            return pool + "/transport"
+
+        def read_property(ds: str, name: str):
+            return (
+                self.source_props[name]
+                if ds.startswith(source + "/")
+                else self.props[name]
+            )
+
+        self.contexts.enter_context(
+            patch.object(t, "validate_pair", side_effect=data_for_pair)
+        )
+        self.contexts.enter_context(
+            patch.object(t, "validate_transport", side_effect=transport_for_pool)
+        )
+        self.source_props = {"mounted": "no", "keystatus": "unavailable"}
+        self.contexts.enter_context(patch.object(t, "prop", side_effect=read_property))
+        self.contexts.enter_context(patch.object(t, "output", side_effect=original))
+        self.contexts.enter_context(
+            patch.object(
+                t,
+                "mirror_leaves",
+                return_value=[("  ", "1", "ONLINE", "0", "0", "0")] * 2,
+            )
+        )
+        self.contexts.enter_context(
+            patch.object(t, "mounted_transport", side_effect=self.mounted)
+        )
+        self.publish = self.contexts.enter_context(
+            patch.object(t, "publish_inbox", return_value=Path("/inbox/delivery"))
+        )
+        return source
+
+    def test_cross_pair_import_publishes_to_destination_and_exports_source(self):
+        source = self.cross_pair_patches()
+        t.import_transport("2", Path("/discover"))
+        self.publish.assert_called_once_with(
+            Path("/unused"), Path("/mnt/workspace"), self.pool
+        )
+        calls = [c.args for c in self.commands.call_args_list]
+        self.assertIn(("zfs", "destroy", source + "/transport"), calls)
+        self.assertEqual(
+            calls[-2:], [("zpool", "sync", source), ("zpool", "export", source)]
+        )
+        self.assertFalse(any("load-key" in c or "-f" in c or "-l" in c for c in calls))
+        self.assertNotIn(("zpool", "export", self.pool), calls)
+
+    def test_cross_pair_failures_export_source_and_retain_transport(self):
+        source = self.cross_pair_patches()
+        for failure in ("verify", "locked", "health", "unmount"):
+            self.commands.reset_mock()
+            self.source_props["keystatus"] = (
+                "available" if failure == "locked" else "unavailable"
+            )
+            self.publish.side_effect = (
+                RuntimeError("verification failed") if failure == "verify" else None
+            )
+
+            @contextmanager
+            def mounted(*args: object, failure: str = failure, **kwargs: object):
+                try:
+                    yield Path("/unused")
+                finally:
+                    if failure == "unmount":
+                        raise OSError("busy")
+
+            with (
+                self.subTest(failure=failure),
+                patch.object(t, "mounted_transport", side_effect=mounted),
+                patch.object(
+                    t,
+                    "mirror_leaves",
+                    return_value=[
+                        (
+                            "  ",
+                            "1",
+                            "OFFLINE" if failure == "health" else "ONLINE",
+                            "0",
+                            "0",
+                            "0",
+                        )
+                    ]
+                    * 2,
+                ),
+                self.assertRaises((ValueError, RuntimeError, OSError)),
+            ):
+                t.import_transport("2", Path("/discover"))
+            calls = [c.args for c in self.commands.call_args_list]
+            self.assertEqual(calls[-1], ("zpool", "export", source))
+            self.assertFalse(any(c[:2] == ("zfs", "destroy") for c in calls))
+
+    def test_cross_pair_discovery_or_existing_import_refused_without_mutations(self):
+        source = self.cross_pair_patches()
+        for result in (source, "incomplete"):
+
+            def output(*args: str | Path, result: str = result):
+                if args == ("zpool", "list", "-H", "-o", "name"):
+                    return source if result == source else self.pool
+                if args[0] == "python3":
+                    raise ValueError("Incomplete source mirror")
+                return self.output(*args)
+
+            with (
+                patch.object(t, "output", side_effect=output),
+                self.assertRaises(ValueError),
+            ):
+                t.import_transport("2", Path("/discover"))
+            self.commands.assert_not_called()
+
+    def test_invalid_destination_is_refused_before_source_import(self):
+        for data in ("tmpfs", self.pool + "/data/subdir", "level1-workspace-0/data"):
+            with (
+                patch.object(t, "output", return_value=data),
+                self.assertRaises(ValueError),
+            ):
+                t.import_transport("2", Path("/discover"))
+            self.commands.assert_not_called()
+        self.props["keystatus"] = "unavailable"
+        with self.assertRaises(ValueError):
+            t.import_transport("2", Path("/discover"))
+        self.commands.assert_not_called()
+
+    def test_export_failure_reports_source_is_not_safe_to_disconnect(self):
+        source = self.cross_pair_patches()
+
+        def command(*args: str | Path):
+            if args[:2] == ("zpool", "export"):
+                raise subprocess.CalledProcessError(1, list(args))
+
+        self.commands.side_effect = command
+        with self.assertRaisesRegex(RuntimeError, "Failed to export " + source):
+            t.import_transport("2", Path("/discover"))
+
     def stage_patches(self):
         self.props["mounted"] = "no"
+        self.props["keystatus"] = "unavailable"
         self.contexts.enter_context(
             patch.object(t, "walk_tree", return_value=[{"type": "file", "size": 42}])
         )

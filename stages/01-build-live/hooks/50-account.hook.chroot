@@ -98,7 +98,7 @@ Pair IDs below are examples; use the IDs printed on your USB pairs.
   sudo workspace-mount           Unlock the only complete connected pair.
   sudo workspace-mount 1         Select pair 1 explicitly (also for degraded use).
                                  Active: writable. Replica: read-only.
-  sudo workspace-transport-import 1
+  sudo workspace-transport-import [SOURCE_PAIR]
                                  Verify staged files into encrypted inbox, then remove transport.
   workspace-transport-import-git-bundles /mnt/workspace/inbox/<delivery>/git-bundles
                                  As simlun: update offline checkouts in /mnt/workspace/git/.

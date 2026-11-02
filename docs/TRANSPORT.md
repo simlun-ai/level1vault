@@ -59,11 +59,36 @@ sudo workspace-transport-import 1
 ls /mnt/workspace/inbox/
 ```
 
-The importer requires an already mounted, active writable workspace at
-`/mnt/workspace`. It never unlocks data, promotes a replica or executes payload
-files. Without a pair ID it uses the same unique-complete-pair selection as
-`workspace-mount`; supply an ID when multiple complete pairs are connected.
-Staging on a replica is allowed, but importing requires its deliberate activation.
+The destination is always the already mounted, active writable workspace at
+`/mnt/workspace`. The optional pair ID selects the **transport source**; without
+an ID, the source defaults to the mounted destination pair, even when other pairs
+are connected. The importer never unlocks encrypted data, promotes a replica or
+executes payload files.
+
+### Use another pair as the carrier
+
+Pair 1 can remain running while pair 2 carries files from the workstation:
+
+```bash
+# Workstation: connect both members of exported pair 2; put files in transport/.
+make stage-transport PAIR=2
+# Wait for successful export, then move both members to the offline computer.
+
+# Offline computer: pair 1 is already mounted through start 1.
+sudo workspace-transport-import 2
+ls /mnt/workspace/inbox/
+```
+
+Both source members must be connected and ONLINE without device errors. The
+source must be exported before the command; an already imported external source
+is refused, even if locked. The importer discovers its GUID, imports without
+force or dataset mounts, and keeps its encrypted workspace locked and unmounted.
+Its active/replica policy is unchanged: a replica can be a carrier without
+activation. Only the destination must be active and writable.
+
+After delivery and cleanup, the separate source pool is exported automatically.
+Wait for the successful export message before disconnecting its drives. Pair 1
+and its working session remain mounted throughout.
 
 Transport is mounted read-only with noexec, nosuid and nodev. Its manifest and
 contents are checked, then files are copied into a private temporary inbox
@@ -83,13 +108,16 @@ receipts while a transport cleanup may need retrying.
 
 The importer flushes the verified data, publishes the directory, flushes again,
 and unmounts transport before destroying that exact dataset. Source deletion
-never precedes successful inbox verification and durable publication. The pool
-stays imported for your session; export normally with `workspace-umount` when done.
+never precedes successful inbox verification and durable publication. The
+destination pool stays imported for your session; export normally with `workspace-umount` when done.
+A separate source pool is synced and exported after cleanup.
 
 ## Failures and retries
 
 A failed copy or verification retains transport and any private partial inbox
-copy. Rerun the importer to replace the partial copy and retry. If publication
+copy. For a separate source, the importer attempts export on failure as well; if
+export fails, inspect pool/export status before disconnecting its drives. Rerun
+the importer to replace the partial copy and retry. If publication
 succeeded but cleanup failed, rerunning verifies the existing delivery against
 its receipt and finishes cleanup without creating another delivery. If the inbox
 copy has since been edited, import refuses deletion; preserve those edits and

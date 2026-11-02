@@ -14,19 +14,19 @@ sys.path.insert(
     if (ROOT / "common").is_dir()
     else "/usr/local/lib/level1vault",
 )
-from member_recovery import output  # noqa: E402 - resolve shared helpers after configuring their path
 from transport import import_transport, workspace_lock  # noqa: E402 - resolve shared helpers after configuring their path
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("pair", nargs="?")
+    parser.add_argument(
+        "pair",
+        nargs="?",
+        help="Transport source pair; defaults to the mounted active workspace pair",
+    )
     args = parser.parse_args()
     with workspace_lock():
-        pair = args.pair or output(
-            "python3", Path(__file__).with_name("workspace-discover")
-        )
-        import_transport(pair)
+        import_transport(args.pair, Path(__file__).with_name("workspace-discover"))
 
 
 if __name__ == "__main__":

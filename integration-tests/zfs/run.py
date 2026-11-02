@@ -495,7 +495,7 @@ def verify_transport(base: Path):
     helper("workspace-umount", "1")
     command(*stage, input="yes\n", text=True)
     helper("workspace-mount", "1", input=KEY + "\n")
-    helper("workspace-transport-import", "1")
+    helper("workspace-transport-import")
     deliveries = list(Path("/mnt/workspace/inbox").glob("[0-9]*"))
     assert len(deliveries) == 1
     delivery = deliveries[0]
@@ -509,18 +509,52 @@ def verify_transport(base: Path):
     assert (
         pool + "/transport" not in run("zfs", "list", "-H", "-o", "name").splitlines()
     )
-    command("zfs", "unmount", pool + "/data")
-    command("zfs", "unload-key", pool + "/data")
-
-    # Transport on a replica never changes its role, and may coexist with later raw receives.
-    command("zpool", "export", "level1-workspace-2")
+    # A replica can carry a delivery directly into the still-running active pair.
+    source_pool = "level1-workspace-2"
+    command("zpool", "export", source_pool)
     stage[stage.index("--pair") + 1] = "2"
     command(*stage, input="yes\n", text=True)
+    helper("workspace-transport-import", "2")
+    assert source_pool not in run("zpool", "list", "-H", "-o", "name").splitlines()
+    assert get(pool + "/data", "mounted") == "yes"
+    deliveries = list(Path("/mnt/workspace/inbox").glob("[0-9]*"))
+    assert len(deliveries) == 2
+    assert all(
+        (d / "README.md").read_text() == "replacement instructions" for d in deliveries
+    )
+
+    # Inspect the exported source without loading its key or changing its replica policy.
+    command(
+        "zpool",
+        "import",
+        "-N",
+        "-d",
+        "/dev/disk/by-partuuid",
+        "-o",
+        "cachefile=none",
+        source_pool,
+    )
+    assert get(source_pool, "org.level1vault:state") == "replica"
+    assert get(source_pool + "/data", "readonly") == "on"
+    assert get(source_pool + "/data", "keystatus") == "unavailable"
+    assert get(source_pool + "/data", "mounted") == "no"
+    assert (
+        source_pool + "/transport"
+        not in run("zfs", "list", "-H", "-o", "name").splitlines()
+    )
+    helper(
+        "workspace-transport-import", "2", ok=False
+    )  # never take over an existing import
+    command("zpool", "export", source_pool)
+
+    # Leave a new staged package to verify that later raw replication preserves transport.
+    command(*stage, input="yes\n", text=True)
+    command("zfs", "unmount", pool + "/data")
+    command("zfs", "unload-key", pool + "/data")
     helper("workspace-mount", "2", input=KEY + "\n")
-    helper("workspace-transport-import", "2", ok=False)
-    assert get("level1-workspace-2", "org.level1vault:state") == "replica"
-    command("zfs", "unmount", "level1-workspace-2/data")
-    command("zfs", "unload-key", "level1-workspace-2/data")
+    helper("workspace-transport-import", ok=False)  # replicas cannot be destinations
+    command("zfs", "unmount", source_pool + "/data")
+    command("zfs", "unload-key", source_pool + "/data")
 
 
 def main():
